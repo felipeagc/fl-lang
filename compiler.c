@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <assert.h>
 
@@ -367,9 +368,9 @@ typedef struct Location
 {
     SourceFile *file;
     char *buf;
+    uint32_t length;
     uint32_t line;
     uint32_t col;
-    uint32_t length;
 } Location;
 // }}}
 
@@ -397,6 +398,22 @@ void compiler_init(Compiler *compiler)
 void compiler_destroy(Compiler *compiler)
 {
     bump_destroy(&compiler->bump);
+}
+
+void compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
+{
+    char buf[2048];
+
+    va_list vl;
+    va_start(vl, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, vl);
+    va_end(vl);
+
+    String message = bump_strdup(
+        &compiler->bump, (String){.buf = buf, .length = strlen(buf)});
+
+    Error err = {.loc = loc, .message = message};
+    array_push(compiler->errors, err);
 }
 // }}}
 
@@ -510,17 +527,19 @@ typedef struct Lexer
     Compiler *compiler;
     SourceFile *file;
     size_t pos;
+    uint32_t line;
+    uint32_t col;
     /*array*/ Token *tokens;
 } Lexer;
 
 static inline bool is_letter(char c)
 {
-    return ('z' >= c && c >= 'a') || ('Z' >= c && c >= 'A');
+    return (('z' >= c) && (c >= 'a')) || (('Z' >= c) && (c >= 'A'));
 }
 
 static inline bool is_numeric(char c)
 {
-    return '0' <= c && '9' >= c;
+    return ('0' <= c) && ('9' >= c);
 }
 
 static inline bool is_alphanum(char c)
@@ -528,15 +547,15 @@ static inline bool is_alphanum(char c)
     return is_letter(c) || is_numeric(c) || c == '_';
 }
 
-static inline bool is_newline(char c)
-{
-    return c == '\n';
-}
+/* static inline bool is_newline(char c) */
+/* { */
+/*     return c == '\n'; */
+/* } */
 
-static inline bool is_whitespace(char c)
-{
-    return c == ' ' || c == '\t' || is_newline(c);
-}
+/* static inline bool is_whitespace(char c) */
+/* { */
+/*     return c == ' ' || c == '\t' || is_newline(c); */
+/* } */
 
 static inline bool lex_is_at_end(Lexer *l)
 {
@@ -556,22 +575,24 @@ static inline char lex_peek(Lexer *l)
     return l->file->content.buf[l->pos];
 }
 
-static inline char lex_match_str(Lexer *l, String s)
-{
-    return strncmp(&l->file->content.buf[l->pos], s.buf, s.length) == 0;
-}
-
 void lex_token(Lexer *l)
 {
+    ++l->col;
+
     Token tok = {0};
     tok.loc.file = l->file;
-    tok.loc.buf = l->file->content.buf + l->pos;
+    tok.loc.buf = &l->file->content.buf[l->pos];
     tok.loc.length = 0;
+    tok.loc.line = l->line;
+    tok.loc.col = l->col;
     char c = lex_peek(l);
 
     switch (c)
     {
-        case '\n':
+        case '\n': {
+            ++l->line;
+            l->col = 0;
+        }
         case '\r':
         case '\t':
         case ' ': {
@@ -629,7 +650,7 @@ void lex_token(Lexer *l)
         case ';': {
             tok.loc.length = 1;
             lex_next(l, 1);
-            tok.type = TOKEN_COLON;
+            tok.type = TOKEN_SEMICOLON;
             break;
         }
         case '.': {
@@ -659,7 +680,7 @@ void lex_token(Lexer *l)
         default: {
             if (is_letter(c))
             {
-                while (is_alphanum(tok.loc.file->content.buf[tok.loc.length]))
+                while (is_alphanum(tok.loc.buf[tok.loc.length]))
                 {
                     tok.loc.length++;
                 }
@@ -737,8 +758,15 @@ void lex_token(Lexer *l)
                 break;
             }
 
-            printf("Failed: %d\n", (int)c);
-            abort();
+            tok.loc.length = 1;
+            compile_error(
+                l->compiler,
+                tok.loc,
+                "invalid token: '%.*s'",
+                tok.loc.length,
+                tok.loc.buf);
+            tok.loc.length = 0;
+            lex_next(l, 1);
             break;
         }
     }
@@ -754,11 +782,82 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
     memset(l, 0, sizeof(*l));
     l->compiler = compiler;
     l->file = file;
+    l->line = 1;
 
     while (!lex_is_at_end(l))
     {
         lex_token(l);
     }
+}
+// }}}
+
+// Printing {{{
+void print_token(Token *tok)
+{
+    printf("(%u:%u) ", tok->loc.line, tok->loc.col);
+
+#define PRINT_TOKEN_TYPE(type)                                                 \
+    case type: printf(#type); break
+
+    switch (tok->type)
+    {
+        PRINT_TOKEN_TYPE(TOKEN_LPAREN);
+        PRINT_TOKEN_TYPE(TOKEN_RPAREN);
+        PRINT_TOKEN_TYPE(TOKEN_LBRACK);
+        PRINT_TOKEN_TYPE(TOKEN_RBRACK);
+        PRINT_TOKEN_TYPE(TOKEN_LCURLY);
+        PRINT_TOKEN_TYPE(TOKEN_RCURLY);
+
+        PRINT_TOKEN_TYPE(TOKEN_SEMICOLON);
+        PRINT_TOKEN_TYPE(TOKEN_COLON);
+
+        PRINT_TOKEN_TYPE(TOKEN_ASTERISK);
+        PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
+
+        PRINT_TOKEN_TYPE(TOKEN_DOT);
+        PRINT_TOKEN_TYPE(TOKEN_COMMA);
+
+        PRINT_TOKEN_TYPE(TOKEN_NOT);
+        PRINT_TOKEN_TYPE(TOKEN_ASSIGN);
+        PRINT_TOKEN_TYPE(TOKEN_EQUAL);
+        PRINT_TOKEN_TYPE(TOKEN_NOT_EQUAL);
+
+        PRINT_TOKEN_TYPE(TOKEN_INT);
+        PRINT_TOKEN_TYPE(TOKEN_FLOAT);
+
+        PRINT_TOKEN_TYPE(TOKEN_IDENT);
+        PRINT_TOKEN_TYPE(TOKEN_PROC);
+        PRINT_TOKEN_TYPE(TOKEN_STRUCT);
+        PRINT_TOKEN_TYPE(TOKEN_UNION);
+        PRINT_TOKEN_TYPE(TOKEN_FOR);
+        PRINT_TOKEN_TYPE(TOKEN_WHILE);
+        PRINT_TOKEN_TYPE(TOKEN_IF);
+        PRINT_TOKEN_TYPE(TOKEN_ELSE);
+        PRINT_TOKEN_TYPE(TOKEN_RETURN);
+        PRINT_TOKEN_TYPE(TOKEN_CONST);
+        PRINT_TOKEN_TYPE(TOKEN_VAR);
+
+        PRINT_TOKEN_TYPE(TOKEN_U8);
+        PRINT_TOKEN_TYPE(TOKEN_U16);
+        PRINT_TOKEN_TYPE(TOKEN_U32);
+        PRINT_TOKEN_TYPE(TOKEN_U64);
+
+        PRINT_TOKEN_TYPE(TOKEN_I8);
+        PRINT_TOKEN_TYPE(TOKEN_I16);
+        PRINT_TOKEN_TYPE(TOKEN_I32);
+        PRINT_TOKEN_TYPE(TOKEN_I64);
+
+        PRINT_TOKEN_TYPE(TOKEN_F32);
+        PRINT_TOKEN_TYPE(TOKEN_F64);
+
+        PRINT_TOKEN_TYPE(TOKEN_VOID);
+
+        PRINT_TOKEN_TYPE(TOKEN_BOOL);
+        PRINT_TOKEN_TYPE(TOKEN_FALSE);
+        PRINT_TOKEN_TYPE(TOKEN_TRUE);
+    }
+
+    printf(" \"%.*s\"\n", (int)tok->loc.length, tok->loc.buf);
 }
 // }}}
 
@@ -783,6 +882,12 @@ int main(int argc, char **argv)
 
         Lexer lexer;
         lex_file(&lexer, &compiler, file);
+        /* for (Token *tok = lexer.tokens; */
+        /*      tok != lexer.tokens + array_size(lexer.tokens); */
+        /*      ++tok) */
+        /* { */
+        /*     print_token(tok); */
+        /* } */
 
         if (array_size(compiler.errors) > 0)
         {

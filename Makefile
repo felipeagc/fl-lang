@@ -1,7 +1,8 @@
 CC=clang
+CFLAGS=-Wall
 
 compiler: compiler.c
-	$(CC) -o $@ $<
+	$(CC) $(CFLAGS) -o $@ $<
 
 .PHONY: clean test
 
