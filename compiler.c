@@ -732,7 +732,7 @@ void lex_token(Lexer *l)
                 while (is_numeric(tok.loc.buf[tok.loc.length]) ||
                        tok.loc.buf[tok.loc.length] == '.')
                 {
-                    if (tok.loc.buf[tok.loc.length])
+                    if (tok.loc.buf[tok.loc.length] == '.')
                     {
                         has_dot = true;
                     }
