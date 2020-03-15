@@ -474,13 +474,11 @@ enum {
     TOKEN_EQUAL,     // ==
     TOKEN_NOT_EQUAL, // !=
 
-    TOKEN_INT,
-    TOKEN_FLOAT,
-
     TOKEN_IDENT,
     TOKEN_PROC,
     TOKEN_STRUCT,
     TOKEN_UNION,
+    TOKEN_ENUM,
     TOKEN_FOR,
     TOKEN_WHILE,
     TOKEN_IF,
@@ -488,6 +486,9 @@ enum {
     TOKEN_RETURN,
     TOKEN_CONST,
     TOKEN_VAR,
+
+    TOKEN_INT,
+    TOKEN_FLOAT,
 
     TOKEN_U8,
     TOKEN_U16,
@@ -503,6 +504,7 @@ enum {
     TOKEN_F64,
 
     TOKEN_VOID,
+    TOKEN_NULL,
 
     TOKEN_BOOL,
     TOKEN_FALSE,
@@ -517,6 +519,7 @@ typedef struct Token
     {
         double f64;
         int64_t i64;
+        String str;
     };
 } Token;
 // }}}
@@ -546,16 +549,6 @@ static inline bool is_alphanum(char c)
 {
     return is_letter(c) || is_numeric(c) || c == '_';
 }
-
-/* static inline bool is_newline(char c) */
-/* { */
-/*     return c == '\n'; */
-/* } */
-
-/* static inline bool is_whitespace(char c) */
-/* { */
-/*     return c == ' ' || c == '\t' || is_newline(c); */
-/* } */
 
 static inline bool lex_is_at_end(Lexer *l)
 {
@@ -707,6 +700,7 @@ void lex_token(Lexer *l)
                 LEX_MATCH_STR("f32", TOKEN_F32);
                 LEX_MATCH_STR("f64", TOKEN_F64);
                 LEX_MATCH_STR("void", TOKEN_VOID);
+                LEX_MATCH_STR("null", TOKEN_NULL);
                 LEX_MATCH_STR("bool", TOKEN_BOOL);
                 LEX_MATCH_STR("true", TOKEN_TRUE);
                 LEX_MATCH_STR("false", TOKEN_FALSE);
@@ -716,11 +710,18 @@ void lex_token(Lexer *l)
                 LEX_MATCH_STR("proc", TOKEN_PROC);
                 LEX_MATCH_STR("struct", TOKEN_STRUCT);
                 LEX_MATCH_STR("union", TOKEN_UNION);
+                LEX_MATCH_STR("enum", TOKEN_ENUM);
                 LEX_MATCH_STR("if", TOKEN_IF);
                 LEX_MATCH_STR("else", TOKEN_ELSE);
                 LEX_MATCH_STR("while", TOKEN_WHILE);
                 LEX_MATCH_STR("for", TOKEN_FOR);
                 LEX_MATCH_STR("return", TOKEN_RETURN);
+
+                if (tok.type == TOKEN_IDENT)
+                {
+                    tok.str.buf = tok.loc.buf;
+                    tok.str.length = tok.loc.length;
+                }
 
                 break;
             }
@@ -788,6 +789,320 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
     {
         lex_token(l);
     }
+
+    /* for (Token *tok = lexer.tokens; */
+    /*      tok != lexer.tokens + array_size(lexer.tokens); */
+    /*      ++tok) */
+    /* { */
+    /*     print_token(tok); */
+    /* } */
+}
+// }}}
+
+// AST {{{
+typedef enum UnOpType {
+    UNOP_DEREFERENCE,
+    UNOP_ADDRESS,
+} UnOpType;
+
+typedef enum BinOpType {
+    BINOP_ADD,
+    BINOP_SUB,
+    BINOP_MUL,
+    BINOP_DIV,
+} BinOpType;
+
+typedef enum AstType {
+    AST_UNINITIALIZED,
+    AST_ROOT,
+    AST_STRUCT_DECL,
+    AST_PROC_DECL,
+    AST_BLOCK,
+    AST_UNARY_EXPR,
+    AST_BINARY_EXPR,
+    AST_CONST_DECL,
+    AST_VAR_DECL,
+    AST_VAR_ASSIGN,
+    AST_RETURN,
+    AST_PRIMARY,
+} AstType;
+
+typedef struct Ast
+{
+    AstType type;
+    Location loc;
+
+    union
+    {
+        Token *tok;
+        struct
+        {
+            /*array*/ struct Ast *stmts;
+        } proc;
+        struct
+        {
+            String name;
+            struct Ast *type_expr;
+            struct Ast *value_expr;
+        } decl;
+        struct
+        {
+            struct Ast *assigned_expr;
+            struct Ast *value_expr;
+        } assign;
+        struct
+        {
+            UnOpType type;
+            struct Ast *sub;
+        } unop;
+        struct
+        {
+            BinOpType type;
+            struct Ast *left;
+            struct Ast *right;
+        } binop;
+    };
+} Ast;
+// }}}
+
+// Parser {{{
+typedef struct Parser
+{
+    Compiler *compiler;
+    Lexer *lexer;
+    Ast *ast;
+    size_t pos;
+} Parser;
+
+static inline bool parser_is_at_end(Parser *p)
+{
+    return p->pos >= array_size(p->lexer->tokens);
+}
+
+static inline Token *parser_peek(Parser *p, size_t offset)
+{
+    if (p->pos + offset >= array_size(p->lexer->tokens))
+    {
+        return &p->lexer->tokens[p->pos];
+    }
+    return &p->lexer->tokens[p->pos + offset];
+}
+
+static inline Token *parser_next(Parser *p, size_t count)
+{
+    if (!parser_is_at_end(p)) p->pos += count;
+    return &p->lexer->tokens[p->pos - count];
+}
+
+static inline Token *parser_consume(Parser *p, TokenType tok_type)
+{
+    Token *tok = parser_peek(p, 0);
+    if (tok->type != tok_type)
+    {
+        compile_error(
+            p->compiler,
+            tok->loc,
+            "unexpected token: '%.*s'",
+            tok->loc.length,
+            tok->loc.buf);
+        parser_next(p, 1);
+        return NULL;
+    }
+    else
+    {
+        return parser_next(p, 1);
+    }
+}
+
+bool parse_expr(Parser *p, Ast *ast);
+
+bool parse_primery_expr(Parser *p, Ast *ast)
+{
+    bool res = true;
+    Token *tok = parser_peek(p, 0);
+    switch (tok->type)
+    {
+        case TOKEN_IDENT:
+        case TOKEN_TRUE:
+        case TOKEN_FALSE:
+        case TOKEN_VOID:
+        case TOKEN_NULL:
+        case TOKEN_BOOL:
+        case TOKEN_U8:
+        case TOKEN_U16:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_I8:
+        case TOKEN_I16:
+        case TOKEN_I32:
+        case TOKEN_I64:
+        case TOKEN_F32:
+        case TOKEN_F64:
+        case TOKEN_INT:
+        case TOKEN_FLOAT: {
+            parser_next(p, 1);
+            ast->type = AST_PRIMARY;
+            ast->tok = tok;
+            break;
+        }
+        default: {
+            res = false;
+            break;
+        }
+    }
+    return res;
+}
+
+bool parse_unary_expr(Parser *p, Ast *ast)
+{
+    bool res = true;
+    Token *tok = parser_peek(p, 0);
+
+    switch (tok->type)
+    {
+        case TOKEN_ASTERISK:
+        case TOKEN_AMPERSAND: {
+            parser_next(p, 1);
+
+            ast->type = AST_UNARY_EXPR;
+            if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
+            if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
+
+            ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->unop.sub)) res = false;
+
+            break;
+        }
+        default: {
+            res = parse_primery_expr(p, ast);
+            break;
+        }
+    }
+
+    return res;
+}
+
+bool parse_expr(Parser *p, Ast *ast)
+{
+    memset(ast, 0, sizeof(*ast));
+    return parse_unary_expr(p, ast);
+}
+
+bool parse_stmt(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    Token *tok = parser_peek(p, 0);
+    switch (tok->type)
+    {
+        case TOKEN_PROC: {
+            parser_next(p, 1);
+
+            ast->type = AST_PROC_DECL;
+
+            Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
+            if (!proc_name_tok) res = false;
+
+            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                if (!parser_consume(p, TOKEN_IDENT)) res = false;
+                if (!parser_consume(p, TOKEN_COLON)) res = false;
+
+                Ast type_expr = {0};
+                if (!parse_expr(p, &type_expr)) res = false;
+
+                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
+            }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            Ast return_expr = {0};
+            if (!parse_expr(p, &return_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+            ast->proc.stmts = NULL;
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+            {
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt)) res = false;
+                array_push(ast->proc.stmts, stmt);
+            }
+
+            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+            break;
+        }
+        case TOKEN_VAR:
+        case TOKEN_CONST: {
+            Token *kind = parser_next(p, 1);
+
+            if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
+            if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
+
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (!ident_tok)
+                res = false;
+            else
+                ast->decl.name = ident_tok->str;
+
+            if (!parser_consume(p, TOKEN_COLON)) res = false;
+
+            ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.type_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            break;
+        }
+        default: {
+            ast->type = AST_VAR_ASSIGN;
+
+            ast->assign.assigned_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->assign.assigned_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            break;
+        }
+    }
+
+    return res;
+}
+
+void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
+{
+    memset(p, 0, sizeof(*p));
+    p->compiler = compiler;
+    p->lexer = lexer;
+
+    p->ast = bump_alloc(&p->compiler->bump, sizeof(Ast));
+    memset(p->ast, 0, sizeof(*p->ast));
+    p->ast->type = AST_ROOT;
+
+    while (!parser_is_at_end(p))
+    {
+        Ast ast = {0};
+        if (parse_stmt(p, &ast))
+        {
+            // Success...
+        }
+    }
 }
 // }}}
 
@@ -829,6 +1144,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_PROC);
         PRINT_TOKEN_TYPE(TOKEN_STRUCT);
         PRINT_TOKEN_TYPE(TOKEN_UNION);
+        PRINT_TOKEN_TYPE(TOKEN_ENUM);
         PRINT_TOKEN_TYPE(TOKEN_FOR);
         PRINT_TOKEN_TYPE(TOKEN_WHILE);
         PRINT_TOKEN_TYPE(TOKEN_IF);
@@ -851,6 +1167,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_F64);
 
         PRINT_TOKEN_TYPE(TOKEN_VOID);
+        PRINT_TOKEN_TYPE(TOKEN_NULL);
 
         PRINT_TOKEN_TYPE(TOKEN_BOOL);
         PRINT_TOKEN_TYPE(TOKEN_FALSE);
@@ -861,10 +1178,33 @@ void print_token(Token *tok)
 }
 // }}}
 
+// Printing errors {{{
+void print_errors(Compiler *compiler)
+{
+    if (array_size(compiler->errors) > 0)
+    {
+        for (Error *err = compiler->errors;
+             err != compiler->errors + array_size(compiler->errors);
+             ++err)
+        {
+            printf(
+                "%.*s (%u:%u): %.*s\n",
+                (int)err->loc.file->path.length,
+                err->loc.file->path.buf,
+                err->loc.line,
+                err->loc.col,
+                (int)err->message.length,
+                err->message.buf);
+        }
+        exit(1);
+    }
+}
+// }}}
+
 int main(int argc, char **argv)
 {
-    Compiler compiler;
-    compiler_init(&compiler);
+    Compiler *compiler = malloc(sizeof(*compiler));
+    compiler_init(compiler);
 
     if (argc <= 1)
     {
@@ -874,40 +1214,27 @@ int main(int argc, char **argv)
 
     if (argc == 2)
     {
-        SourceFile *file = bump_alloc(&compiler.bump, sizeof(SourceFile));
+        SourceFile *file = bump_alloc(&compiler->bump, sizeof(*file));
         source_file_init(
             file,
-            &compiler,
+            compiler,
             (String){.buf = argv[1], .length = strlen(argv[1])});
 
-        Lexer lexer;
-        lex_file(&lexer, &compiler, file);
-        /* for (Token *tok = lexer.tokens; */
-        /*      tok != lexer.tokens + array_size(lexer.tokens); */
-        /*      ++tok) */
-        /* { */
-        /*     print_token(tok); */
-        /* } */
+        Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
+        lex_file(lexer, compiler, file);
+        print_errors(compiler);
 
-        if (array_size(compiler.errors) > 0)
-        {
-            for (Error *err = compiler.errors;
-                 err != compiler.errors + array_size(compiler.errors);
-                 ++err)
-            {
-                printf(
-                    "%.*s (%u:%u): %.*s\n",
-                    (int)err->loc.file->path.length,
-                    err->loc.file->path.buf,
-                    err->loc.line,
-                    err->loc.col,
-                    (int)err->message.length,
-                    err->message.buf);
-            }
-            exit(1);
-        }
+        Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
+        parse_file(parser, compiler, lexer);
+        print_errors(compiler);
+    }
+    else
+    {
+        printf("Invalid compiler usage\n");
+        exit(1);
     }
 
-    compiler_destroy(&compiler);
+    compiler_destroy(compiler);
+    free(compiler);
     return 0;
 }

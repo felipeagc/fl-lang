@@ -1,0 +1,8 @@
+const hello: i32 = 123;
+var global: i32 = 123;
+
+proc hello(hello: *void, hello2: i32) void
+{
+	var hey: i32 = 123;
+	*hello = 123;
+}

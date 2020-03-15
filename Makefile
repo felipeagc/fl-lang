@@ -10,4 +10,4 @@ clean:
 	rm compiler
 
 test: compiler
-	./compiler test.lang
+	@find tests/ -type f -name "*.lang" -exec ./compiler {} \;
