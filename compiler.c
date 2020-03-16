@@ -475,6 +475,8 @@ enum {
     TOKEN_NOT_EQUAL, // !=
 
     TOKEN_IDENT,
+    TOKEN_STRING,
+    TOKEN_CSTRING,
     TOKEN_PROC,
     TOKEN_STRUCT,
     TOKEN_UNION,
@@ -563,9 +565,9 @@ static inline char lex_next(Lexer *l, size_t count)
     return c;
 }
 
-static inline char lex_peek(Lexer *l)
+static inline char lex_peek(Lexer *l, size_t offset)
 {
-    return l->file->content.buf[l->pos];
+    return l->file->content.buf[l->pos + offset];
 }
 
 void lex_token(Lexer *l)
@@ -578,7 +580,7 @@ void lex_token(Lexer *l)
     tok.loc.length = 0;
     tok.loc.line = l->line;
     tok.loc.col = l->col;
-    char c = lex_peek(l);
+    char c = lex_peek(l, 0);
 
     switch (c)
     {
@@ -662,7 +664,7 @@ void lex_token(Lexer *l)
             tok.loc.length = 1;
             lex_next(l, 1);
             tok.type = TOKEN_ASSIGN;
-            if (lex_peek(l) == '=')
+            if (lex_peek(l, 0) == '=')
             {
                 ++tok.loc.length;
                 lex_next(l, 1);
@@ -671,6 +673,59 @@ void lex_token(Lexer *l)
             break;
         }
         default: {
+            if ((lex_peek(l, 0) == 'c' && lex_peek(l, 1) == '\"') ||
+                (lex_peek(l, 0) == '\"'))
+            {
+                if (lex_peek(l, 0) == 'c')
+                {
+                    tok.type = TOKEN_CSTRING;
+                    tok.loc.length = 2;
+                    lex_next(l, 2);
+                }
+                else
+                {
+                    tok.type = TOKEN_STRING;
+                    tok.loc.length = 1;
+                    lex_next(l, 1);
+                }
+
+                tok.str = (String){0};
+
+                while (lex_peek(l, 0) != '\"' && !lex_is_at_end(l))
+                {
+                    ++tok.loc.length;
+                    char n = lex_next(l, 1);
+                    if (n == '\\')
+                    {
+                        ++tok.loc.length;
+                        n = lex_next(l, 1);
+                    }
+
+                    array_push(tok.str.buf, n);
+                }
+
+                if (tok.type == TOKEN_CSTRING)
+                {
+                    array_push(tok.str.buf, '\0');
+                }
+
+                tok.str.length = array_size(tok.str.buf);
+
+                ++tok.loc.length;
+                if (lex_next(l, 1) != '\"' || lex_is_at_end(l))
+                {
+                    compile_error(
+                        l->compiler,
+                        tok.loc,
+                        "unclosed string",
+                        tok.loc.length,
+                        tok.loc.buf);
+                    tok.loc.length = 0;
+                }
+
+                break;
+            }
+
             if (is_letter(c))
             {
                 while (is_alphanum(tok.loc.buf[tok.loc.length]))
@@ -928,6 +983,8 @@ bool parse_primery_expr(Parser *p, Ast *ast)
         case TOKEN_VOID:
         case TOKEN_NULL:
         case TOKEN_BOOL:
+        case TOKEN_STRING:
+        case TOKEN_CSTRING:
         case TOKEN_U8:
         case TOKEN_U16:
         case TOKEN_U32:
@@ -946,6 +1003,7 @@ bool parse_primery_expr(Parser *p, Ast *ast)
             break;
         }
         default: {
+            parser_next(p, 1);
             res = false;
             break;
         }

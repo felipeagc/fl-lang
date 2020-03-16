@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-Wall
+CFLAGS=-Wall -g
 
 compiler: compiler.c
 	$(CC) $(CFLAGS) -o $@ $<
