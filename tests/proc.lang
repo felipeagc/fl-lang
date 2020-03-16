@@ -4,7 +4,7 @@ var global: i32 = 123;
 proc hello(hello: **i32, hello2: i32) void
 {
 	var yo: i32;
-	var hey: i32 = 123;
+	var hey: i32 = *&yo;
 	*hello = (123);
 
 	var string: *u8 = c"cool";

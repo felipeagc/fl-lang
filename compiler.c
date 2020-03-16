@@ -23,6 +23,12 @@ typedef struct String
         .buf = lit,                                                            \
         .length = sizeof(lit) - 1,                                             \
     })
+
+static inline bool string_equals(String a, String b)
+{
+    if (a.length != b.length) return false;
+    return strncmp(a.buf, b.buf, a.length) == 0;
+}
 // }}}
 
 // Array {{{
@@ -103,13 +109,11 @@ void *array_grow(void *a, uint64_t item_size, uint64_t cap)
 // }}}
 
 // HashMap {{{
-#define HASH_UNUSED UINT64_MAX
-#define HASH_NOT_FOUND UINT64_MAX
-
 typedef struct HashMap
 {
-    uint64_t *keys;
-    uint64_t *values;
+    String *keys;
+    uint64_t *hashes;
+    void **values;
     uint32_t size;
 } HashMap;
 
@@ -134,22 +138,26 @@ void hash_init(HashMap *map, uint32_t size)
     map->size = size;
 
     map->keys = malloc(sizeof(*map->keys) * map->size);
+    map->hashes = malloc(sizeof(*map->hashes) * map->size);
     map->values = malloc(sizeof(*map->values) * map->size);
 
-    memset(map->keys, 0xff, sizeof(*map->keys) * map->size);
+    memset(map->keys, 0, sizeof(*map->keys) * map->size);
+    memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
 }
 
 void hash_clear(HashMap *map)
 {
-    memset(map->keys, 0xff, sizeof(*map->keys) * map->size);
+    memset(map->keys, 0, sizeof(*map->keys) * map->size);
+    memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
 }
 
-uint64_t hash_set_uint(HashMap *map, uint64_t key, uint64_t value)
+void *hash_set(HashMap *map, String key, void *value)
 {
-    uint32_t i = key % map->size;
+    uint64_t hash = hash_str(key);
+    uint32_t i = hash % map->size;
     uint32_t iters = 0;
-    while (map->keys[i] != key && map->keys[i] != HASH_UNUSED &&
-           iters < map->size)
+    while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
+           map->hashes[i] != 0 && iters < map->size)
     {
         i = (i + 1) % map->size;
         iters++;
@@ -158,51 +166,42 @@ uint64_t hash_set_uint(HashMap *map, uint64_t key, uint64_t value)
     if (iters >= map->size)
     {
         hash_grow(map);
-        return hash_set_uint(map, key, value);
+        return hash_set(map, key, value);
     }
 
     map->keys[i] = key;
+    map->hashes[i] = hash;
     map->values[i] = value;
 
     return value;
 }
 
-uint64_t hash_get_uint(HashMap *map, uint64_t key)
+void *hash_get(HashMap *map, String key)
 {
-    uint32_t i = key % map->size;
+    uint64_t hash = hash_str(key);
+    uint32_t i = hash % map->size;
     uint32_t iters = 0;
-    while (map->keys[i] != key && map->keys[i] != HASH_UNUSED &&
-           iters < map->size)
+    while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
+           map->hashes[i] != 0 && iters < map->size)
     {
         i = (i + 1) % map->size;
         iters++;
     }
     if (iters >= map->size)
     {
-        return HASH_NOT_FOUND;
+        return NULL;
     }
 
-    return map->keys[i] == HASH_UNUSED ? HASH_NOT_FOUND : map->values[i];
+    return map->hashes[i] == 0 ? NULL : map->values[i];
 }
 
-void *hash_set_ptr(HashMap *map, uint64_t key, void *value)
+void hash_remove(HashMap *map, String key)
 {
-    return (void *)hash_set_uint(map, key, (uint64_t)value);
-}
-
-void *hash_get_ptr(HashMap *map, uint64_t key)
-{
-    uint64_t result = hash_get_uint(map, key);
-    if (result == HASH_NOT_FOUND) return NULL;
-    return (void *)result;
-}
-
-void hash_remove(HashMap *map, uint64_t key)
-{
-    uint32_t i = key % map->size;
-    uint32_t iters = 0;
-    while (map->keys[i] != key && map->keys[i] != HASH_UNUSED &&
-           iters < map->size)
+    uint64_t hash = hash_str(key);
+    uint64_t i = hash % map->size;
+    uint64_t iters = 0;
+    while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
+           map->hashes[i] != 0 && iters < map->size)
     {
         i = (i + 1) % map->size;
         iters++;
@@ -213,38 +212,42 @@ void hash_remove(HashMap *map, uint64_t key)
         return;
     }
 
-    map->keys[i] = HASH_UNUSED;
+    map->hashes[i] = 0;
 
     return;
 }
 
 void hash_grow(HashMap *map)
 {
-    uint32_t old_size = map->size;
-    uint64_t *old_keys = map->keys;
-    uint64_t *old_values = map->values;
+    uint64_t old_size = map->size;
+    String *old_keys = map->keys;
+    uint64_t *old_hashes = map->hashes;
+    void **old_values = map->values;
 
     map->size = old_size * 2;
-    map->keys = malloc(sizeof(*map->keys) * map->size);
+    map->hashes = malloc(sizeof(*map->hashes) * map->size);
     map->values = malloc(sizeof(*map->values) * map->size);
-    memset(map->keys, 0xff, sizeof(*map->keys) * map->size);
+    memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
+    memset(map->keys, 0, sizeof(*map->keys) * map->size);
 
-    for (uint32_t i = 0; i < old_size; i++)
+    for (uint64_t i = 0; i < old_size; i++)
     {
-        if (old_keys[i] != HASH_UNUSED)
+        if (old_hashes[i] != 0)
         {
-            hash_set_uint(map, old_keys[i], old_values[i]);
+            hash_set(map, old_keys[i], old_values[i]);
         }
     }
 
-    free(old_keys);
+    free(old_hashes);
     free(old_values);
+    free(old_keys);
 }
 
 void hash_destroy(HashMap *map)
 {
-    free(map->keys);
+    free(map->hashes);
     free(map->values);
+    free(map->keys);
 }
 // }}}
 
@@ -636,6 +639,12 @@ void lex_token(Lexer *l)
             tok.type = TOKEN_ASTERISK;
             break;
         }
+        case '&': {
+            tok.loc.length = 1;
+            lex_next(l, 1);
+            tok.type = TOKEN_AMPERSAND;
+            break;
+        }
         case ':': {
             tok.loc.length = 1;
             lex_next(l, 1);
@@ -854,6 +863,59 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
 }
 // }}}
 
+// Type {{{
+typedef enum TypeKind {
+    TYPE_UNINITIALIZED,
+    TYPE_NONE,
+    TYPE_PRIMITIVE,
+    TYPE_POINTER,
+    TYPE_ARRAY,
+} TypeKind;
+
+typedef enum PrimitiveType {
+    PRIMITIVE_TYPE_U8,
+    PRIMITIVE_TYPE_U16,
+    PRIMITIVE_TYPE_U32,
+    PRIMITIVE_TYPE_U64,
+    PRIMITIVE_TYPE_I8,
+    PRIMITIVE_TYPE_I16,
+    PRIMITIVE_TYPE_I32,
+    PRIMITIVE_TYPE_I64,
+    PRIMITIVE_TYPE_F32,
+    PRIMITIVE_TYPE_F64,
+    PRIMITIVE_TYPE_BOOL,
+    PRIMITIVE_TYPE_VOID,
+} PrimitiveType;
+
+typedef struct TypeInfo
+{
+    TypeKind kind;
+    union
+    {
+        PrimitiveType primitive;
+        struct
+        {
+            struct TypeInfo *sub;
+        } ptr;
+        struct
+        {
+            struct TypeInfo *sub;
+            size_t size;
+        } array;
+    };
+} TypeInfo;
+// }}}
+
+// Scope {{{
+typedef struct Scope
+{
+    HashMap map;
+    struct Scope *parent;
+    /* array */ struct Scope **siblings;
+    struct Ast *procedure;
+} Scope;
+// }}}
+
 // AST {{{
 typedef enum UnOpType {
     UNOP_DEREFERENCE,
@@ -888,6 +950,7 @@ typedef struct Ast
 {
     AstType type;
     Location loc;
+    TypeInfo type_info;
 
     union
     {
@@ -895,6 +958,12 @@ typedef struct Ast
         struct Ast *expr;
         struct
         {
+            Scope scope;
+            /*array*/ struct Ast *stmts;
+        } block;
+        struct
+        {
+            Scope scope;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
@@ -1060,7 +1129,7 @@ bool parse_expr(Parser *p, Ast *ast)
     return parse_unary_expr(p, ast);
 }
 
-bool parse_stmt(Parser *p, Ast *ast)
+bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 {
     bool res = true;
 
@@ -1112,7 +1181,7 @@ bool parse_stmt(Parser *p, Ast *ast)
             while (parser_peek(p, 0)->type != TOKEN_RCURLY)
             {
                 Ast stmt = {0};
-                if (!parse_stmt(p, &stmt)) res = false;
+                if (!parse_stmt(p, &stmt, true)) res = false;
                 array_push(ast->proc.stmts, stmt);
             }
 
@@ -1165,6 +1234,19 @@ bool parse_stmt(Parser *p, Ast *ast)
 
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
+            if (!inside_procedure)
+            {
+                compile_error(
+                    p->compiler,
+                    tok->loc,
+                    "assignment must be inside procedure",
+                    tok->loc.length,
+                    tok->loc.buf);
+
+                res = false;
+                break;
+            }
+
             break;
         }
     }
@@ -1184,10 +1266,36 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
 
     while (!parser_is_at_end(p))
     {
-        Ast ast = {0};
-        if (parse_stmt(p, &ast))
+        Ast stmt = {0};
+        if (parse_stmt(p, &stmt, false))
         {
-            // Success...
+            array_push(p->ast->block.stmts, stmt);
+        }
+    }
+}
+// }}}
+
+// Semantic analyzer {{{
+void analyze_ast(Compiler *compiler, Ast *ast)
+{
+    switch (ast->type)
+    {
+        case AST_ROOT: {
+            for (Ast *stmt = ast->block.stmts;
+                 stmt != ast->block.stmts + array_size(ast->block.stmts);
+                 ++stmt)
+            {
+                analyze_ast(compiler, stmt);
+            }
+            break;
+        }
+        case AST_CONST_DECL: {
+            analyze_ast(compiler, ast->decl.type_expr);
+            analyze_ast(compiler, ast->decl.value_expr);
+            break;
+        }
+        default: {
+            break;
         }
     }
 }
@@ -1314,6 +1422,8 @@ int main(int argc, char **argv)
         Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
         parse_file(parser, compiler, lexer);
         print_errors(compiler);
+
+        analyze_ast(compiler, parser->ast);
     }
     else
     {
