@@ -872,6 +872,7 @@ typedef enum AstType {
     AST_ROOT,
     AST_STRUCT_DECL,
     AST_PROC_DECL,
+    AST_PROC_PARAM,
     AST_BLOCK,
     AST_UNARY_EXPR,
     AST_BINARY_EXPR,
@@ -880,6 +881,7 @@ typedef enum AstType {
     AST_VAR_ASSIGN,
     AST_RETURN,
     AST_PRIMARY,
+    AST_PAREN_EXPR,
 } AstType;
 
 typedef struct Ast
@@ -890,8 +892,11 @@ typedef struct Ast
     union
     {
         Token *tok;
+        struct Ast *expr;
         struct
         {
+            struct Ast *return_type;
+            /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
         } proc;
         struct
@@ -1002,6 +1007,15 @@ bool parse_primery_expr(Parser *p, Ast *ast)
             ast->tok = tok;
             break;
         }
+        case TOKEN_LPAREN: {
+            parser_next(p, 1);
+
+            if (!parse_expr(p, ast)) res = false;
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            break;
+        }
         default: {
             parser_next(p, 1);
             res = false;
@@ -1065,11 +1079,21 @@ bool parse_stmt(Parser *p, Ast *ast)
 
             while (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
-                if (!parser_consume(p, TOKEN_IDENT)) res = false;
+                Ast param = {0};
+
+                Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+                if (!ident_tok)
+                    res = false;
+                else
+                    param.decl.name = ident_tok->str;
+
                 if (!parser_consume(p, TOKEN_COLON)) res = false;
 
-                Ast type_expr = {0};
-                if (!parse_expr(p, &type_expr)) res = false;
+                param.decl.type_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, param.decl.type_expr)) res = false;
+
+                array_push(ast->proc.params, param);
 
                 if (parser_peek(p, 0)->type != TOKEN_RPAREN)
                 {
@@ -1079,8 +1103,8 @@ bool parse_stmt(Parser *p, Ast *ast)
 
             if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-            Ast return_expr = {0};
-            if (!parse_expr(p, &return_expr)) res = false;
+            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->proc.return_type)) res = false;
 
             if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
@@ -1113,10 +1137,15 @@ bool parse_stmt(Parser *p, Ast *ast)
             ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, ast->decl.type_expr)) res = false;
 
-            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+            ast->decl.value_expr = NULL;
+            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            {
+                if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
-            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+                ast->decl.value_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->decl.value_expr)) res = false;
+            }
 
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
