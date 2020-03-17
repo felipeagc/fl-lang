@@ -1216,7 +1216,11 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 bool parse_expr(Parser *p, Ast *ast)
 {
     memset(ast, 0, sizeof(*ast));
-    return parse_unary_expr(p, ast);
+    ast->loc = parser_peek(p, 0)->loc;
+    bool res = parse_unary_expr(p, ast);
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+    return res;
 }
 
 bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
@@ -1398,11 +1402,6 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     {
         case AST_CONST_DECL:
         case AST_VAR_DECL: {
-            printf(
-                "Registering '%.*s'\n",
-                (int)ast->decl.name.length,
-                ast->decl.name.buf);
-
             Scope *scope = *array_last(a->scope_stack);
             assert(scope);
             scope_set(scope, ast->decl.name, ast);
@@ -1410,11 +1409,6 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
             break;
         }
         case AST_PROC_DECL: {
-            printf(
-                "Registering '%.*s'\n",
-                (int)ast->proc.name.length,
-                ast->proc.name.buf);
-
             Scope *scope = *array_last(a->scope_stack);
             assert(scope);
             scope_set(scope, ast->proc.name, ast);
@@ -1459,8 +1453,10 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
                     Ast *sym = get_symbol(a, ast->primary.tok->str);
                     if (!sym)
                     {
-                        printf(
-                            "wrong: %.*s\n",
+                        compile_error(
+                            a->compiler,
+                            ast->loc,
+                            "invalid identifier: '%.*s'",
                             (int)ast->primary.tok->str.length,
                             ast->primary.tok->str.buf);
                     }
@@ -1580,11 +1576,12 @@ void print_errors(Compiler *compiler)
              ++err)
         {
             printf(
-                "%.*s (%u:%u): %.*s\n",
+                "%.*s (%u:%u %u): %.*s\n",
                 (int)err->loc.file->path.length,
                 err->loc.file->path.buf,
                 err->loc.line,
                 err->loc.col,
+                err->loc.length,
                 (int)err->message.length,
                 err->message.buf);
         }
@@ -1624,6 +1621,7 @@ int main(int argc, char **argv)
         memset(analyzer, 0, sizeof(*analyzer));
         analyzer->compiler = compiler;
         analyze_ast_children(analyzer, parser->ast);
+        print_errors(compiler);
     }
     else
     {

@@ -5,7 +5,7 @@ proc main(hello: **i32, hello2: i32) void
 {
 	var yo: i32;
 	var hey: i32 = *&yo;
-	*hello = (123);
+	*hello4 = (123);
 
 	var string: *u8 = c"cool";
 }
