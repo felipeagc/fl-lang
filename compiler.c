@@ -529,6 +529,78 @@ typedef struct Token
 } Token;
 // }}}
 
+// Printing {{{
+void print_token(Token *tok)
+{
+    printf("(%u:%u) ", tok->loc.line, tok->loc.col);
+
+#define PRINT_TOKEN_TYPE(type)                                                 \
+    case type: printf(#type); break
+
+    switch (tok->type)
+    {
+        PRINT_TOKEN_TYPE(TOKEN_LPAREN);
+        PRINT_TOKEN_TYPE(TOKEN_RPAREN);
+        PRINT_TOKEN_TYPE(TOKEN_LBRACK);
+        PRINT_TOKEN_TYPE(TOKEN_RBRACK);
+        PRINT_TOKEN_TYPE(TOKEN_LCURLY);
+        PRINT_TOKEN_TYPE(TOKEN_RCURLY);
+
+        PRINT_TOKEN_TYPE(TOKEN_SEMICOLON);
+        PRINT_TOKEN_TYPE(TOKEN_COLON);
+
+        PRINT_TOKEN_TYPE(TOKEN_ASTERISK);
+        PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
+
+        PRINT_TOKEN_TYPE(TOKEN_DOT);
+        PRINT_TOKEN_TYPE(TOKEN_COMMA);
+
+        PRINT_TOKEN_TYPE(TOKEN_NOT);
+        PRINT_TOKEN_TYPE(TOKEN_ASSIGN);
+        PRINT_TOKEN_TYPE(TOKEN_EQUAL);
+        PRINT_TOKEN_TYPE(TOKEN_NOT_EQUAL);
+
+        PRINT_TOKEN_TYPE(TOKEN_INT);
+        PRINT_TOKEN_TYPE(TOKEN_FLOAT);
+
+        PRINT_TOKEN_TYPE(TOKEN_IDENT);
+        PRINT_TOKEN_TYPE(TOKEN_PROC);
+        PRINT_TOKEN_TYPE(TOKEN_STRUCT);
+        PRINT_TOKEN_TYPE(TOKEN_UNION);
+        PRINT_TOKEN_TYPE(TOKEN_ENUM);
+        PRINT_TOKEN_TYPE(TOKEN_FOR);
+        PRINT_TOKEN_TYPE(TOKEN_WHILE);
+        PRINT_TOKEN_TYPE(TOKEN_IF);
+        PRINT_TOKEN_TYPE(TOKEN_ELSE);
+        PRINT_TOKEN_TYPE(TOKEN_RETURN);
+        PRINT_TOKEN_TYPE(TOKEN_CONST);
+        PRINT_TOKEN_TYPE(TOKEN_VAR);
+
+        PRINT_TOKEN_TYPE(TOKEN_U8);
+        PRINT_TOKEN_TYPE(TOKEN_U16);
+        PRINT_TOKEN_TYPE(TOKEN_U32);
+        PRINT_TOKEN_TYPE(TOKEN_U64);
+
+        PRINT_TOKEN_TYPE(TOKEN_I8);
+        PRINT_TOKEN_TYPE(TOKEN_I16);
+        PRINT_TOKEN_TYPE(TOKEN_I32);
+        PRINT_TOKEN_TYPE(TOKEN_I64);
+
+        PRINT_TOKEN_TYPE(TOKEN_F32);
+        PRINT_TOKEN_TYPE(TOKEN_F64);
+
+        PRINT_TOKEN_TYPE(TOKEN_VOID);
+        PRINT_TOKEN_TYPE(TOKEN_NULL);
+
+        PRINT_TOKEN_TYPE(TOKEN_BOOL);
+        PRINT_TOKEN_TYPE(TOKEN_FALSE);
+        PRINT_TOKEN_TYPE(TOKEN_TRUE);
+    }
+
+    printf(" \"%.*s\"\n", (int)tok->loc.length, tok->loc.buf);
+}
+// }}}
+
 // Lexer {{{
 typedef struct Lexer
 {
@@ -910,10 +982,25 @@ typedef struct TypeInfo
 typedef struct Scope
 {
     HashMap map;
-    struct Scope *parent;
-    /* array */ struct Scope **siblings;
     struct Ast *procedure;
 } Scope;
+
+void scope_init(Scope *scope, size_t size, struct Ast *procedure)
+{
+    memset(scope, 0, sizeof(*scope));
+    hash_init(&scope->map, size);
+    scope->procedure = procedure;
+}
+
+void scope_set(Scope *scope, String name, struct Ast *decl)
+{
+    hash_set(&scope->map, name, decl);
+}
+
+struct Ast *scope_get_local(Scope *scope, String name)
+{
+    return hash_get(&scope->map, name);
+}
 // }}}
 
 // AST {{{
@@ -921,7 +1008,6 @@ typedef enum UnOpType {
     UNOP_DEREFERENCE,
     UNOP_ADDRESS,
 } UnOpType;
-
 typedef enum BinOpType {
     BINOP_ADD,
     BINOP_SUB,
@@ -954,8 +1040,11 @@ typedef struct Ast
 
     union
     {
-        Token *tok;
         struct Ast *expr;
+        struct
+        {
+            Token *tok;
+        } primary;
         struct
         {
             Scope scope;
@@ -964,6 +1053,7 @@ typedef struct Ast
         struct
         {
             Scope scope;
+            String name;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
@@ -1073,7 +1163,7 @@ bool parse_primery_expr(Parser *p, Ast *ast)
         case TOKEN_FLOAT: {
             parser_next(p, 1);
             ast->type = AST_PRIMARY;
-            ast->tok = tok;
+            ast->primary.tok = tok;
             break;
         }
         case TOKEN_LPAREN: {
@@ -1142,7 +1232,10 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             ast->type = AST_PROC_DECL;
 
             Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
-            if (!proc_name_tok) res = false;
+            if (!proc_name_tok)
+                res = false;
+            else
+                ast->proc.name = proc_name_tok->str;
 
             if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -1229,8 +1322,9 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
             if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
-            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+            ast->assign.value_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->assign.value_expr)) res = false;
 
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
@@ -1276,100 +1370,203 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
 // }}}
 
 // Semantic analyzer {{{
-void analyze_ast(Compiler *compiler, Ast *ast)
+typedef struct Analyzer
+{
+    Compiler *compiler;
+    /*array*/ Scope **scope_stack;
+} Analyzer;
+
+struct Ast *get_symbol(Analyzer *a, String name)
+{
+    struct Ast *sym = NULL;
+    for (Scope **scope = a->scope_stack + array_size(a->scope_stack) - 1;
+         scope >= a->scope_stack;
+         --scope)
+    {
+        sym = scope_get_local(*scope, name);
+        if (sym) return sym;
+    }
+
+    return NULL;
+}
+
+void analyze_ast_children(Analyzer *a, Ast *ast);
+
+void register_symbol_ast(Analyzer *a, Ast *ast)
+{
+    switch (ast->type)
+    {
+        case AST_CONST_DECL:
+        case AST_VAR_DECL: {
+            printf(
+                "Registering '%.*s'\n",
+                (int)ast->decl.name.length,
+                ast->decl.name.buf);
+
+            Scope *scope = *array_last(a->scope_stack);
+            assert(scope);
+            scope_set(scope, ast->decl.name, ast);
+
+            break;
+        }
+        case AST_PROC_DECL: {
+            printf(
+                "Registering '%.*s'\n",
+                (int)ast->proc.name.length,
+                ast->proc.name.buf);
+
+            Scope *scope = *array_last(a->scope_stack);
+            assert(scope);
+            scope_set(scope, ast->proc.name, ast);
+            break;
+        }
+        default: break;
+    }
+}
+
+void symbol_check_ast(Analyzer *a, Ast *ast)
+{
+    switch (ast->type)
+    {
+        case AST_CONST_DECL:
+        case AST_VAR_DECL: {
+            symbol_check_ast(a, ast->decl.type_expr);
+            if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
+                ast->type == AST_CONST_DECL)
+            {
+                symbol_check_ast(a, ast->decl.value_expr);
+            }
+            break;
+        }
+        case AST_VAR_ASSIGN: {
+            symbol_check_ast(a, ast->assign.assigned_expr);
+            symbol_check_ast(a, ast->assign.value_expr);
+            break;
+        }
+        case AST_UNARY_EXPR: {
+            symbol_check_ast(a, ast->unop.sub);
+            break;
+        }
+        case AST_BINARY_EXPR: {
+            symbol_check_ast(a, ast->binop.left);
+            symbol_check_ast(a, ast->binop.right);
+            break;
+        }
+        case AST_PRIMARY: {
+            switch (ast->primary.tok->type)
+            {
+                case TOKEN_IDENT: {
+                    Ast *sym = get_symbol(a, ast->primary.tok->str);
+                    if (!sym)
+                    {
+                        printf(
+                            "wrong: %.*s\n",
+                            (int)ast->primary.tok->str.length,
+                            ast->primary.tok->str.buf);
+                    }
+
+                    break;
+                }
+                default: break;
+            }
+
+            break;
+        }
+        default: break;
+    }
+}
+
+void type_check_ast(Analyzer *a, Ast *ast)
+{
+    switch (ast->type)
+    {
+        default: break;
+    }
+}
+
+void analyze_stmts(Analyzer *a, Ast *stmts)
+{
+    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    {
+        switch (stmt->type)
+        {
+            case AST_CONST_DECL:
+            case AST_PROC_DECL: {
+                register_symbol_ast(a, stmt);
+                break;
+            }
+            default: break;
+        }
+    }
+
+    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    {
+        switch (stmt->type)
+        {
+            case AST_CONST_DECL:
+            case AST_PROC_DECL: {
+                symbol_check_ast(a, stmt);
+                type_check_ast(a, stmt);
+                break;
+            }
+            default: break;
+        }
+    }
+
+    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    {
+        switch (stmt->type)
+        {
+            case AST_CONST_DECL:
+            case AST_PROC_DECL: {
+                break;
+            }
+            default: {
+                register_symbol_ast(a, stmt);
+                symbol_check_ast(a, stmt);
+                type_check_ast(a, stmt);
+                analyze_ast_children(a, stmt);
+                break;
+            }
+        }
+    }
+
+    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    {
+        switch (stmt->type)
+        {
+            case AST_CONST_DECL:
+            case AST_PROC_DECL: {
+                analyze_ast_children(a, stmt);
+                break;
+            }
+            default: break;
+        }
+    }
+}
+
+void analyze_ast_children(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
         case AST_ROOT: {
-            for (Ast *stmt = ast->block.stmts;
-                 stmt != ast->block.stmts + array_size(ast->block.stmts);
-                 ++stmt)
-            {
-                analyze_ast(compiler, stmt);
-            }
+            scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
+
+            array_push(a->scope_stack, &ast->block.scope);
+            analyze_stmts(a, ast->block.stmts);
+            array_pop(a->scope_stack);
             break;
         }
-        case AST_CONST_DECL: {
-            analyze_ast(compiler, ast->decl.type_expr);
-            analyze_ast(compiler, ast->decl.value_expr);
+        case AST_PROC_DECL: {
+            scope_init(&ast->proc.scope, array_size(ast->proc.stmts), NULL);
+
+            array_push(a->scope_stack, &ast->proc.scope);
+            analyze_stmts(a, ast->proc.stmts);
+            array_pop(a->scope_stack);
             break;
         }
-        default: {
-            break;
-        }
+        default: break;
     }
-}
-// }}}
-
-// Printing {{{
-void print_token(Token *tok)
-{
-    printf("(%u:%u) ", tok->loc.line, tok->loc.col);
-
-#define PRINT_TOKEN_TYPE(type)                                                 \
-    case type: printf(#type); break
-
-    switch (tok->type)
-    {
-        PRINT_TOKEN_TYPE(TOKEN_LPAREN);
-        PRINT_TOKEN_TYPE(TOKEN_RPAREN);
-        PRINT_TOKEN_TYPE(TOKEN_LBRACK);
-        PRINT_TOKEN_TYPE(TOKEN_RBRACK);
-        PRINT_TOKEN_TYPE(TOKEN_LCURLY);
-        PRINT_TOKEN_TYPE(TOKEN_RCURLY);
-
-        PRINT_TOKEN_TYPE(TOKEN_SEMICOLON);
-        PRINT_TOKEN_TYPE(TOKEN_COLON);
-
-        PRINT_TOKEN_TYPE(TOKEN_ASTERISK);
-        PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
-
-        PRINT_TOKEN_TYPE(TOKEN_DOT);
-        PRINT_TOKEN_TYPE(TOKEN_COMMA);
-
-        PRINT_TOKEN_TYPE(TOKEN_NOT);
-        PRINT_TOKEN_TYPE(TOKEN_ASSIGN);
-        PRINT_TOKEN_TYPE(TOKEN_EQUAL);
-        PRINT_TOKEN_TYPE(TOKEN_NOT_EQUAL);
-
-        PRINT_TOKEN_TYPE(TOKEN_INT);
-        PRINT_TOKEN_TYPE(TOKEN_FLOAT);
-
-        PRINT_TOKEN_TYPE(TOKEN_IDENT);
-        PRINT_TOKEN_TYPE(TOKEN_PROC);
-        PRINT_TOKEN_TYPE(TOKEN_STRUCT);
-        PRINT_TOKEN_TYPE(TOKEN_UNION);
-        PRINT_TOKEN_TYPE(TOKEN_ENUM);
-        PRINT_TOKEN_TYPE(TOKEN_FOR);
-        PRINT_TOKEN_TYPE(TOKEN_WHILE);
-        PRINT_TOKEN_TYPE(TOKEN_IF);
-        PRINT_TOKEN_TYPE(TOKEN_ELSE);
-        PRINT_TOKEN_TYPE(TOKEN_RETURN);
-        PRINT_TOKEN_TYPE(TOKEN_CONST);
-        PRINT_TOKEN_TYPE(TOKEN_VAR);
-
-        PRINT_TOKEN_TYPE(TOKEN_U8);
-        PRINT_TOKEN_TYPE(TOKEN_U16);
-        PRINT_TOKEN_TYPE(TOKEN_U32);
-        PRINT_TOKEN_TYPE(TOKEN_U64);
-
-        PRINT_TOKEN_TYPE(TOKEN_I8);
-        PRINT_TOKEN_TYPE(TOKEN_I16);
-        PRINT_TOKEN_TYPE(TOKEN_I32);
-        PRINT_TOKEN_TYPE(TOKEN_I64);
-
-        PRINT_TOKEN_TYPE(TOKEN_F32);
-        PRINT_TOKEN_TYPE(TOKEN_F64);
-
-        PRINT_TOKEN_TYPE(TOKEN_VOID);
-        PRINT_TOKEN_TYPE(TOKEN_NULL);
-
-        PRINT_TOKEN_TYPE(TOKEN_BOOL);
-        PRINT_TOKEN_TYPE(TOKEN_FALSE);
-        PRINT_TOKEN_TYPE(TOKEN_TRUE);
-    }
-
-    printf(" \"%.*s\"\n", (int)tok->loc.length, tok->loc.buf);
 }
 // }}}
 
@@ -1423,7 +1620,10 @@ int main(int argc, char **argv)
         parse_file(parser, compiler, lexer);
         print_errors(compiler);
 
-        analyze_ast(compiler, parser->ast);
+        Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
+        memset(analyzer, 0, sizeof(*analyzer));
+        analyzer->compiler = compiler;
+        analyze_ast_children(analyzer, parser->ast);
     }
     else
     {
