@@ -1424,6 +1424,17 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
             break;
         }
+        case TOKEN_RETURN: {
+            parser_next(p, 1);
+
+            ast->type = AST_RETURN;
+
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+            break;
+        }
         default: {
             ast->type = AST_VAR_ASSIGN;
 
@@ -1557,6 +1568,7 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
+        case AST_RETURN:
         case AST_PAREN_EXPR: {
             symbol_check_ast(a, ast->expr);
             break;

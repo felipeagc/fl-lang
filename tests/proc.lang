@@ -8,6 +8,7 @@ proc main(argc: i32, argv: **u8) i32 {
 	var yo: i32;
 	*hello = (yo);
 
-
 	var string: *u8 = c"cool";
+
+	return 0;
 }
