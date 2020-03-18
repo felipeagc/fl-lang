@@ -481,6 +481,7 @@ enum {
     TOKEN_STRING,
     TOKEN_CSTRING,
     TOKEN_PROC,
+    TOKEN_TYPEDEF,
     TOKEN_STRUCT,
     TOKEN_UNION,
     TOKEN_ENUM,
@@ -542,6 +543,7 @@ static const char *token_strings[] = {
     [TOKEN_STRING] = "string literal",
     [TOKEN_CSTRING] = "c-string literal",
     [TOKEN_PROC] = "proc",
+    [TOKEN_TYPEDEF] = "typedef",
     [TOKEN_STRUCT] = "struct",
     [TOKEN_UNION] = "union",
     [TOKEN_ENUM] = "enum",
@@ -912,6 +914,7 @@ void lex_token(Lexer *l)
                 LEX_MATCH_STR("var", TOKEN_VAR);
                 LEX_MATCH_STR("const", TOKEN_CONST);
                 LEX_MATCH_STR("proc", TOKEN_PROC);
+                LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
                 LEX_MATCH_STR("struct", TOKEN_STRUCT);
                 LEX_MATCH_STR("union", TOKEN_UNION);
                 LEX_MATCH_STR("enum", TOKEN_ENUM);
@@ -1094,6 +1097,7 @@ typedef enum AstType {
     AST_BLOCK,
     AST_UNARY_EXPR,
     AST_BINARY_EXPR,
+    AST_TYPEDEF,
     AST_CONST_DECL,
     AST_VAR_DECL,
     AST_VAR_ASSIGN,
@@ -1128,6 +1132,11 @@ typedef struct Ast
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
         } proc;
+        struct
+        {
+            String name;
+            struct Ast *type_expr;
+        } type_def;
         struct
         {
             String name;
@@ -1385,6 +1394,25 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
                 if (!parse_expr(p, ast->decl.value_expr)) res = false;
             }
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            break;
+        }
+        case TOKEN_TYPEDEF: {
+            parser_next(p, 1);
+
+            ast->type = AST_TYPEDEF;
+
+            Token *type_name_tok = parser_consume(p, TOKEN_IDENT);
+            if (!type_name_tok)
+                res = false;
+            else
+                ast->type_def.name = type_name_tok->str;
+
+            ast->type_def.type_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->type_def.type_expr)) res = false;
 
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
