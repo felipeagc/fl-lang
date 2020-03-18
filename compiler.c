@@ -227,6 +227,7 @@ void hash_grow(HashMap *map)
     map->size = old_size * 2;
     map->hashes = malloc(sizeof(*map->hashes) * map->size);
     map->values = malloc(sizeof(*map->values) * map->size);
+    map->keys = malloc(sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
 
@@ -406,6 +407,7 @@ void compiler_destroy(Compiler *compiler)
 void compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
 {
     char buf[2048];
+    assert(loc.file);
 
     va_list vl;
     va_start(vl, fmt);
@@ -1307,6 +1309,7 @@ bool parse_expr(Parser *p, Ast *ast)
 
 bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 {
+    ast->loc = parser_peek(p, 0)->loc;
     bool res = true;
 
     Token *tok = parser_peek(p, 0);
@@ -1328,12 +1331,15 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             while (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
                 Ast param = {0};
+                param.type = AST_PROC_PARAM;
 
                 Token *ident_tok = parser_consume(p, TOKEN_IDENT);
                 if (!ident_tok)
                     res = false;
                 else
                     param.decl.name = ident_tok->str;
+
+                param.loc = ident_tok->loc;
 
                 if (!parser_consume(p, TOKEN_COLON)) res = false;
 
@@ -1450,6 +1456,9 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         }
     }
 
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
     return res;
 }
 
@@ -1467,12 +1476,7 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     {
         Ast stmt = {0};
 
-        stmt.loc = parser_peek(p, 0)->loc;
-        bool res = parse_stmt(p, &stmt, false);
-        Location last_loc = parser_peek(p, -1)->loc;
-        stmt.loc.length = last_loc.buf + last_loc.length - stmt.loc.buf;
-
-        if (res)
+        if (parse_stmt(p, &stmt, false))
         {
             array_push(p->ast->block.stmts, stmt);
         }
@@ -1508,16 +1512,40 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     switch (ast->type)
     {
         case AST_CONST_DECL:
-        case AST_VAR_DECL: {
+        case AST_VAR_DECL:
+        case AST_PROC_PARAM: {
             Scope *scope = *array_last(a->scope_stack);
             assert(scope);
-            scope_set(scope, ast->decl.name, ast);
 
+            if (get_symbol(a, ast->decl.name))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "duplicate declaration: '%.*s'",
+                    (int)ast->decl.name.length,
+                    ast->decl.name.buf);
+                break;
+            }
+
+            scope_set(scope, ast->decl.name, ast);
             break;
         }
         case AST_PROC_DECL: {
             Scope *scope = *array_last(a->scope_stack);
             assert(scope);
+
+            if (get_symbol(a, ast->proc.name))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "duplicate declaration: '%.*s'",
+                    (int)ast->proc.name.length,
+                    ast->proc.name.buf);
+                break;
+            }
+
             scope_set(scope, ast->proc.name, ast);
             break;
         }
@@ -1665,9 +1693,13 @@ void analyze_ast_children(Analyzer *a, Ast *ast)
             break;
         }
         case AST_PROC_DECL: {
-            scope_init(&ast->proc.scope, array_size(ast->proc.stmts), NULL);
+            scope_init(
+                &ast->proc.scope,
+                array_size(ast->proc.stmts) + array_size(ast->proc.params),
+                NULL);
 
             array_push(a->scope_stack, &ast->proc.scope);
+            analyze_stmts(a, ast->proc.params);
             analyze_stmts(a, ast->proc.stmts);
             array_pop(a->scope_stack);
             break;
