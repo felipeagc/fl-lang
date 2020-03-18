@@ -516,6 +516,67 @@ enum {
     TOKEN_TRUE,
 };
 
+static const char *token_strings[] = {
+    [TOKEN_LPAREN] = "(",
+    [TOKEN_RPAREN] = ")",
+    [TOKEN_LBRACK] = "[",
+    [TOKEN_RBRACK] = "]",
+    [TOKEN_LCURLY] = "{",
+    [TOKEN_RCURLY] = "}",
+
+    [TOKEN_SEMICOLON] = ";",
+    [TOKEN_COLON] = ":",
+
+    [TOKEN_ASTERISK] = "*",
+    [TOKEN_AMPERSAND] = "&",
+
+    [TOKEN_DOT] = ".",
+    [TOKEN_COMMA] = ",",
+
+    [TOKEN_NOT] = "!",        // !
+    [TOKEN_ASSIGN] = "=",     // =
+    [TOKEN_EQUAL] = "==",     // ==
+    [TOKEN_NOT_EQUAL] = "!=", // !=
+
+    [TOKEN_IDENT] = "identifier",
+    [TOKEN_STRING] = "string literal",
+    [TOKEN_CSTRING] = "c-string literal",
+    [TOKEN_PROC] = "proc",
+    [TOKEN_STRUCT] = "struct",
+    [TOKEN_UNION] = "union",
+    [TOKEN_ENUM] = "enum",
+    [TOKEN_FOR] = "for",
+    [TOKEN_WHILE] = "while",
+    [TOKEN_IF] = "if",
+    [TOKEN_ELSE] = "else",
+    [TOKEN_RETURN] = "return",
+    [TOKEN_CONST] = "const",
+    [TOKEN_VAR] = "var",
+
+    [TOKEN_INT] = "integer literal",
+    [TOKEN_FLOAT] = "float literal",
+
+    [TOKEN_U8] = "u8",
+    [TOKEN_U16] = "u16",
+    [TOKEN_U32] = "u32",
+    [TOKEN_U64] = "u64",
+
+    [TOKEN_I8] = "i8",
+    [TOKEN_I16] = "i16",
+    [TOKEN_I32] = "i32",
+    [TOKEN_I64] = "i64",
+
+    [TOKEN_F32] = "f32",
+    [TOKEN_F64] = "f64",
+
+    [TOKEN_VOID] = "void",
+    [TOKEN_NULL] = "null",
+
+    [TOKEN_BOOL] = "bool",
+    [TOKEN_FALSE] = "false",
+    [TOKEN_TRUE] = "true",
+};
+
 typedef struct Token
 {
     TokenType type;
@@ -757,6 +818,8 @@ void lex_token(Lexer *l)
             if ((lex_peek(l, 0) == 'c' && lex_peek(l, 1) == '\"') ||
                 (lex_peek(l, 0) == '\"'))
             {
+                l->col--;
+
                 if (lex_peek(l, 0) == 'c')
                 {
                     tok.type = TOKEN_CSTRING;
@@ -804,15 +867,20 @@ void lex_token(Lexer *l)
                     tok.loc.length = 0;
                 }
 
+                l->col += tok.loc.length;
+
                 break;
             }
 
             if (is_letter(c))
             {
+                l->col--;
                 while (is_alphanum(tok.loc.buf[tok.loc.length]))
                 {
                     tok.loc.length++;
                 }
+
+                l->col += tok.loc.length;
 
                 lex_next(l, tok.loc.length);
 
@@ -864,6 +932,7 @@ void lex_token(Lexer *l)
 
             if (is_numeric(c))
             {
+                l->col--;
                 bool has_dot = false;
 
                 while (is_numeric(tok.loc.buf[tok.loc.length]) ||
@@ -875,6 +944,8 @@ void lex_token(Lexer *l)
                     }
                     tok.loc.length++;
                 }
+
+                l->col += tok.loc.length;
 
                 lex_next(l, tok.loc.length);
 
@@ -926,8 +997,7 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
         lex_token(l);
     }
 
-    /* for (Token *tok = lexer.tokens; */
-    /*      tok != lexer.tokens + array_size(lexer.tokens); */
+    /* for (Token *tok = l->tokens; tok != l->tokens + array_size(l->tokens); */
     /*      ++tok) */
     /* { */
     /*     print_token(tok); */
@@ -1118,19 +1188,19 @@ static inline Token *parser_consume(Parser *p, TokenType tok_type)
     Token *tok = parser_peek(p, 0);
     if (tok->type != tok_type)
     {
+        Location loc = tok->loc;
+        tok = parser_peek(p, -1);
         compile_error(
             p->compiler,
-            tok->loc,
-            "unexpected token: '%.*s'",
+            loc,
+            "expected: '%s' after '%.*s'",
+            token_strings[tok_type],
             tok->loc.length,
             tok->loc.buf);
-        parser_next(p, 1);
         return NULL;
     }
-    else
-    {
-        return parser_next(p, 1);
-    }
+
+    return parser_next(p, 1);
 }
 
 bool parse_expr(Parser *p, Ast *ast);
@@ -1169,7 +1239,9 @@ bool parse_primery_expr(Parser *p, Ast *ast)
         case TOKEN_LPAREN: {
             parser_next(p, 1);
 
-            if (!parse_expr(p, ast)) res = false;
+            ast->type = AST_PAREN_EXPR;
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->expr)) res = false;
 
             if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
@@ -1215,6 +1287,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
 bool parse_expr(Parser *p, Ast *ast)
 {
+    assert(!parser_is_at_end(p));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
     bool res = parse_unary_expr(p, ast);
@@ -1365,7 +1438,13 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     while (!parser_is_at_end(p))
     {
         Ast stmt = {0};
-        if (parse_stmt(p, &stmt, false))
+
+        stmt.loc = parser_peek(p, 0)->loc;
+        bool res = parse_stmt(p, &stmt, false);
+        Location last_loc = parser_peek(p, -1)->loc;
+        stmt.loc.length = last_loc.buf + last_loc.length - stmt.loc.buf;
+
+        if (res)
         {
             array_push(p->ast->block.stmts, stmt);
         }
@@ -1422,6 +1501,10 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
+        case AST_PAREN_EXPR: {
+            symbol_check_ast(a, ast->expr);
+            break;
+        }
         case AST_CONST_DECL:
         case AST_VAR_DECL: {
             symbol_check_ast(a, ast->decl.type_expr);
@@ -1576,12 +1659,11 @@ void print_errors(Compiler *compiler)
              ++err)
         {
             printf(
-                "%.*s (%u:%u %u): %.*s\n",
+                "%.*s (%u:%u): %.*s\n",
                 (int)err->loc.file->path.length,
                 err->loc.file->path.buf,
                 err->loc.line,
                 err->loc.col,
-                err->loc.length,
                 (int)err->message.length,
                 err->message.buf);
         }
