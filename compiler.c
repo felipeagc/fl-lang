@@ -456,8 +456,7 @@ void source_file_init(SourceFile *file, Compiler *compiler, String path)
 // }}}
 
 // Token {{{
-typedef uint32_t TokenType;
-enum {
+typedef enum TokenType {
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LBRACK,
@@ -517,7 +516,7 @@ enum {
     TOKEN_BOOL,
     TOKEN_FALSE,
     TOKEN_TRUE,
-};
+} TokenType;
 
 static const char *token_strings[] = {
     [TOKEN_LPAREN] = "(",
@@ -630,6 +629,7 @@ void print_token(Token *tok)
 
         PRINT_TOKEN_TYPE(TOKEN_IDENT);
         PRINT_TOKEN_TYPE(TOKEN_PROC);
+        PRINT_TOKEN_TYPE(TOKEN_TYPEDEF);
         PRINT_TOKEN_TYPE(TOKEN_STRUCT);
         PRINT_TOKEN_TYPE(TOKEN_UNION);
         PRINT_TOKEN_TYPE(TOKEN_ENUM);
@@ -660,6 +660,9 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_BOOL);
         PRINT_TOKEN_TYPE(TOKEN_FALSE);
         PRINT_TOKEN_TYPE(TOKEN_TRUE);
+
+        PRINT_TOKEN_TYPE(TOKEN_STRING);
+        PRINT_TOKEN_TYPE(TOKEN_CSTRING);
     }
 
     printf(" \"%.*s\"\n", (int)tok->loc.length, tok->loc.buf);
@@ -1014,6 +1017,7 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
 typedef enum TypeKind {
     TYPE_UNINITIALIZED,
     TYPE_NONE,
+    TYPE_TYPE,
     TYPE_PRIMITIVE,
     TYPE_POINTER,
     TYPE_ARRAY,
@@ -1112,7 +1116,8 @@ typedef struct Ast
 {
     AstType type;
     Location loc;
-    TypeInfo type_info;
+    TypeInfo *type_info;
+    TypeInfo *as_type;
 
     union
     {
@@ -1309,6 +1314,7 @@ bool parse_expr(Parser *p, Ast *ast)
 
 bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 {
+    memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
     bool res = true;
 
@@ -1486,7 +1492,6 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     while (!parser_is_at_end(p))
     {
         Ast stmt = {0};
-
         if (parse_stmt(p, &stmt, false))
         {
             array_push(p->ast->block.stmts, stmt);
@@ -1516,52 +1521,127 @@ struct Ast *get_symbol(Analyzer *a, String name)
     return NULL;
 }
 
+#define CASE_PRIMITIVE_TYPE(tok_type, prim_type)                               \
+    case tok_type: {                                                           \
+        static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
+        ast->as_type = &ty;                                                    \
+        res = true;                                                            \
+    }                                                                          \
+    break
+
+bool ast_as_type(Analyzer *a, Ast *ast)
+{
+    bool res = false;
+    if (ast->as_type) return true;
+
+    Scope *scope = *array_last(a->scope_stack);
+    assert(scope);
+
+    switch (ast->type)
+    {
+        case AST_PRIMARY: {
+            switch (ast->primary.tok->type)
+            {
+                CASE_PRIMITIVE_TYPE(TOKEN_U8, PRIMITIVE_TYPE_U8);
+                CASE_PRIMITIVE_TYPE(TOKEN_U16, PRIMITIVE_TYPE_U16);
+                CASE_PRIMITIVE_TYPE(TOKEN_U32, PRIMITIVE_TYPE_U32);
+                CASE_PRIMITIVE_TYPE(TOKEN_U64, PRIMITIVE_TYPE_U64);
+                CASE_PRIMITIVE_TYPE(TOKEN_I8, PRIMITIVE_TYPE_I8);
+                CASE_PRIMITIVE_TYPE(TOKEN_I16, PRIMITIVE_TYPE_I16);
+                CASE_PRIMITIVE_TYPE(TOKEN_I32, PRIMITIVE_TYPE_I32);
+                CASE_PRIMITIVE_TYPE(TOKEN_I64, PRIMITIVE_TYPE_I64);
+                CASE_PRIMITIVE_TYPE(TOKEN_F32, PRIMITIVE_TYPE_F32);
+                CASE_PRIMITIVE_TYPE(TOKEN_F64, PRIMITIVE_TYPE_F64);
+                CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
+                CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
+                case TOKEN_IDENT: {
+                    Ast *sym = get_symbol(a, ast->primary.tok->str);
+                    if (sym && sym->type == AST_TYPEDEF)
+                    {
+                        res = ast_as_type(a, sym->type_def.type_expr);
+                        if (res)
+                        {
+                            ast->as_type = sym->type_def.type_expr->as_type;
+                        }
+                    }
+
+                    break;
+                }
+                default: break;
+            }
+            break;
+        }
+        case AST_PAREN_EXPR: {
+            res = ast_as_type(a, ast->expr);
+            ast->as_type = ast->expr->as_type;
+            break;
+        }
+        case AST_UNARY_EXPR: {
+            switch (ast->unop.type)
+            {
+                case UNOP_DEREFERENCE: {
+                    res = ast_as_type(a, ast->unop.sub);
+                    if (res)
+                    {
+                        TypeInfo *ty =
+                            bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+                        memset(ty, 0, sizeof(*ty));
+                        ty->kind = TYPE_POINTER;
+                        ty->ptr.sub = ast->unop.sub->as_type;
+                    }
+                    break;
+                }
+                default: break;
+            }
+            break;
+        }
+        default: break;
+    }
+
+    return res;
+}
+
 void analyze_ast_children(Analyzer *a, Ast *ast);
 
 void register_symbol_ast(Analyzer *a, Ast *ast)
 {
+    Scope *scope = *array_last(a->scope_stack);
+    assert(scope);
+    String sym_name = {0};
+
     switch (ast->type)
     {
         case AST_CONST_DECL:
         case AST_VAR_DECL:
         case AST_PROC_PARAM: {
-            Scope *scope = *array_last(a->scope_stack);
-            assert(scope);
-
-            if (get_symbol(a, ast->decl.name))
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "duplicate declaration: '%.*s'",
-                    (int)ast->decl.name.length,
-                    ast->decl.name.buf);
-                break;
-            }
-
-            scope_set(scope, ast->decl.name, ast);
+            sym_name = ast->decl.name;
+            break;
+        }
+        case AST_TYPEDEF: {
+            sym_name = ast->type_def.name;
             break;
         }
         case AST_PROC_DECL: {
-            Scope *scope = *array_last(a->scope_stack);
-            assert(scope);
-
-            if (get_symbol(a, ast->proc.name))
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "duplicate declaration: '%.*s'",
-                    (int)ast->proc.name.length,
-                    ast->proc.name.buf);
-                break;
-            }
-
-            scope_set(scope, ast->proc.name, ast);
+            sym_name = ast->proc.name;
             break;
         }
-        default: break;
+        default: return;
     }
+
+    assert(sym_name.length > 0);
+
+    if (get_symbol(a, sym_name))
+    {
+        compile_error(
+            a->compiler,
+            ast->loc,
+            "duplicate declaration: '%.*s'",
+            (int)sym_name.length,
+            sym_name.buf);
+        return;
+    }
+
+    scope_set(scope, sym_name, ast);
 }
 
 void symbol_check_ast(Analyzer *a, Ast *ast)
@@ -1573,6 +1653,7 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
             symbol_check_ast(a, ast->expr);
             break;
         }
+        case AST_PROC_PARAM:
         case AST_CONST_DECL:
         case AST_VAR_DECL: {
             symbol_check_ast(a, ast->decl.type_expr);
@@ -1625,8 +1706,39 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 
 void type_check_ast(Analyzer *a, Ast *ast)
 {
+    ast_as_type(a, ast);
     switch (ast->type)
     {
+        case AST_RETURN:
+        case AST_PAREN_EXPR: {
+            type_check_ast(a, ast->expr);
+            break;
+        }
+        case AST_PROC_PARAM:
+        case AST_CONST_DECL:
+        case AST_VAR_DECL: {
+            type_check_ast(a, ast->decl.type_expr);
+            if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
+                ast->type == AST_CONST_DECL)
+            {
+                type_check_ast(a, ast->decl.value_expr);
+            }
+            break;
+        }
+        case AST_VAR_ASSIGN: {
+            type_check_ast(a, ast->assign.assigned_expr);
+            type_check_ast(a, ast->assign.value_expr);
+            break;
+        }
+        case AST_UNARY_EXPR: {
+            type_check_ast(a, ast->unop.sub);
+            break;
+        }
+        case AST_BINARY_EXPR: {
+            type_check_ast(a, ast->binop.left);
+            type_check_ast(a, ast->binop.right);
+            break;
+        }
         default: break;
     }
 }
