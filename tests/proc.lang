@@ -3,7 +3,9 @@ var global: i32 = 123;
 
 typedef MyInt i32;
 
-proc "c" puts(str: u8, a: i32) void;
+proc "c" puts(str: *u8) void;
+
+proc add(a: i32, b: i32) i32;
 
 proc main(argc: i32, argv: **u8) i32 {
 	var hey: i32 = argc;
@@ -15,6 +17,8 @@ proc main(argc: i32, argv: **u8) i32 {
 	var my_f32: f32 = 321.123;
 
 	var string: *u8 = c"cool";
+
+	var derp: i32 = add(1, 2);
 
 	return 0;
 }

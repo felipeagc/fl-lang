@@ -1019,6 +1019,7 @@ typedef enum TypeKind {
     TYPE_UNINITIALIZED,
     TYPE_NONE,
     TYPE_TYPE,
+    TYPE_PROC,
     TYPE_PRIMITIVE,
     TYPE_POINTER,
     TYPE_ARRAY,
@@ -1054,6 +1055,11 @@ typedef struct TypeInfo
             struct TypeInfo *sub;
             size_t size;
         } array;
+        struct
+        {
+            struct TypeInfo *return_type;
+            /*array*/ struct TypeInfo *params;
+        } proc;
     };
 } TypeInfo;
 
@@ -1074,6 +1080,24 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     case TYPE_ARRAY: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         if (received->array.size != expected->array.size) return NULL;
+        break;
+    }
+    case TYPE_PROC: {
+        if (!exact_types(
+                received->proc.return_type, expected->proc.return_type))
+            return NULL;
+
+        if (array_size(received->proc.params) !=
+            array_size(expected->proc.params))
+            return NULL;
+
+        for (size_t i = 0; i < array_size(received->proc.params); ++i)
+        {
+            if (!exact_types(
+                    &received->proc.params[i], &expected->proc.params[i]))
+                return NULL;
+        }
+
         break;
     }
     case TYPE_TYPE: break;
@@ -1116,6 +1140,7 @@ typedef enum UnOpType {
     UNOP_DEREFERENCE,
     UNOP_ADDRESS,
 } UnOpType;
+
 typedef enum BinOpType {
     BINOP_ADD,
     BINOP_SUB,
@@ -1129,6 +1154,7 @@ typedef enum AstType {
     AST_STRUCT_DECL,
     AST_PROC_DECL,
     AST_BLOCK,
+    AST_PROC_CALL,
     AST_UNARY_EXPR,
     AST_BINARY_EXPR,
     AST_TYPEDEF,
@@ -1168,6 +1194,11 @@ typedef struct Ast
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
         } proc;
+        struct
+        {
+            struct Ast *expr;
+            /*array*/ struct Ast *params;
+        } proc_call;
         struct
         {
             String name;
@@ -1301,6 +1332,49 @@ bool parse_primery_expr(Parser *p, Ast *ast)
     return res;
 }
 
+bool parse_proc_call(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    Ast expr = *ast;
+    if (!parse_primery_expr(p, &expr)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
+
+    if (parser_peek(p, 0)->type == TOKEN_LPAREN)
+    {
+        // Proc call
+        ast->type = AST_PROC_CALL;
+        ast->proc_call.expr =
+            bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
+        *ast->proc_call.expr = expr;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
+        {
+            Ast param = {0};
+            if (!parse_expr(p, &param))
+                res = false;
+            else
+                array_push(ast->proc_call.params, param);
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+    }
+    else
+    {
+        *ast = expr;
+    }
+
+    return res;
+}
+
 bool parse_unary_expr(Parser *p, Ast *ast)
 {
     bool res = true;
@@ -1322,7 +1396,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         break;
     }
     default: {
-        res = parse_primery_expr(p, ast);
+        res = parse_proc_call(p, ast);
         break;
     }
     }
@@ -1652,8 +1726,6 @@ bool ast_as_type(Analyzer *a, Ast *ast)
     return res;
 }
 
-void analyze_ast_children(Analyzer *a, Ast *ast);
-
 void register_symbol_ast(Analyzer *a, Ast *ast)
 {
     Scope *scope = *array_last(a->scope_stack);
@@ -1673,6 +1745,15 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     }
     case AST_PROC_DECL: {
         sym_name = ast->proc.name;
+
+        array_push(a->scope_stack, &ast->proc.scope);
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            register_symbol_ast(a, param);
+        }
+        array_pop(a->scope_stack);
         break;
     }
     default: return;
@@ -1716,6 +1797,18 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     case AST_VAR_ASSIGN: {
         symbol_check_ast(a, ast->assign.assigned_expr);
         symbol_check_ast(a, ast->assign.value_expr);
+        break;
+    }
+    case AST_PROC_CALL: {
+        symbol_check_ast(a, ast->proc_call.expr);
+
+        for (Ast *param = ast->proc_call.params;
+             param != ast->proc_call.params + array_size(ast->proc_call.params);
+             ++param)
+        {
+            symbol_check_ast(a, param);
+        }
+
         break;
     }
     case AST_UNARY_EXPR: {
@@ -1782,13 +1875,14 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
     case AST_TYPEDEF: {
-        static TypeInfo ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->type_def.type_expr, &ty);
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        type_check_ast(a, ast->type_def.type_expr, &ty_ty);
         break;
     }
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
-        type_check_ast(a, ast->decl.type_expr, NULL);
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        type_check_ast(a, ast->decl.type_expr, &ty_ty);
         if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
             ast->type == AST_CONST_DECL)
         {
@@ -1804,6 +1898,35 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
     case AST_PROC_DECL: {
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_PROC;
+
+        array_push(a->scope_stack, &ast->proc.scope);
+
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            if (!type_check_ast(a, param, NULL)) res = false;
+            if (res)
+            {
+                assert(param->decl.type_expr->as_type);
+                array_push(ty->proc.params, *param->decl.type_expr->as_type);
+            }
+        }
+
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        if (!type_check_ast(a, ast->proc.return_type, &ty_ty)) res = false;
+        if (res)
+        {
+            assert(ast->proc.return_type->as_type);
+            ty->proc.return_type = ast->proc.return_type->as_type;
+        }
+
+        array_pop(a->scope_stack);
+
+        ast->type_info = ty;
         break;
     }
     default: {
@@ -1918,6 +2041,11 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     assert(ast->type_info);
                     break;
                 }
+                case AST_PROC_DECL: {
+                    ast->type_info = sym->type_info;
+                    assert(ast->type_info);
+                    break;
+                }
                 case AST_TYPEDEF: {
                     ast->type_info = sym->type_def.type_expr->type_info;
                     assert(ast->type_info);
@@ -1936,6 +2064,42 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_PAREN_EXPR: {
         res = type_check_ast(a, ast->expr, expected_type);
         ast->type_info = ast->expr->type_info;
+        break;
+    }
+    case AST_PROC_CALL: {
+        if (!type_check_ast(a, ast->proc_call.expr, NULL)) res = false;
+        if (!res) break;
+
+        if (ast->proc_call.expr->type_info->kind != TYPE_PROC)
+        {
+            res = false;
+            compile_error(
+                a->compiler, ast->loc, "tried to call a non procedure type");
+            break;
+        }
+
+        assert(ast->proc_call.expr->type_info);
+        ast->type_info = ast->proc_call.expr->type_info->proc.return_type;
+
+        if (array_size(ast->proc_call.params) !=
+            array_size(ast->proc_call.expr->type_info->proc.params))
+        {
+            res = false;
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "wrong parameter count for function call");
+            break;
+        }
+
+        for (size_t i = 0; i < array_size(ast->proc_call.params); ++i)
+        {
+            type_check_ast(
+                a,
+                &ast->proc_call.params[i],
+                &ast->proc_call.expr->type_info->proc.params[i]);
+        }
+        break;
     }
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
@@ -2014,60 +2178,87 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     return res;
 }
 
-void analyze_stmts(Analyzer *a, Ast *stmts, size_t stmt_count)
+void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
 {
-    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
-        switch (stmt->type)
+        switch (ast->type)
         {
-        case AST_CONST_DECL:
+        case AST_ROOT: {
+            scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
+            break;
+        }
         case AST_PROC_DECL: {
-            register_symbol_ast(a, stmt);
+            scope_init(
+                &ast->proc.scope,
+                array_size(ast->proc.stmts) + array_size(ast->proc.params),
+                ast);
             break;
         }
         default: break;
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
-        switch (stmt->type)
+        switch (ast->type)
         {
         case AST_CONST_DECL:
         case AST_PROC_DECL: {
-            symbol_check_ast(a, stmt);
-            type_check_ast(a, stmt, NULL);
+            register_symbol_ast(a, ast);
             break;
         }
         default: break;
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
-        switch (stmt->type)
+        switch (ast->type)
         {
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            symbol_check_ast(a, ast);
+            type_check_ast(a, ast, NULL);
+            break;
+        }
+        default: break;
+        }
+    }
+
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT:
         case AST_CONST_DECL:
         case AST_PROC_DECL: {
             break;
         }
         default: {
-            register_symbol_ast(a, stmt);
-            symbol_check_ast(a, stmt);
-            type_check_ast(a, stmt, NULL);
-            analyze_ast_children(a, stmt);
+            register_symbol_ast(a, ast);
+            symbol_check_ast(a, ast);
+            type_check_ast(a, ast, NULL);
             break;
         }
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
+    // Analyze children ASTs
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
-        switch (stmt->type)
+        switch (ast->type)
         {
-        case AST_CONST_DECL:
+        case AST_ROOT: {
+            array_push(a->scope_stack, &ast->block.scope);
+            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
         case AST_PROC_DECL: {
-            analyze_ast_children(a, stmt);
+            array_push(a->scope_stack, &ast->proc.scope);
+            analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            array_pop(a->scope_stack);
             break;
         }
         default: break;
@@ -2075,34 +2266,6 @@ void analyze_stmts(Analyzer *a, Ast *stmts, size_t stmt_count)
     }
 }
 
-void analyze_ast_children(Analyzer *a, Ast *ast)
-{
-    switch (ast->type)
-    {
-    case AST_ROOT: {
-        scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
-
-        array_push(a->scope_stack, &ast->block.scope);
-        analyze_stmts(a, ast->block.stmts, array_size(ast->block.stmts));
-        array_pop(a->scope_stack);
-        break;
-    }
-    case AST_PROC_DECL: {
-        scope_init(
-            &ast->proc.scope,
-            array_size(ast->proc.stmts) + array_size(ast->proc.params),
-            ast);
-
-        array_push(a->scope_stack, &ast->proc.scope);
-        analyze_stmts(a, ast->proc.params, array_size(ast->proc.params));
-        analyze_stmts(a, ast->proc.return_type, 1);
-        analyze_stmts(a, ast->proc.stmts, array_size(ast->proc.stmts));
-        array_pop(a->scope_stack);
-        break;
-    }
-    default: break;
-    }
-}
 // }}}
 
 // Printing errors {{{
@@ -2158,7 +2321,7 @@ int main(int argc, char **argv)
         Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
         memset(analyzer, 0, sizeof(*analyzer));
         analyzer->compiler = compiler;
-        analyze_ast_children(analyzer, parser->ast);
+        analyze_asts(analyzer, parser->ast, 1);
         print_errors(compiler);
     }
     else
