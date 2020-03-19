@@ -1164,6 +1164,7 @@ typedef enum AstType {
     AST_RETURN,
     AST_PRIMARY,
     AST_PAREN_EXPR,
+    AST_EXPR_STMT,
 } AstType;
 
 typedef struct Ast
@@ -1557,29 +1558,47 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         break;
     }
     default: {
-        ast->type = AST_VAR_ASSIGN;
+        Ast expr = {0};
+        if (!parse_expr(p, &expr)) res = false;
 
-        ast->assign.assigned_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->assign.assigned_expr)) res = false;
-
-        if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
-
-        ast->assign.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->assign.value_expr)) res = false;
-
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
-        if (!inside_procedure)
+        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
         {
-            compile_error(
-                p->compiler,
-                tok->loc,
-                "assignment must be inside procedure",
-                tok->loc.length,
-                tok->loc.buf);
+            ast->type = AST_VAR_ASSIGN;
 
-            res = false;
-            break;
+            ast->assign.assigned_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->assign.assigned_expr = expr;
+
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            ast->assign.value_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->assign.value_expr)) res = false;
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            if (!inside_procedure)
+            {
+                // TODO: maybe this shouldn't be a parser error
+                compile_error(
+                    p->compiler,
+                    tok->loc,
+                    "assignment must be inside procedure",
+                    tok->loc.length,
+                    tok->loc.buf);
+
+                res = false;
+                break;
+            }
+        }
+        else
+        {
+            ast->type = AST_EXPR_STMT;
+
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->expr = expr;
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
         break;
@@ -1799,6 +1818,10 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->assign.value_expr);
         break;
     }
+    case AST_EXPR_STMT: {
+        symbol_check_ast(a, ast->expr);
+        break;
+    }
     case AST_PROC_CALL: {
         symbol_check_ast(a, ast->proc_call.expr);
 
@@ -1895,6 +1918,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         type_check_ast(a, ast->assign.assigned_expr, NULL);
         type_check_ast(
             a, ast->assign.value_expr, ast->assign.assigned_expr->type_info);
+        break;
+    }
+    case AST_EXPR_STMT: {
+        type_check_ast(a, ast->expr, NULL);
         break;
     }
     case AST_PROC_DECL: {
