@@ -10,4 +10,4 @@ clean:
 	rm compiler
 
 test: compiler
-	@find tests/ -type f -name "*.lang" -exec ./compiler {} \;
+	@bash ./tests/run_tests.sh

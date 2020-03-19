@@ -1,0 +1,3 @@
+proc main() void {
+	var hello: i32 = a;
+}
