@@ -1546,15 +1546,27 @@ typedef struct Analyzer
     /*array*/ Scope **scope_stack;
 } Analyzer;
 
-struct Ast *get_symbol(Analyzer *a, String name)
+Ast *get_symbol(Analyzer *a, String name)
 {
-    struct Ast *sym = NULL;
+    Ast *sym = NULL;
     for (Scope **scope = a->scope_stack + array_size(a->scope_stack) - 1;
          scope >= a->scope_stack;
          --scope)
     {
         sym = scope_get_local(*scope, name);
         if (sym) return sym;
+    }
+
+    return NULL;
+}
+
+Ast *get_scope_procedure(Analyzer *a)
+{
+    for (Scope **scope = a->scope_stack + array_size(a->scope_stack) - 1;
+         scope >= a->scope_stack;
+         --scope)
+    {
+        if ((*scope)->procedure) return (*scope)->procedure;
     }
 
     return NULL;
@@ -1757,8 +1769,16 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     switch (ast->type)
     {
     case AST_RETURN: {
-        // TODO: use procedure's return type as expected type
-        type_check_ast(a, ast->expr, NULL);
+        Ast *proc = get_scope_procedure(a);
+        if (!proc)
+        {
+            compile_error(
+                a->compiler, ast->loc, "return needs to be inside a procedure");
+            break;
+        }
+
+        assert(proc->proc.return_type->as_type);
+        type_check_ast(a, ast->expr, proc->proc.return_type->as_type);
         break;
     }
     case AST_TYPEDEF: {
@@ -1994,9 +2014,9 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     return res;
 }
 
-void analyze_stmts(Analyzer *a, Ast *stmts)
+void analyze_stmts(Analyzer *a, Ast *stmts, size_t stmt_count)
 {
-    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
     {
         switch (stmt->type)
         {
@@ -2009,7 +2029,7 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
     {
         switch (stmt->type)
         {
@@ -2023,7 +2043,7 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
     {
         switch (stmt->type)
         {
@@ -2041,7 +2061,7 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
         }
     }
 
-    for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+    for (Ast *stmt = stmts; stmt != stmts + stmt_count; ++stmt)
     {
         switch (stmt->type)
         {
@@ -2063,7 +2083,7 @@ void analyze_ast_children(Analyzer *a, Ast *ast)
         scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
 
         array_push(a->scope_stack, &ast->block.scope);
-        analyze_stmts(a, ast->block.stmts);
+        analyze_stmts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->scope_stack);
         break;
     }
@@ -2071,11 +2091,12 @@ void analyze_ast_children(Analyzer *a, Ast *ast)
         scope_init(
             &ast->proc.scope,
             array_size(ast->proc.stmts) + array_size(ast->proc.params),
-            NULL);
+            ast);
 
         array_push(a->scope_stack, &ast->proc.scope);
-        analyze_stmts(a, ast->proc.params);
-        analyze_stmts(a, ast->proc.stmts);
+        analyze_stmts(a, ast->proc.params, array_size(ast->proc.params));
+        analyze_stmts(a, ast->proc.return_type, 1);
+        analyze_stmts(a, ast->proc.stmts, array_size(ast->proc.stmts));
         array_pop(a->scope_stack);
         break;
     }
