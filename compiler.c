@@ -1731,8 +1731,9 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     }                                                                          \
     break
 
-void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
+bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
+    bool res = true;
     bool is_statement = true;
 
     // Statements
@@ -1776,7 +1777,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     if (is_statement)
     {
-        return;
+        return res;
     }
 
     ast_as_type(a, ast);
@@ -1881,7 +1882,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     break;
                 }
                 case AST_TYPEDEF: {
-                    ast->type_info = sym->type_def.type_expr->as_type;
+                    ast->type_info = sym->type_def.type_expr->type_info;
                     assert(ast->type_info);
                     break;
                 }
@@ -1896,15 +1897,14 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
     case AST_PAREN_EXPR: {
-        type_check_ast(a, ast->expr, expected_type);
+        res = type_check_ast(a, ast->expr, expected_type);
         ast->type_info = ast->expr->type_info;
-        break;
     }
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            type_check_ast(a, ast->unop.sub, NULL);
+            res = type_check_ast(a, ast->unop.sub, NULL);
 
             if (!ast->unop.sub->type_info) break;
 
@@ -1936,7 +1936,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 sub_expected_type = expected_type->ptr.sub;
             }
-            type_check_ast(a, ast->unop.sub, sub_expected_type);
+
+            res = type_check_ast(a, ast->unop.sub, sub_expected_type);
 
             if (!ast->unop.sub->type_info) break;
 
@@ -1964,13 +1965,16 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         printf("undefined type: %u:%u\n", ast->loc.line, ast->loc.col);
     }
 
-    if (ast->type_info && expected_type)
+    if (res && ast->type_info && expected_type)
     {
         if (!exact_types(ast->type_info, expected_type))
         {
             compile_error(a->compiler, ast->loc, "wrong type");
+            res = false;
         }
     }
+
+    return res;
 }
 
 void analyze_stmts(Analyzer *a, Ast *stmts)
