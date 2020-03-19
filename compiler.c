@@ -894,7 +894,8 @@ void lex_token(Lexer *l)
             tok.type = TOKEN_IDENT;
 
 #define LEX_MATCH_STR(lit, tok_type)                                           \
-    if (strncmp(tok.loc.buf, lit, tok.loc.length) == 0)                        \
+    if (strlen(lit) == tok.loc.length &&                                       \
+        strncmp(tok.loc.buf, lit, tok.loc.length) == 0)                        \
     {                                                                          \
         tok.type = (tok_type);                                                 \
         break;                                                                 \
@@ -1161,6 +1162,7 @@ typedef struct Ast
         struct
         {
             Scope scope;
+            String convention;
             String name;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
@@ -1353,6 +1355,12 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         ast->type = AST_PROC_DECL;
 
+        if (parser_peek(p, 0)->type == TOKEN_STRING)
+        {
+            Token *convention_tok = parser_consume(p, TOKEN_STRING);
+            ast->proc.convention = convention_tok->str;
+        }
+
         Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
         if (!proc_name_tok)
             res = false;
@@ -1372,7 +1380,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             else
                 param.decl.name = ident_tok->str;
 
-            param.loc = ident_tok->loc;
+            if (ident_tok) param.loc = ident_tok->loc;
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
@@ -1392,17 +1400,26 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->proc.return_type)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
-
         ast->proc.stmts = NULL;
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+
+        if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
-            Ast stmt = {0};
-            if (!parse_stmt(p, &stmt, true)) res = false;
-            array_push(ast->proc.stmts, stmt);
+            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+            {
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true)) res = false;
+                array_push(ast->proc.stmts, stmt);
+            }
+
+            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        }
+        else
+        {
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
-        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
         break;
     }
     case TOKEN_VAR:

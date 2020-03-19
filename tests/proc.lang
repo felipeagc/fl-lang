@@ -3,6 +3,8 @@ var global: i32 = 123;
 
 typedef MyInt i32;
 
+proc "c" puts(str: u8, a: i32) void;
+
 proc main(argc: i32, argv: **u8) i32 {
 	var hey: i32 = argc;
 	var yo: *i32 = (&hey);
