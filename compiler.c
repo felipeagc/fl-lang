@@ -727,171 +727,171 @@ void lex_token(Lexer *l)
 
     switch (c)
     {
-        case '\n': {
-            ++l->line;
-            l->col = 0;
-        }
-        case '\r':
-        case '\t':
-        case ' ': {
+    case '\n': {
+        ++l->line;
+        l->col = 0;
+    }
+    case '\r':
+    case '\t':
+    case ' ': {
+        lex_next(l, 1);
+        break;
+    }
+    case '(': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_LPAREN;
+        break;
+    }
+    case ')': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_RPAREN;
+        break;
+    }
+    case '[': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_LBRACK;
+        break;
+    }
+    case ']': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_RBRACK;
+        break;
+    }
+    case '{': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_LCURLY;
+        break;
+    }
+    case '}': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_RCURLY;
+        break;
+    }
+    case '*': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_ASTERISK;
+        break;
+    }
+    case '&': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_AMPERSAND;
+        break;
+    }
+    case ':': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_COLON;
+        break;
+    }
+    case ';': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_SEMICOLON;
+        break;
+    }
+    case '.': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_DOT;
+        break;
+    }
+    case ',': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_COMMA;
+        break;
+    }
+    case '=': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_ASSIGN;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
             lex_next(l, 1);
-            break;
+            tok.type = TOKEN_EQUAL;
         }
-        case '(': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_LPAREN;
-            break;
-        }
-        case ')': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_RPAREN;
-            break;
-        }
-        case '[': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_LBRACK;
-            break;
-        }
-        case ']': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_RBRACK;
-            break;
-        }
-        case '{': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_LCURLY;
-            break;
-        }
-        case '}': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_RCURLY;
-            break;
-        }
-        case '*': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_ASTERISK;
-            break;
-        }
-        case '&': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_AMPERSAND;
-            break;
-        }
-        case ':': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_COLON;
-            break;
-        }
-        case ';': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_SEMICOLON;
-            break;
-        }
-        case '.': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_DOT;
-            break;
-        }
-        case ',': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_COMMA;
-            break;
-        }
-        case '=': {
-            tok.loc.length = 1;
-            lex_next(l, 1);
-            tok.type = TOKEN_ASSIGN;
-            if (lex_peek(l, 0) == '=')
+        break;
+    }
+    default: {
+        if ((lex_peek(l, 0) == 'c' && lex_peek(l, 1) == '\"') ||
+            (lex_peek(l, 0) == '\"'))
+        {
+            l->col--;
+
+            if (lex_peek(l, 0) == 'c')
+            {
+                tok.type = TOKEN_CSTRING;
+                tok.loc.length = 2;
+                lex_next(l, 2);
+            }
+            else
+            {
+                tok.type = TOKEN_STRING;
+                tok.loc.length = 1;
+                lex_next(l, 1);
+            }
+
+            tok.str = (String){0};
+
+            while (lex_peek(l, 0) != '\"' && !lex_is_at_end(l))
             {
                 ++tok.loc.length;
-                lex_next(l, 1);
-                tok.type = TOKEN_EQUAL;
-            }
-            break;
-        }
-        default: {
-            if ((lex_peek(l, 0) == 'c' && lex_peek(l, 1) == '\"') ||
-                (lex_peek(l, 0) == '\"'))
-            {
-                l->col--;
-
-                if (lex_peek(l, 0) == 'c')
-                {
-                    tok.type = TOKEN_CSTRING;
-                    tok.loc.length = 2;
-                    lex_next(l, 2);
-                }
-                else
-                {
-                    tok.type = TOKEN_STRING;
-                    tok.loc.length = 1;
-                    lex_next(l, 1);
-                }
-
-                tok.str = (String){0};
-
-                while (lex_peek(l, 0) != '\"' && !lex_is_at_end(l))
+                char n = lex_next(l, 1);
+                if (n == '\\')
                 {
                     ++tok.loc.length;
-                    char n = lex_next(l, 1);
-                    if (n == '\\')
-                    {
-                        ++tok.loc.length;
-                        n = lex_next(l, 1);
-                    }
-
-                    array_push(tok.str.buf, n);
+                    n = lex_next(l, 1);
                 }
 
-                if (tok.type == TOKEN_CSTRING)
-                {
-                    array_push(tok.str.buf, '\0');
-                }
-
-                tok.str.length = array_size(tok.str.buf);
-
-                ++tok.loc.length;
-                if (lex_next(l, 1) != '\"' || lex_is_at_end(l))
-                {
-                    compile_error(
-                        l->compiler,
-                        tok.loc,
-                        "unclosed string",
-                        tok.loc.length,
-                        tok.loc.buf);
-                    tok.loc.length = 0;
-                }
-
-                l->col += tok.loc.length;
-
-                break;
+                array_push(tok.str.buf, n);
             }
 
-            if (is_letter(c))
+            if (tok.type == TOKEN_CSTRING)
             {
-                l->col--;
-                while (is_alphanum(tok.loc.buf[tok.loc.length]))
-                {
-                    tok.loc.length++;
-                }
+                array_push(tok.str.buf, '\0');
+            }
 
-                l->col += tok.loc.length;
+            tok.str.length = array_size(tok.str.buf);
 
-                lex_next(l, tok.loc.length);
+            ++tok.loc.length;
+            if (lex_next(l, 1) != '\"' || lex_is_at_end(l))
+            {
+                compile_error(
+                    l->compiler,
+                    tok.loc,
+                    "unclosed string",
+                    tok.loc.length,
+                    tok.loc.buf);
+                tok.loc.length = 0;
+            }
 
-                tok.type = TOKEN_IDENT;
+            l->col += tok.loc.length;
+
+            break;
+        }
+
+        if (is_letter(c))
+        {
+            l->col--;
+            while (is_alphanum(tok.loc.buf[tok.loc.length]))
+            {
+                tok.loc.length++;
+            }
+
+            l->col += tok.loc.length;
+
+            lex_next(l, tok.loc.length);
+
+            tok.type = TOKEN_IDENT;
 
 #define LEX_MATCH_STR(lit, tok_type)                                           \
     if (strncmp(tok.loc.buf, lit, tok.loc.length) == 0)                        \
@@ -900,91 +900,91 @@ void lex_token(Lexer *l)
         break;                                                                 \
     }
 
-                LEX_MATCH_STR("u8", TOKEN_U8);
-                LEX_MATCH_STR("u16", TOKEN_U16);
-                LEX_MATCH_STR("u32", TOKEN_U32);
-                LEX_MATCH_STR("u64", TOKEN_U64);
-                LEX_MATCH_STR("i8", TOKEN_I8);
-                LEX_MATCH_STR("i16", TOKEN_I16);
-                LEX_MATCH_STR("i32", TOKEN_I32);
-                LEX_MATCH_STR("i64", TOKEN_I64);
-                LEX_MATCH_STR("f32", TOKEN_F32);
-                LEX_MATCH_STR("f64", TOKEN_F64);
-                LEX_MATCH_STR("void", TOKEN_VOID);
-                LEX_MATCH_STR("null", TOKEN_NULL);
-                LEX_MATCH_STR("bool", TOKEN_BOOL);
-                LEX_MATCH_STR("true", TOKEN_TRUE);
-                LEX_MATCH_STR("false", TOKEN_FALSE);
+            LEX_MATCH_STR("u8", TOKEN_U8);
+            LEX_MATCH_STR("u16", TOKEN_U16);
+            LEX_MATCH_STR("u32", TOKEN_U32);
+            LEX_MATCH_STR("u64", TOKEN_U64);
+            LEX_MATCH_STR("i8", TOKEN_I8);
+            LEX_MATCH_STR("i16", TOKEN_I16);
+            LEX_MATCH_STR("i32", TOKEN_I32);
+            LEX_MATCH_STR("i64", TOKEN_I64);
+            LEX_MATCH_STR("f32", TOKEN_F32);
+            LEX_MATCH_STR("f64", TOKEN_F64);
+            LEX_MATCH_STR("void", TOKEN_VOID);
+            LEX_MATCH_STR("null", TOKEN_NULL);
+            LEX_MATCH_STR("bool", TOKEN_BOOL);
+            LEX_MATCH_STR("true", TOKEN_TRUE);
+            LEX_MATCH_STR("false", TOKEN_FALSE);
 
-                LEX_MATCH_STR("var", TOKEN_VAR);
-                LEX_MATCH_STR("const", TOKEN_CONST);
-                LEX_MATCH_STR("proc", TOKEN_PROC);
-                LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
-                LEX_MATCH_STR("struct", TOKEN_STRUCT);
-                LEX_MATCH_STR("union", TOKEN_UNION);
-                LEX_MATCH_STR("enum", TOKEN_ENUM);
-                LEX_MATCH_STR("if", TOKEN_IF);
-                LEX_MATCH_STR("else", TOKEN_ELSE);
-                LEX_MATCH_STR("while", TOKEN_WHILE);
-                LEX_MATCH_STR("for", TOKEN_FOR);
-                LEX_MATCH_STR("return", TOKEN_RETURN);
+            LEX_MATCH_STR("var", TOKEN_VAR);
+            LEX_MATCH_STR("const", TOKEN_CONST);
+            LEX_MATCH_STR("proc", TOKEN_PROC);
+            LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
+            LEX_MATCH_STR("struct", TOKEN_STRUCT);
+            LEX_MATCH_STR("union", TOKEN_UNION);
+            LEX_MATCH_STR("enum", TOKEN_ENUM);
+            LEX_MATCH_STR("if", TOKEN_IF);
+            LEX_MATCH_STR("else", TOKEN_ELSE);
+            LEX_MATCH_STR("while", TOKEN_WHILE);
+            LEX_MATCH_STR("for", TOKEN_FOR);
+            LEX_MATCH_STR("return", TOKEN_RETURN);
 
-                if (tok.type == TOKEN_IDENT)
-                {
-                    tok.str.buf = tok.loc.buf;
-                    tok.str.length = tok.loc.length;
-                }
-
-                break;
-            }
-
-            if (is_numeric(c))
+            if (tok.type == TOKEN_IDENT)
             {
-                l->col--;
-                bool has_dot = false;
-
-                while (is_numeric(tok.loc.buf[tok.loc.length]) ||
-                       tok.loc.buf[tok.loc.length] == '.')
-                {
-                    if (tok.loc.buf[tok.loc.length] == '.')
-                    {
-                        has_dot = true;
-                    }
-                    tok.loc.length++;
-                }
-
-                l->col += tok.loc.length;
-
-                lex_next(l, tok.loc.length);
-
-                char *str = bump_c_str(
-                    &l->compiler->bump,
-                    (String){.buf = tok.loc.buf, .length = tok.loc.length});
-
-                if (has_dot)
-                {
-                    tok.type = TOKEN_FLOAT;
-                    tok.f64 = strtod(str, NULL);
-                }
-                else
-                {
-                    tok.type = TOKEN_INT;
-                    tok.i64 = strtol(str, NULL, 10);
-                }
-                break;
+                tok.str.buf = tok.loc.buf;
+                tok.str.length = tok.loc.length;
             }
 
-            tok.loc.length = 1;
-            compile_error(
-                l->compiler,
-                tok.loc,
-                "invalid token: '%.*s'",
-                tok.loc.length,
-                tok.loc.buf);
-            tok.loc.length = 0;
-            lex_next(l, 1);
             break;
         }
+
+        if (is_numeric(c))
+        {
+            l->col--;
+            bool has_dot = false;
+
+            while (is_numeric(tok.loc.buf[tok.loc.length]) ||
+                   tok.loc.buf[tok.loc.length] == '.')
+            {
+                if (tok.loc.buf[tok.loc.length] == '.')
+                {
+                    has_dot = true;
+                }
+                tok.loc.length++;
+            }
+
+            l->col += tok.loc.length;
+
+            lex_next(l, tok.loc.length);
+
+            char *str = bump_c_str(
+                &l->compiler->bump,
+                (String){.buf = tok.loc.buf, .length = tok.loc.length});
+
+            if (has_dot)
+            {
+                tok.type = TOKEN_FLOAT;
+                tok.f64 = strtod(str, NULL);
+            }
+            else
+            {
+                tok.type = TOKEN_INT;
+                tok.i64 = strtol(str, NULL, 10);
+            }
+            break;
+        }
+
+        tok.loc.length = 1;
+        compile_error(
+            l->compiler,
+            tok.loc,
+            "invalid token: '%.*s'",
+            tok.loc.length,
+            tok.loc.buf);
+        tok.loc.length = 0;
+        lex_next(l, 1);
+        break;
+    }
     }
 
     if (tok.loc.length > 0)
@@ -1055,6 +1055,34 @@ typedef struct TypeInfo
         } array;
     };
 } TypeInfo;
+
+TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
+{
+    if (received->kind != expected->kind) return NULL;
+
+    switch (received->kind)
+    {
+    case TYPE_PRIMITIVE: {
+        if (received->primitive != expected->primitive) return NULL;
+        break;
+    }
+    case TYPE_POINTER: {
+        if (!exact_types(received->ptr.sub, expected->ptr.sub)) return NULL;
+        break;
+    }
+    case TYPE_ARRAY: {
+        if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
+        if (received->array.size != expected->array.size) return NULL;
+        break;
+    }
+    case TYPE_TYPE: break;
+    case TYPE_UNINITIALIZED: break;
+    case TYPE_NONE: break;
+    }
+
+    return received;
+}
+
 // }}}
 
 // Scope {{{
@@ -1099,7 +1127,6 @@ typedef enum AstType {
     AST_ROOT,
     AST_STRUCT_DECL,
     AST_PROC_DECL,
-    AST_PROC_PARAM,
     AST_BLOCK,
     AST_UNARY_EXPR,
     AST_BINARY_EXPR,
@@ -1227,47 +1254,47 @@ bool parse_primery_expr(Parser *p, Ast *ast)
     Token *tok = parser_peek(p, 0);
     switch (tok->type)
     {
-        case TOKEN_IDENT:
-        case TOKEN_TRUE:
-        case TOKEN_FALSE:
-        case TOKEN_VOID:
-        case TOKEN_NULL:
-        case TOKEN_BOOL:
-        case TOKEN_STRING:
-        case TOKEN_CSTRING:
-        case TOKEN_U8:
-        case TOKEN_U16:
-        case TOKEN_U32:
-        case TOKEN_U64:
-        case TOKEN_I8:
-        case TOKEN_I16:
-        case TOKEN_I32:
-        case TOKEN_I64:
-        case TOKEN_F32:
-        case TOKEN_F64:
-        case TOKEN_INT:
-        case TOKEN_FLOAT: {
-            parser_next(p, 1);
-            ast->type = AST_PRIMARY;
-            ast->primary.tok = tok;
-            break;
-        }
-        case TOKEN_LPAREN: {
-            parser_next(p, 1);
+    case TOKEN_IDENT:
+    case TOKEN_TRUE:
+    case TOKEN_FALSE:
+    case TOKEN_VOID:
+    case TOKEN_NULL:
+    case TOKEN_BOOL:
+    case TOKEN_STRING:
+    case TOKEN_CSTRING:
+    case TOKEN_U8:
+    case TOKEN_U16:
+    case TOKEN_U32:
+    case TOKEN_U64:
+    case TOKEN_I8:
+    case TOKEN_I16:
+    case TOKEN_I32:
+    case TOKEN_I64:
+    case TOKEN_F32:
+    case TOKEN_F64:
+    case TOKEN_INT:
+    case TOKEN_FLOAT: {
+        parser_next(p, 1);
+        ast->type = AST_PRIMARY;
+        ast->primary.tok = tok;
+        break;
+    }
+    case TOKEN_LPAREN: {
+        parser_next(p, 1);
 
-            ast->type = AST_PAREN_EXPR;
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->expr)) res = false;
+        ast->type = AST_PAREN_EXPR;
+        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->expr)) res = false;
 
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-            break;
-        }
-        default: {
-            parser_next(p, 1);
-            res = false;
-            break;
-        }
+        break;
+    }
+    default: {
+        parser_next(p, 1);
+        res = false;
+        break;
+    }
     }
     return res;
 }
@@ -1279,23 +1306,23 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
     switch (tok->type)
     {
-        case TOKEN_ASTERISK:
-        case TOKEN_AMPERSAND: {
-            parser_next(p, 1);
+    case TOKEN_ASTERISK:
+    case TOKEN_AMPERSAND: {
+        parser_next(p, 1);
 
-            ast->type = AST_UNARY_EXPR;
-            if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
-            if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
+        ast->type = AST_UNARY_EXPR;
+        if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
+        if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
 
-            ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->unop.sub)) res = false;
+        ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->unop.sub)) res = false;
 
-            break;
-        }
-        default: {
-            res = parse_primery_expr(p, ast);
-            break;
-        }
+        break;
+    }
+    default: {
+        res = parse_primery_expr(p, ast);
+        break;
+    }
     }
 
     return res;
@@ -1321,156 +1348,151 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
     Token *tok = parser_peek(p, 0);
     switch (tok->type)
     {
-        case TOKEN_PROC: {
-            parser_next(p, 1);
+    case TOKEN_PROC: {
+        parser_next(p, 1);
 
-            ast->type = AST_PROC_DECL;
+        ast->type = AST_PROC_DECL;
 
-            Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
-            if (!proc_name_tok)
-                res = false;
-            else
-                ast->proc.name = proc_name_tok->str;
+        Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
+        if (!proc_name_tok)
+            res = false;
+        else
+            ast->proc.name = proc_name_tok->str;
 
-            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
-            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
-            {
-                Ast param = {0};
-                param.type = AST_PROC_PARAM;
-
-                Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-                if (!ident_tok)
-                    res = false;
-                else
-                    param.decl.name = ident_tok->str;
-
-                param.loc = ident_tok->loc;
-
-                if (!parser_consume(p, TOKEN_COLON)) res = false;
-
-                param.decl.type_expr =
-                    bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_expr(p, param.decl.type_expr)) res = false;
-
-                array_push(ast->proc.params, param);
-
-                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
-                {
-                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
-                }
-            }
-
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->proc.return_type)) res = false;
-
-            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
-
-            ast->proc.stmts = NULL;
-            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
-            {
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true)) res = false;
-                array_push(ast->proc.stmts, stmt);
-            }
-
-            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
-            break;
-        }
-        case TOKEN_VAR:
-        case TOKEN_CONST: {
-            Token *kind = parser_next(p, 1);
-
-            if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
-            if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        {
+            Ast param = {0};
+            param.type = AST_VAR_DECL;
 
             Token *ident_tok = parser_consume(p, TOKEN_IDENT);
             if (!ident_tok)
                 res = false;
             else
-                ast->decl.name = ident_tok->str;
+                param.decl.name = ident_tok->str;
+
+            param.loc = ident_tok->loc;
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
-            ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.type_expr)) res = false;
+            param.decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, param.decl.type_expr)) res = false;
 
-            ast->decl.value_expr = NULL;
-            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            array_push(ast->proc.params, param);
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
-                if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
-
-                ast->decl.value_expr =
-                    bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_expr(p, ast->decl.value_expr)) res = false;
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
             }
-
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
-            break;
         }
-        case TOKEN_TYPEDEF: {
-            parser_next(p, 1);
 
-            ast->type = AST_TYPEDEF;
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-            Token *type_name_tok = parser_consume(p, TOKEN_IDENT);
-            if (!type_name_tok)
-                res = false;
-            else
-                ast->type_def.name = type_name_tok->str;
+        ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->proc.return_type)) res = false;
 
-            ast->type_def.type_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->type_def.type_expr)) res = false;
+        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
-            break;
+        ast->proc.stmts = NULL;
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+            Ast stmt = {0};
+            if (!parse_stmt(p, &stmt, true)) res = false;
+            array_push(ast->proc.stmts, stmt);
         }
-        case TOKEN_RETURN: {
-            parser_next(p, 1);
 
-            ast->type = AST_RETURN;
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        break;
+    }
+    case TOKEN_VAR:
+    case TOKEN_CONST: {
+        Token *kind = parser_next(p, 1);
 
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->expr)) res = false;
+        if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
+        if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
 
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-            break;
-        }
-        default: {
-            ast->type = AST_VAR_ASSIGN;
+        Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+        if (!ident_tok)
+            res = false;
+        else
+            ast->decl.name = ident_tok->str;
 
-            ast->assign.assigned_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->assign.assigned_expr)) res = false;
+        if (!parser_consume(p, TOKEN_COLON)) res = false;
 
+        ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->decl.type_expr)) res = false;
+
+        ast->decl.value_expr = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+        {
             if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
-            ast->assign.value_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->assign.value_expr)) res = false;
+            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+        }
 
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
-            if (!inside_procedure)
-            {
-                compile_error(
-                    p->compiler,
-                    tok->loc,
-                    "assignment must be inside procedure",
-                    tok->loc.length,
-                    tok->loc.buf);
+        break;
+    }
+    case TOKEN_TYPEDEF: {
+        parser_next(p, 1);
 
-                res = false;
-                break;
-            }
+        ast->type = AST_TYPEDEF;
 
+        Token *type_name_tok = parser_consume(p, TOKEN_IDENT);
+        if (!type_name_tok)
+            res = false;
+        else
+            ast->type_def.name = type_name_tok->str;
+
+        ast->type_def.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->type_def.type_expr)) res = false;
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+        break;
+    }
+    case TOKEN_RETURN: {
+        parser_next(p, 1);
+
+        ast->type = AST_RETURN;
+
+        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->expr)) res = false;
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+        break;
+    }
+    default: {
+        ast->type = AST_VAR_ASSIGN;
+
+        ast->assign.assigned_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->assign.assigned_expr)) res = false;
+
+        if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+        ast->assign.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->assign.value_expr)) res = false;
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+        if (!inside_procedure)
+        {
+            compile_error(
+                p->compiler,
+                tok->loc,
+                "assignment must be inside procedure",
+                tok->loc.length,
+                tok->loc.buf);
+
+            res = false;
             break;
         }
+
+        break;
+    }
     }
 
     Location last_loc = parser_peek(p, -1)->loc;
@@ -1521,7 +1543,7 @@ struct Ast *get_symbol(Analyzer *a, String name)
     return NULL;
 }
 
-#define CASE_PRIMITIVE_TYPE(tok_type, prim_type)                               \
+#define AS_TYPE_CASE_PRIMITIVE_TYPE(tok_type, prim_type)                       \
     case tok_type: {                                                           \
         static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
         ast->as_type = &ty;                                                    \
@@ -1539,63 +1561,63 @@ bool ast_as_type(Analyzer *a, Ast *ast)
 
     switch (ast->type)
     {
-        case AST_PRIMARY: {
-            switch (ast->primary.tok->type)
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U8, PRIMITIVE_TYPE_U8);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U16, PRIMITIVE_TYPE_U16);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U32, PRIMITIVE_TYPE_U32);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U64, PRIMITIVE_TYPE_U64);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I8, PRIMITIVE_TYPE_I8);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I16, PRIMITIVE_TYPE_I16);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I32, PRIMITIVE_TYPE_I32);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I64, PRIMITIVE_TYPE_I64);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_F32, PRIMITIVE_TYPE_F32);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_F64, PRIMITIVE_TYPE_F64);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            if (sym && sym->type == AST_TYPEDEF)
             {
-                CASE_PRIMITIVE_TYPE(TOKEN_U8, PRIMITIVE_TYPE_U8);
-                CASE_PRIMITIVE_TYPE(TOKEN_U16, PRIMITIVE_TYPE_U16);
-                CASE_PRIMITIVE_TYPE(TOKEN_U32, PRIMITIVE_TYPE_U32);
-                CASE_PRIMITIVE_TYPE(TOKEN_U64, PRIMITIVE_TYPE_U64);
-                CASE_PRIMITIVE_TYPE(TOKEN_I8, PRIMITIVE_TYPE_I8);
-                CASE_PRIMITIVE_TYPE(TOKEN_I16, PRIMITIVE_TYPE_I16);
-                CASE_PRIMITIVE_TYPE(TOKEN_I32, PRIMITIVE_TYPE_I32);
-                CASE_PRIMITIVE_TYPE(TOKEN_I64, PRIMITIVE_TYPE_I64);
-                CASE_PRIMITIVE_TYPE(TOKEN_F32, PRIMITIVE_TYPE_F32);
-                CASE_PRIMITIVE_TYPE(TOKEN_F64, PRIMITIVE_TYPE_F64);
-                CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
-                CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
-                case TOKEN_IDENT: {
-                    Ast *sym = get_symbol(a, ast->primary.tok->str);
-                    if (sym && sym->type == AST_TYPEDEF)
-                    {
-                        res = ast_as_type(a, sym->type_def.type_expr);
-                        if (res)
-                        {
-                            ast->as_type = sym->type_def.type_expr->as_type;
-                        }
-                    }
-
-                    break;
+                res = ast_as_type(a, sym->type_def.type_expr);
+                if (res)
+                {
+                    ast->as_type = sym->type_def.type_expr->as_type;
                 }
-                default: break;
             }
+
             break;
         }
-        case AST_PAREN_EXPR: {
-            res = ast_as_type(a, ast->expr);
-            ast->as_type = ast->expr->as_type;
-            break;
+        default: break;
         }
-        case AST_UNARY_EXPR: {
-            switch (ast->unop.type)
+        break;
+    }
+    case AST_PAREN_EXPR: {
+        res = ast_as_type(a, ast->expr);
+        ast->as_type = ast->expr->as_type;
+        break;
+    }
+    case AST_UNARY_EXPR: {
+        switch (ast->unop.type)
+        {
+        case UNOP_DEREFERENCE: {
+            res = ast_as_type(a, ast->unop.sub);
+            if (res)
             {
-                case UNOP_DEREFERENCE: {
-                    res = ast_as_type(a, ast->unop.sub);
-                    if (res)
-                    {
-                        TypeInfo *ty =
-                            bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-                        memset(ty, 0, sizeof(*ty));
-                        ty->kind = TYPE_POINTER;
-                        ty->ptr.sub = ast->unop.sub->as_type;
-                    }
-                    break;
-                }
-                default: break;
+                TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+                memset(ty, 0, sizeof(*ty));
+                ty->kind = TYPE_POINTER;
+                ty->ptr.sub = ast->unop.sub->as_type;
+                ast->as_type = ty;
             }
             break;
         }
         default: break;
+        }
+        break;
+    }
+    default: break;
     }
 
     return res;
@@ -1611,21 +1633,20 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
 
     switch (ast->type)
     {
-        case AST_CONST_DECL:
-        case AST_VAR_DECL:
-        case AST_PROC_PARAM: {
-            sym_name = ast->decl.name;
-            break;
-        }
-        case AST_TYPEDEF: {
-            sym_name = ast->type_def.name;
-            break;
-        }
-        case AST_PROC_DECL: {
-            sym_name = ast->proc.name;
-            break;
-        }
-        default: return;
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        sym_name = ast->decl.name;
+        break;
+    }
+    case AST_TYPEDEF: {
+        sym_name = ast->type_def.name;
+        break;
+    }
+    case AST_PROC_DECL: {
+        sym_name = ast->proc.name;
+        break;
+    }
+    default: return;
     }
 
     assert(sym_name.length > 0);
@@ -1648,98 +1669,307 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
-        case AST_RETURN:
-        case AST_PAREN_EXPR: {
-            symbol_check_ast(a, ast->expr);
-            break;
+    case AST_RETURN:
+    case AST_PAREN_EXPR: {
+        symbol_check_ast(a, ast->expr);
+        break;
+    }
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        symbol_check_ast(a, ast->decl.type_expr);
+        if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
+            ast->type == AST_CONST_DECL)
+        {
+            symbol_check_ast(a, ast->decl.value_expr);
         }
-        case AST_PROC_PARAM:
-        case AST_CONST_DECL:
-        case AST_VAR_DECL: {
-            symbol_check_ast(a, ast->decl.type_expr);
-            if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
-                ast->type == AST_CONST_DECL)
+        break;
+    }
+    case AST_VAR_ASSIGN: {
+        symbol_check_ast(a, ast->assign.assigned_expr);
+        symbol_check_ast(a, ast->assign.value_expr);
+        break;
+    }
+    case AST_UNARY_EXPR: {
+        symbol_check_ast(a, ast->unop.sub);
+        break;
+    }
+    case AST_BINARY_EXPR: {
+        symbol_check_ast(a, ast->binop.left);
+        symbol_check_ast(a, ast->binop.right);
+        break;
+    }
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            if (!sym)
             {
-                symbol_check_ast(a, ast->decl.value_expr);
-            }
-            break;
-        }
-        case AST_VAR_ASSIGN: {
-            symbol_check_ast(a, ast->assign.assigned_expr);
-            symbol_check_ast(a, ast->assign.value_expr);
-            break;
-        }
-        case AST_UNARY_EXPR: {
-            symbol_check_ast(a, ast->unop.sub);
-            break;
-        }
-        case AST_BINARY_EXPR: {
-            symbol_check_ast(a, ast->binop.left);
-            symbol_check_ast(a, ast->binop.right);
-            break;
-        }
-        case AST_PRIMARY: {
-            switch (ast->primary.tok->type)
-            {
-                case TOKEN_IDENT: {
-                    Ast *sym = get_symbol(a, ast->primary.tok->str);
-                    if (!sym)
-                    {
-                        compile_error(
-                            a->compiler,
-                            ast->loc,
-                            "invalid identifier: '%.*s'",
-                            (int)ast->primary.tok->str.length,
-                            ast->primary.tok->str.buf);
-                    }
-
-                    break;
-                }
-                default: break;
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "invalid identifier: '%.*s'",
+                    (int)ast->primary.tok->str.length,
+                    ast->primary.tok->str.buf);
             }
 
             break;
         }
         default: break;
+        }
+
+        break;
+    }
+    default: break;
     }
 }
 
-void type_check_ast(Analyzer *a, Ast *ast)
+#define TYPE_CHECK_CASE_PRIMITIVE_TYPE(prim_type)                              \
+    case prim_type: {                                                          \
+        static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
+        ast->type_info = &ty;                                                  \
+    }                                                                          \
+    break
+
+void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
-    ast_as_type(a, ast);
+    bool is_statement = true;
+
+    // Statements
     switch (ast->type)
     {
-        case AST_RETURN:
-        case AST_PAREN_EXPR: {
-            type_check_ast(a, ast->expr);
+    case AST_RETURN: {
+        // TODO: use procedure's return type as expected type
+        type_check_ast(a, ast->expr, NULL);
+        break;
+    }
+    case AST_TYPEDEF: {
+        static TypeInfo ty = {.kind = TYPE_TYPE};
+        type_check_ast(a, ast->type_def.type_expr, &ty);
+        break;
+    }
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        type_check_ast(a, ast->decl.type_expr, NULL);
+        if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
+            ast->type == AST_CONST_DECL)
+        {
+            type_check_ast(
+                a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+        }
+        break;
+    }
+    case AST_VAR_ASSIGN: {
+        type_check_ast(a, ast->assign.assigned_expr, NULL);
+        type_check_ast(
+            a, ast->assign.value_expr, ast->assign.assigned_expr->type_info);
+        break;
+    }
+    case AST_PROC_DECL: {
+        break;
+    }
+    default: {
+        is_statement = false;
+        break;
+    }
+    }
+
+    if (is_statement)
+    {
+        return;
+    }
+
+    ast_as_type(a, ast);
+
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_U8:
+        case TOKEN_U16:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_I8:
+        case TOKEN_I16:
+        case TOKEN_I32:
+        case TOKEN_I64:
+        case TOKEN_F32:
+        case TOKEN_F64:
+        case TOKEN_BOOL:
+        case TOKEN_VOID: {
+            static TypeInfo ty = {.kind = TYPE_TYPE};
+            ast->type_info = &ty;
             break;
         }
-        case AST_PROC_PARAM:
-        case AST_CONST_DECL:
-        case AST_VAR_DECL: {
-            type_check_ast(a, ast->decl.type_expr);
-            if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
-                ast->type == AST_CONST_DECL)
+        case TOKEN_TRUE:
+        case TOKEN_FALSE: {
+            static TypeInfo ty = {
+                .kind = TYPE_PRIMITIVE,
+                .primitive = PRIMITIVE_TYPE_BOOL,
+            };
+            ast->type_info = &ty;
+            break;
+        }
+        case TOKEN_INT: {
+            static TypeInfo ty = {
+                .kind = TYPE_PRIMITIVE,
+                .primitive = PRIMITIVE_TYPE_I64,
+            };
+            ast->type_info = &ty;
+
+            if (expected_type && expected_type->kind == TYPE_PRIMITIVE)
             {
-                type_check_ast(a, ast->decl.value_expr);
+                switch (expected_type->primitive)
+                {
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U8);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U16);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U32);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U64);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I8);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I16);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I32);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I64);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F32);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F64);
+                default: break;
+                }
+            }
+
+            break;
+        }
+        case TOKEN_FLOAT: {
+            static TypeInfo ty = {
+                .kind = TYPE_PRIMITIVE,
+                .primitive = PRIMITIVE_TYPE_F64,
+            };
+            ast->type_info = &ty;
+
+            if (expected_type && expected_type->kind == TYPE_PRIMITIVE)
+            {
+                switch (expected_type->primitive)
+                {
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F32);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F64);
+                default: break;
+                }
             }
             break;
         }
-        case AST_VAR_ASSIGN: {
-            type_check_ast(a, ast->assign.assigned_expr);
-            type_check_ast(a, ast->assign.value_expr);
+        case TOKEN_CSTRING: {
+            static TypeInfo u8_ty = {
+                .kind = TYPE_PRIMITIVE,
+                .primitive = PRIMITIVE_TYPE_U8,
+            };
+            static TypeInfo ty = {
+                .kind = TYPE_POINTER,
+                .ptr.sub = &u8_ty,
+            };
+            ast->type_info = &ty;
             break;
         }
-        case AST_UNARY_EXPR: {
-            type_check_ast(a, ast->unop.sub);
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            if (sym)
+            {
+                switch (sym->type)
+                {
+                case AST_VAR_DECL:
+                case AST_CONST_DECL: {
+                    ast->type_info = sym->decl.type_expr->as_type;
+                    assert(ast->type_info);
+                    break;
+                }
+                case AST_TYPEDEF: {
+                    ast->type_info = sym->type_def.type_expr->as_type;
+                    assert(ast->type_info);
+                    break;
+                }
+                default: break;
+                }
+            }
+
             break;
         }
-        case AST_BINARY_EXPR: {
-            type_check_ast(a, ast->binop.left);
-            type_check_ast(a, ast->binop.right);
+        default: assert(0); break;
+        }
+        break;
+    }
+    case AST_PAREN_EXPR: {
+        type_check_ast(a, ast->expr, expected_type);
+        ast->type_info = ast->expr->type_info;
+        break;
+    }
+    case AST_UNARY_EXPR: {
+        switch (ast->unop.type)
+        {
+        case UNOP_DEREFERENCE: {
+            type_check_ast(a, ast->unop.sub, NULL);
+
+            if (!ast->unop.sub->type_info) break;
+
+            if (ast->unop.sub->type_info->kind == TYPE_TYPE)
+            {
+                TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+                memset(ty, 0, sizeof(*ty));
+                ty->kind = TYPE_TYPE;
+                ast->type_info = ty;
+                break;
+            }
+
+            if (ast->unop.sub->type_info->kind != TYPE_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "you can only dereference pointer types");
+                break;
+            }
+
+            ast->type_info = ast->unop.sub->type_info->ptr.sub;
+
             break;
         }
-        default: break;
+        case UNOP_ADDRESS: {
+            TypeInfo *sub_expected_type = NULL;
+            if (expected_type && expected_type->kind == TYPE_POINTER)
+            {
+                sub_expected_type = expected_type->ptr.sub;
+            }
+            type_check_ast(a, ast->unop.sub, sub_expected_type);
+
+            if (!ast->unop.sub->type_info) break;
+
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_POINTER;
+            ty->ptr.sub = ast->unop.sub->type_info;
+            ast->type_info = ty;
+            break;
+        }
+        }
+        break;
+    }
+    case AST_BINARY_EXPR: {
+        type_check_ast(a, ast->binop.left, NULL);
+        type_check_ast(a, ast->binop.right, NULL);
+        break;
+    }
+    default: break;
+    }
+
+    if (!ast->type_info)
+    {
+        // TODO: remove this, only temporary for debugging
+        printf("undefined type: %u:%u\n", ast->loc.line, ast->loc.col);
+    }
+
+    if (ast->type_info && expected_type)
+    {
+        if (!exact_types(ast->type_info, expected_type))
+        {
+            compile_error(a->compiler, ast->loc, "wrong type");
+        }
     }
 }
 
@@ -1749,12 +1979,12 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
     {
         switch (stmt->type)
         {
-            case AST_CONST_DECL:
-            case AST_PROC_DECL: {
-                register_symbol_ast(a, stmt);
-                break;
-            }
-            default: break;
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            register_symbol_ast(a, stmt);
+            break;
+        }
+        default: break;
         }
     }
 
@@ -1762,13 +1992,13 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
     {
         switch (stmt->type)
         {
-            case AST_CONST_DECL:
-            case AST_PROC_DECL: {
-                symbol_check_ast(a, stmt);
-                type_check_ast(a, stmt);
-                break;
-            }
-            default: break;
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            symbol_check_ast(a, stmt);
+            type_check_ast(a, stmt, NULL);
+            break;
+        }
+        default: break;
         }
     }
 
@@ -1776,17 +2006,17 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
     {
         switch (stmt->type)
         {
-            case AST_CONST_DECL:
-            case AST_PROC_DECL: {
-                break;
-            }
-            default: {
-                register_symbol_ast(a, stmt);
-                symbol_check_ast(a, stmt);
-                type_check_ast(a, stmt);
-                analyze_ast_children(a, stmt);
-                break;
-            }
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            break;
+        }
+        default: {
+            register_symbol_ast(a, stmt);
+            symbol_check_ast(a, stmt);
+            type_check_ast(a, stmt, NULL);
+            analyze_ast_children(a, stmt);
+            break;
+        }
         }
     }
 
@@ -1794,12 +2024,12 @@ void analyze_stmts(Analyzer *a, Ast *stmts)
     {
         switch (stmt->type)
         {
-            case AST_CONST_DECL:
-            case AST_PROC_DECL: {
-                analyze_ast_children(a, stmt);
-                break;
-            }
-            default: break;
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            analyze_ast_children(a, stmt);
+            break;
+        }
+        default: break;
         }
     }
 }
@@ -1808,27 +2038,27 @@ void analyze_ast_children(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
-        case AST_ROOT: {
-            scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
+    case AST_ROOT: {
+        scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
 
-            array_push(a->scope_stack, &ast->block.scope);
-            analyze_stmts(a, ast->block.stmts);
-            array_pop(a->scope_stack);
-            break;
-        }
-        case AST_PROC_DECL: {
-            scope_init(
-                &ast->proc.scope,
-                array_size(ast->proc.stmts) + array_size(ast->proc.params),
-                NULL);
+        array_push(a->scope_stack, &ast->block.scope);
+        analyze_stmts(a, ast->block.stmts);
+        array_pop(a->scope_stack);
+        break;
+    }
+    case AST_PROC_DECL: {
+        scope_init(
+            &ast->proc.scope,
+            array_size(ast->proc.stmts) + array_size(ast->proc.params),
+            NULL);
 
-            array_push(a->scope_stack, &ast->proc.scope);
-            analyze_stmts(a, ast->proc.params);
-            analyze_stmts(a, ast->proc.stmts);
-            array_pop(a->scope_stack);
-            break;
-        }
-        default: break;
+        array_push(a->scope_stack, &ast->proc.scope);
+        analyze_stmts(a, ast->proc.params);
+        analyze_stmts(a, ast->proc.stmts);
+        array_pop(a->scope_stack);
+        break;
+    }
+    default: break;
     }
 }
 // }}}

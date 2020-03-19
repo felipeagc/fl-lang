@@ -4,7 +4,7 @@ UseTab: Never
 IndentWidth: 4
 ColumnLimit: 80
 
-IndentCaseLabels: true
+IndentCaseLabels: false
 BreakBeforeBraces: Custom
 BraceWrapping:
   AfterStruct: true
