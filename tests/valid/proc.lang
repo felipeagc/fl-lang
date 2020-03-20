@@ -1,14 +1,15 @@
 const hello: i32 = 123;
-var global: i32 = 123;
 
 typedef MyInt i32;
 
 proc "c" puts(str: *u8) void;
 
-proc add(a: i32, b: i32) i32;
+proc add(a: i32, b: i32) i32 {
+	return 0;
+}
 
-proc main(argc: i32, argv: **u8) i32 {
-	var hey: i32 = argc;
+proc main() i32 {
+	var hey: i32 = 2;
 	var yo: *i32 = (&hey);
 	*yo = (123);
 

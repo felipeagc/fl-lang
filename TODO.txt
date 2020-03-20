@@ -1,0 +1,4 @@
+Throw error if function didn't return (but needed to return)
+Fix codegen for global variables
+
+Generic int type with size & sign properties

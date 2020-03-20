@@ -1,0 +1,8 @@
+proc main() void {
+	var my_int: i32 = 123;
+	var ptr: *i32 = &my_int;
+	var ptr2: *i64 = &123;
+	*ptr = 321;
+
+	var my_char: u8 = *c"hello";
+}

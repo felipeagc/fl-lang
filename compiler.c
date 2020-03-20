@@ -2498,7 +2498,7 @@ void llvm_codegen_asts(
                 }
                 case PRIMITIVE_TYPE_F32:
                 case PRIMITIVE_TYPE_F64: {
-                    LLVMConstReal(
+                    ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->i64);
                     break;
@@ -2512,7 +2512,7 @@ void llvm_codegen_asts(
                 {
                 case PRIMITIVE_TYPE_F32:
                 case PRIMITIVE_TYPE_F64: {
-                    LLVMConstReal(
+                    ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->f64);
                     break;
@@ -2624,9 +2624,40 @@ void llvm_codegen_asts(
         case AST_RETURN: {
             llvm_codegen_asts(l, mod, ast->expr, 1, false);
             LLVMBuildRet(mod->builder, load_val(mod, &ast->expr->value));
-
             break;
         }
+        case AST_UNARY_EXPR: {
+            switch (ast->unop.type)
+            {
+            case UNOP_ADDRESS: {
+                llvm_codegen_asts(l, mod, ast->unop.sub, 1, false);
+
+                if (!ast->unop.sub->value.is_lvalue)
+                {
+                    ast->value.value = LLVMBuildAlloca(
+                        mod->builder,
+                        llvm_type(l, ast->unop.sub->type_info),
+                        "");
+                    LLVMBuildStore(
+                        mod->builder,
+                        ast->unop.sub->value.value,
+                        ast->value.value);
+                    break;
+                }
+
+                ast->value.value = ast->unop.sub->value.value;
+                break;
+            }
+            case UNOP_DEREFERENCE: {
+                llvm_codegen_asts(l, mod, ast->unop.sub, 1, false);
+                ast->value.value =
+                    LLVMBuildLoad(mod->builder, ast->unop.sub->value.value, "");
+                break;
+            }
+            }
+            break;
+        }
+        case AST_TYPEDEF: break;
         default: assert(0); break;
         }
     }
