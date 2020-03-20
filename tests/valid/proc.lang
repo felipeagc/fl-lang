@@ -26,5 +26,7 @@ proc main() i32 {
 	var derp: i32 = add(1, 2);
 	add(1, 2);
 
+	var my_char: i8 = 'A';
+
 	return 0;
 }

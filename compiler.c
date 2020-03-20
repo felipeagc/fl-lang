@@ -577,7 +577,7 @@ static const char *token_strings[] = {
     [TOKEN_IDENT] = "identifier",
     [TOKEN_STRING_LIT] = "string literal",
     [TOKEN_CSTRING_LIT] = "c-string literal",
-    [TOKEN_CHAR_LIT] = "c-string literal",
+    [TOKEN_CHAR_LIT] = "char literal",
     [TOKEN_PROC] = "proc",
     [TOKEN_TYPEDEF] = "typedef",
     [TOKEN_STRUCT] = "struct",
@@ -624,6 +624,7 @@ typedef struct Token
         double f64;
         int64_t i64;
         String str;
+        char chr;
     };
 } Token;
 // }}}
@@ -857,6 +858,29 @@ void lex_token(Lexer *l)
         }
         break;
     }
+    case '\'': {
+        tok.type = TOKEN_CHAR_LIT;
+
+        lex_next(l, 1);
+        ++tok.loc.length;
+
+        tok.chr = lex_next(l, 1);
+        ++tok.loc.length;
+
+        ++tok.loc.length;
+        if (lex_next(l, 1) != '\'' || lex_is_at_end(l))
+        {
+            compile_error(
+                l->compiler,
+                tok.loc,
+                "unclosed char literal",
+                tok.loc.length,
+                tok.loc.buf);
+            tok.loc.length = 0;
+        }
+
+        break;
+    }
     default: {
         if ((lex_peek(l, 0) == 'c' && lex_peek(l, 1) == '\"') ||
             (lex_peek(l, 0) == '\"'))
@@ -884,6 +908,7 @@ void lex_token(Lexer *l)
                 char n = lex_next(l, 1);
                 if (n == '\\')
                 {
+                    // TODO: wtf this is wrong
                     ++tok.loc.length;
                     n = lex_next(l, 1);
                 }
@@ -1404,7 +1429,7 @@ static inline Token *parser_consume(Parser *p, TokenType tok_type)
 
 bool parse_expr(Parser *p, Ast *ast);
 
-bool parse_primery_expr(Parser *p, Ast *ast)
+bool parse_primary_expr(Parser *p, Ast *ast)
 {
     bool res = true;
     Token *tok = parser_peek(p, 0);
@@ -1418,6 +1443,7 @@ bool parse_primery_expr(Parser *p, Ast *ast)
     case TOKEN_BOOL:
     case TOKEN_STRING_LIT:
     case TOKEN_CSTRING_LIT:
+    case TOKEN_CHAR_LIT:
     case TOKEN_U8:
     case TOKEN_U16:
     case TOKEN_U32:
@@ -1460,7 +1486,7 @@ bool parse_proc_call(Parser *p, Ast *ast)
     bool res = true;
 
     Ast expr = *ast;
-    if (!parse_primery_expr(p, &expr)) res = false;
+    if (!parse_primary_expr(p, &expr)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
 
@@ -2164,6 +2190,14 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = &ty;
             break;
         }
+        case TOKEN_CHAR_LIT: {
+            static TypeInfo i8_ty = {
+                .kind = TYPE_PRIMITIVE,
+                .primitive = PRIMITIVE_TYPE_I8,
+            };
+            ast->type_info = &i8_ty;
+            break;
+        }
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
             if (sym)
@@ -2642,6 +2676,13 @@ void llvm_codegen_asts(
                 LLVMValueRef indices[2] = {zero, zero};
 
                 ast->value.value = LLVMConstGEP(glob, indices, 2);
+                break;
+            }
+            case TOKEN_CHAR_LIT: {
+                ast->value.value = LLVMConstInt(
+                    llvm_type(l, ast->type_info),
+                    (unsigned long long)ast->primary.tok->chr,
+                    true);
                 break;
             }
             case TOKEN_IDENT: {
