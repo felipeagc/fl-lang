@@ -1,0 +1,9 @@
+proc "c" puts(str: *u8) void;
+
+proc hey() void {
+
+}
+
+proc "c" main() void {
+	puts(c"Hello, world!");
+}

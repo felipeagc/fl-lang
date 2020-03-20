@@ -7,6 +7,16 @@
 #include <string.h>
 #include <assert.h>
 
+#if defined(LLVM_BACKEND)
+#include <llvm-c/Analysis.h>
+#include <llvm-c/BitWriter.h>
+#include <llvm-c/Core.h>
+#include <llvm-c/DebugInfo.h>
+#include <llvm-c/ExecutionEngine.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/TargetMachine.h>
+#endif
+
 // Forward declarations {{{
 typedef struct SourceFile SourceFile;
 //}}}
@@ -1043,6 +1053,11 @@ typedef enum PrimitiveType {
 typedef struct TypeInfo
 {
     TypeKind kind;
+
+#if defined(LLVM_BACKEND)
+    LLVMTypeRef ref;
+#endif
+
     union
     {
         PrimitiveType primitive;
@@ -1133,6 +1148,32 @@ struct Ast *scope_get_local(Scope *scope, String name)
 {
     return hash_get(&scope->map, name);
 }
+
+struct Ast *get_symbol(Scope **scope_stack, String name)
+{
+    struct Ast *sym = NULL;
+    for (Scope **scope = scope_stack + array_size(scope_stack) - 1;
+         scope >= scope_stack;
+         --scope)
+    {
+        sym = scope_get_local(*scope, name);
+        if (sym) return sym;
+    }
+
+    return NULL;
+}
+
+struct Ast *get_scope_procedure(Scope **scope_stack)
+{
+    for (Scope **scope = scope_stack + array_size(scope_stack) - 1;
+         scope >= scope_stack;
+         --scope)
+    {
+        if ((*scope)->procedure) return (*scope)->procedure;
+    }
+
+    return NULL;
+}
 // }}}
 
 // AST {{{
@@ -1176,6 +1217,16 @@ typedef struct Ast
 
     union
     {
+#if defined(LLVM_BACKEND)
+        LLVMValueRef value;
+        LLVMTypeRef type;
+#else
+        void *dummy; // can't have an empty union
+#endif
+    } value;
+
+    union
+    {
         struct Ast *expr;
         struct
         {
@@ -1191,6 +1242,7 @@ typedef struct Ast
             Scope scope;
             String convention;
             String name;
+            bool has_body;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
@@ -1479,6 +1531,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
+            ast->proc.has_body = true;
             if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
             while (parser_peek(p, 0)->type != TOKEN_RCURLY)
@@ -1492,6 +1545,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         }
         else
         {
+            ast->proc.has_body = false;
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
@@ -1639,32 +1693,6 @@ typedef struct Analyzer
     /*array*/ Scope **scope_stack;
 } Analyzer;
 
-Ast *get_symbol(Analyzer *a, String name)
-{
-    Ast *sym = NULL;
-    for (Scope **scope = a->scope_stack + array_size(a->scope_stack) - 1;
-         scope >= a->scope_stack;
-         --scope)
-    {
-        sym = scope_get_local(*scope, name);
-        if (sym) return sym;
-    }
-
-    return NULL;
-}
-
-Ast *get_scope_procedure(Analyzer *a)
-{
-    for (Scope **scope = a->scope_stack + array_size(a->scope_stack) - 1;
-         scope >= a->scope_stack;
-         --scope)
-    {
-        if ((*scope)->procedure) return (*scope)->procedure;
-    }
-
-    return NULL;
-}
-
 #define AS_TYPE_CASE_PRIMITIVE_TYPE(tok_type, prim_type)                       \
     case tok_type: {                                                           \
         static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
@@ -1699,7 +1727,7 @@ bool ast_as_type(Analyzer *a, Ast *ast)
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
             if (sym && sym->type == AST_TYPEDEF)
             {
                 res = ast_as_type(a, sym->type_def.type_expr);
@@ -1780,7 +1808,7 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
 
     assert(sym_name.length > 0);
 
-    if (get_symbol(a, sym_name))
+    if (get_symbol(a->scope_stack, sym_name))
     {
         compile_error(
             a->compiler,
@@ -1847,7 +1875,7 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
             if (!sym)
             {
                 compile_error(
@@ -1885,7 +1913,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     switch (ast->type)
     {
     case AST_RETURN: {
-        Ast *proc = get_scope_procedure(a);
+        Ast *proc = get_scope_procedure(a->scope_stack);
         if (!proc)
         {
             compile_error(
@@ -2057,7 +2085,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a, ast->primary.tok->str);
+            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
             if (sym)
             {
                 switch (sym->type)
@@ -2295,6 +2323,267 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
 
 // }}}
 
+// LLVM Codegen {{{
+#if defined(LLVM_BACKEND)
+typedef struct LLContext
+{
+    Compiler *compiler;
+    /*array*/ Scope **scope_stack;
+} LLContext;
+
+typedef struct LLModule
+{
+    LLVMModuleRef mod;
+    LLVMBuilderRef builder;
+    LLVMTargetDataRef data;
+} LLModule;
+
+LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
+{
+    if (type->ref) return type->ref;
+
+    switch (type->kind)
+    {
+    case TYPE_PRIMITIVE: {
+        switch (type->primitive)
+        {
+        case PRIMITIVE_TYPE_U8:
+        case PRIMITIVE_TYPE_I8: type->ref = LLVMInt8Type(); break;
+        case PRIMITIVE_TYPE_U16:
+        case PRIMITIVE_TYPE_I16: type->ref = LLVMInt16Type(); break;
+        case PRIMITIVE_TYPE_U32:
+        case PRIMITIVE_TYPE_I32: type->ref = LLVMInt32Type(); break;
+        case PRIMITIVE_TYPE_U64:
+        case PRIMITIVE_TYPE_I64: type->ref = LLVMInt64Type(); break;
+        case PRIMITIVE_TYPE_F32: type->ref = LLVMFloatType(); break;
+        case PRIMITIVE_TYPE_F64: type->ref = LLVMDoubleType(); break;
+        case PRIMITIVE_TYPE_VOID: type->ref = LLVMVoidType(); break;
+        case PRIMITIVE_TYPE_BOOL: type->ref = LLVMInt32Type(); break;
+        }
+        break;
+    }
+    case TYPE_POINTER: {
+        type->ref = LLVMPointerType(llvm_type(l, type->ptr.sub), 0);
+        break;
+    }
+    case TYPE_ARRAY: {
+        type->ref =
+            LLVMArrayType(llvm_type(l, type->array.sub), type->array.size);
+        break;
+    }
+    case TYPE_PROC: {
+        size_t param_count = array_size(type->proc.params);
+        LLVMTypeRef *param_types =
+            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
+        for (size_t i = 0; i < param_count; i++)
+        {
+            param_types[i] = llvm_type(l, &type->proc.params[i]);
+        }
+
+        LLVMTypeRef return_type = llvm_type(l, type->proc.return_type);
+
+        type->ref =
+            LLVMFunctionType(return_type, param_types, param_count, false);
+        break;
+    }
+    case TYPE_TYPE:
+    case TYPE_NONE:
+    case TYPE_UNINITIALIZED: assert(0); break;
+    }
+
+    return type->ref;
+}
+
+void llvm_codegen_asts(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
+{
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT: {
+            array_push(l->scope_stack, &ast->block.scope);
+            llvm_codegen_asts(
+                l, mod, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(l->scope_stack);
+            break;
+        }
+        case AST_PROC_DECL: {
+            LLVMTypeRef fun_type = llvm_type(l, ast->type_info);
+
+            char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
+            ast->value.value = LLVMAddFunction(mod->mod, fun_name, fun_type);
+
+            LLVMSetLinkage(ast->value.value, LLVMInternalLinkage);
+            if (string_equals(ast->proc.convention, STR("c")))
+            {
+                LLVMSetLinkage(ast->value.value, LLVMExternalLinkage);
+            }
+
+            if (ast->proc.has_body)
+            {
+                size_t param_count = array_size(ast->proc.params);
+                for (size_t i = 0; i < param_count; i++)
+                {
+                    Ast *param = &ast->proc.params[i];
+                    param->value.value = LLVMGetParam(ast->value.value, i);
+
+                    char *param_name =
+                        bump_c_str(&l->compiler->bump, param->decl.name);
+                    LLVMSetValueName(param->value.value, param_name);
+                }
+
+                LLVMBasicBlockRef entry =
+                    LLVMAppendBasicBlock(ast->value.value, "entry");
+                LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
+
+                LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+                array_push(l->scope_stack, &ast->proc.scope);
+                llvm_codegen_asts(
+                    l, mod, ast->proc.stmts, array_size(ast->proc.stmts));
+                array_pop(l->scope_stack);
+
+                if (!LLVMGetBasicBlockTerminator(
+                        LLVMGetInsertBlock(mod->builder)))
+                {
+                    LLVMBuildRetVoid(mod->builder); // Add void return
+                }
+
+                LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
+            }
+
+            break;
+        }
+        case AST_PRIMARY: {
+            switch (ast->primary.tok->type)
+            {
+            case TOKEN_INT: {
+                break;
+            }
+            case TOKEN_FLOAT: {
+                break;
+            }
+            case TOKEN_CSTRING: {
+                LLVMValueRef glob = LLVMAddGlobal(
+                    mod->mod,
+                    LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
+                    "");
+
+                // set as internal linkage and constant
+                LLVMSetLinkage(glob, LLVMInternalLinkage);
+                LLVMSetGlobalConstant(glob, true);
+
+                // Initialize with string:
+                LLVMSetInitializer(
+                    glob,
+                    LLVMConstString(
+                        ast->primary.tok->str.buf,
+                        ast->primary.tok->str.length,
+                        true));
+
+                LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, false);
+                LLVMValueRef indices[2] = {zero, zero};
+
+                ast->value.value = LLVMConstGEP(glob, indices, 2);
+                break;
+            }
+            case TOKEN_IDENT: {
+                Ast *sym = get_symbol(l->scope_stack, ast->primary.tok->str);
+                assert(sym);
+                assert(sym->value.value);
+
+                ast->value.value = sym->value.value;
+                break;
+            }
+            default: assert(0); break;
+            }
+            break;
+        }
+        case AST_PAREN_EXPR: {
+            llvm_codegen_asts(l, mod, ast->expr, 1);
+            ast->value.value = ast->expr->value.value;
+            break;
+        }
+        case AST_PROC_CALL: {
+            llvm_codegen_asts(l, mod, ast->proc_call.expr, 1);
+            LLVMValueRef fun = ast->proc_call.expr->value.value;
+
+            unsigned param_count = (unsigned)array_size(ast->proc_call.params);
+            LLVMValueRef *params = bump_alloc(
+                &l->compiler->bump, sizeof(LLVMValueRef) * param_count);
+
+            llvm_codegen_asts(
+                l,
+                mod,
+                ast->proc_call.params,
+                array_size(ast->proc_call.params));
+            for (size_t i = 0; i < param_count; i++)
+            {
+                params[i] = ast->proc_call.params[i].value.value;
+            }
+
+            ast->value.value =
+                LLVMBuildCall(mod->builder, fun, params, param_count, "");
+
+            break;
+        }
+        case AST_EXPR_STMT: {
+            llvm_codegen_asts(l, mod, ast->expr, 1);
+            break;
+        }
+        default: assert(0); break;
+        }
+    }
+}
+
+void llvm_codegen(LLContext *l, Ast *ast)
+{
+    LLModule mod = {0};
+    mod.mod = LLVMModuleCreateWithName("main");
+    mod.builder = LLVMCreateBuilder();
+    mod.data = LLVMGetModuleDataLayout(mod.mod);
+
+    llvm_codegen_asts(l, &mod, ast, 1);
+
+    printf("%s\n", LLVMPrintModuleToString(mod.mod));
+
+    char *error = NULL;
+    if (LLVMVerifyModule(mod.mod, LLVMReturnStatusAction, &error))
+    {
+        printf("Failed to verify module:\n%s\n", error);
+        exit(1);
+    }
+
+    LLVMExecutionEngineRef engine;
+    error = NULL;
+
+    LLVMLinkInMCJIT();
+    LLVMInitializeNativeTarget();
+    LLVMInitializeNativeAsmPrinter();
+    if (LLVMCreateExecutionEngineForModule(&engine, mod.mod, &error) != 0)
+    {
+        fprintf(stderr, "failed to create execution engine\n");
+        abort();
+    }
+
+    if (error)
+    {
+        fprintf(stderr, "error: %s\n", error);
+        LLVMDisposeMessage(error);
+        exit(EXIT_FAILURE);
+    }
+
+    void (*main_func)() = (void (*)())LLVMGetFunctionAddress(engine, "main");
+    if (main_func)
+    {
+        main_func();
+    }
+
+    LLVMDisposeBuilder(mod.builder);
+}
+#endif
+// }}}
+
 // Printing errors {{{
 void print_errors(Compiler *compiler)
 {
@@ -2350,6 +2639,17 @@ int main(int argc, char **argv)
         analyzer->compiler = compiler;
         analyze_asts(analyzer, parser->ast, 1);
         print_errors(compiler);
+
+#if defined(LLVM_BACKEND)
+        LLContext *llvm_context =
+            bump_alloc(&compiler->bump, sizeof(*llvm_context));
+        memset(llvm_context, 0, sizeof(*llvm_context));
+        llvm_context->compiler = compiler;
+        llvm_codegen(llvm_context, parser->ast);
+        print_errors(compiler);
+#else
+        printf("No compiler backend\n");
+#endif
     }
     else
     {

@@ -1,8 +1,11 @@
 CC=clang
-CFLAGS=-Wall -g
+LLVM_CFLAGS=$(shell llvm-config-10 --cflags)
+LLVM_LDFLAGS=$(shell llvm-config-10 --ldflags)
+CFLAGS=-Wall -g $(LLVM_CFLAGS) -DLLVM_BACKEND
+LDFLAGS=$(LLVM_LDFLAGS) -lLLVM-10
 
 compiler: compiler.c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $<
 
 .PHONY: clean test
 
