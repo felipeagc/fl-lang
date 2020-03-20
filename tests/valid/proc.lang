@@ -1,10 +1,11 @@
-const hello: i32 = 123;
+const hello: i32 = (123);
 var global: i32 = 123;
 var global_string: *u8 = c"Hello";
 
 typedef MyInt i32;
 
 proc "c" puts(str: *u8) void;
+proc "c" printf(fmt: *u8, ...) void;
 
 proc add(a: i32, b: i32) i32 {
 	return 0;
@@ -27,6 +28,8 @@ proc main() i32 {
 	add(1, 2);
 
 	var my_char: i8 = 'A';
+
+	printf(c"Hello, world \"%d\"!\n", add(1, 2));
 
 	return 0;
 }

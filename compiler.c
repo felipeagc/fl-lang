@@ -504,6 +504,7 @@ typedef enum TokenType {
     TOKEN_AMPERSAND,
 
     TOKEN_DOT,
+    TOKEN_ELLIPSIS,
     TOKEN_COMMA,
 
     TOKEN_NOT,       // !
@@ -567,6 +568,7 @@ static const char *token_strings[] = {
     [TOKEN_AMPERSAND] = "&",
 
     [TOKEN_DOT] = ".",
+    [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
 
     [TOKEN_NOT] = "!",        // !
@@ -653,6 +655,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
+        PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
         PRINT_TOKEN_TYPE(TOKEN_COMMA);
 
         PRINT_TOKEN_TYPE(TOKEN_NOT);
@@ -838,6 +841,12 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_DOT;
+        if (lex_peek(l, 0) == '.' && lex_peek(l, 1) == '.')
+        {
+            lex_next(l, 2);
+            tok.type = TOKEN_ELLIPSIS;
+            tok.loc.length = 3;
+        }
         break;
     }
     case ',': {
@@ -911,6 +920,22 @@ void lex_token(Lexer *l)
                     // TODO: wtf this is wrong
                     ++tok.loc.length;
                     n = lex_next(l, 1);
+                    switch (n)
+                    {
+                    case 'a': n = '\a'; break;
+                    case 'b': n = '\b'; break;
+                    case 'f': n = '\f'; break;
+                    case 'n': n = '\n'; break;
+                    case 'r': n = '\r'; break;
+                    case 't': n = '\t'; break;
+                    case 'v': n = '\v'; break;
+                    case '0': n = '\0'; break;
+                    case '?': n = '\?'; break;
+                    case '"': n = '\"'; break;
+                    case '\'': n = '\''; break;
+                    case '\\': n = '\\'; break;
+                    default: break;
+                    }
                 }
 
                 array_push(tok.str.buf, n);
@@ -1123,6 +1148,7 @@ typedef struct TypeInfo
         } array;
         struct
         {
+            bool is_c_vararg;
             struct TypeInfo *return_type;
             /*array*/ struct TypeInfo *params;
         } proc;
@@ -1273,6 +1299,11 @@ typedef struct AstValue
     };
 } AstValue;
 
+enum {
+    PROC_FLAG_HAS_BODY = 1 << 1,
+    PROC_FLAG_IS_C_VARARGS = 1 << 2,
+};
+
 typedef struct Ast
 {
     AstType type;
@@ -1299,7 +1330,7 @@ typedef struct Ast
             Scope scope;
             String convention;
             String name;
-            bool has_body;
+            uint32_t flags;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
@@ -1371,7 +1402,7 @@ static bool is_expr_const(Scope **scope_stack, Ast *ast)
         res = is_expr_const(scope_stack, ast->expr);
         break;
     }
-    default: assert(0); break;
+    default: break;
     }
 
     return res;
@@ -1594,6 +1625,13 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
         {
+            if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
+            {
+                parser_next(p, 1);
+                ast->proc.flags |= PROC_FLAG_IS_C_VARARGS;
+                break;
+            }
+
             Ast param = {0};
             param.type = AST_VAR_DECL;
 
@@ -1627,7 +1665,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
-            ast->proc.has_body = true;
+            ast->proc.flags |= PROC_FLAG_HAS_BODY;
             if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
             while (parser_peek(p, 0)->type != TOKEN_RCURLY)
@@ -1641,7 +1679,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         }
         else
         {
-            ast->proc.has_body = false;
+            ast->proc.flags = ast->proc.flags & ~PROC_FLAG_HAS_BODY;
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
@@ -2063,6 +2101,9 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
+        ty->proc.is_c_vararg =
+            (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
+
         array_push(a->scope_stack, &ast->proc.scope);
 
         for (Ast *param = ast->proc.params;
@@ -2250,23 +2291,42 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         assert(ast->proc_call.expr->type_info);
         ast->type_info = ast->proc_call.expr->type_info->proc.return_type;
 
-        if (array_size(ast->proc_call.params) !=
-            array_size(ast->proc_call.expr->type_info->proc.params))
+        if (!ast->proc_call.expr->type_info->proc.is_c_vararg)
         {
-            res = false;
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "wrong parameter count for function call");
-            break;
+            if (array_size(ast->proc_call.params) !=
+                array_size(ast->proc_call.expr->type_info->proc.params))
+            {
+                res = false;
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "wrong parameter count for function call");
+                break;
+            }
+        }
+        else
+        {
+            if (array_size(ast->proc_call.params) <
+                array_size(ast->proc_call.expr->type_info->proc.params))
+            {
+                res = false;
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "wrong parameter count for function call");
+                break;
+            }
         }
 
         for (size_t i = 0; i < array_size(ast->proc_call.params); ++i)
         {
-            type_check_ast(
-                a,
-                &ast->proc_call.params[i],
-                &ast->proc_call.expr->type_info->proc.params[i]);
+            TypeInfo *param_expected_type = NULL;
+            if (i < array_size(ast->proc_call.expr->type_info->proc.params))
+            {
+                param_expected_type =
+                    &ast->proc_call.expr->type_info->proc.params[i];
+            }
+            type_check_ast(a, &ast->proc_call.params[i], param_expected_type);
         }
         break;
     }
@@ -2434,7 +2494,7 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
                 (ast->proc.return_type->as_type->kind == TYPE_PRIMITIVE &&
                  ast->proc.return_type->as_type->primitive ==
                      PRIMITIVE_TYPE_VOID) ||
-                !ast->proc.has_body;
+                !(ast->proc.flags & PROC_FLAG_HAS_BODY);
 
             if (!returned)
             {
@@ -2521,8 +2581,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
         LLVMTypeRef return_type = llvm_type(l, type->proc.return_type);
 
-        type->ref =
-            LLVMFunctionType(return_type, param_types, param_count, false);
+        type->ref = LLVMFunctionType(
+            return_type, param_types, param_count, type->proc.is_c_vararg);
         break;
     }
     case TYPE_TYPE:
@@ -2569,7 +2629,7 @@ void llvm_codegen_asts(
                 LLVMSetLinkage(ast->value.value, LLVMExternalLinkage);
             }
 
-            if (ast->proc.has_body)
+            if (ast->proc.flags & PROC_FLAG_HAS_BODY)
             {
                 size_t param_count = array_size(ast->proc.params);
                 for (size_t i = 0; i < param_count; i++)
