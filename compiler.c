@@ -512,8 +512,9 @@ typedef enum TokenType {
     TOKEN_NOT_EQUAL, // !=
 
     TOKEN_IDENT,
-    TOKEN_STRING,
-    TOKEN_CSTRING,
+    TOKEN_STRING_LIT,
+    TOKEN_CSTRING_LIT,
+    TOKEN_CHAR_LIT,
     TOKEN_PROC,
     TOKEN_TYPEDEF,
     TOKEN_STRUCT,
@@ -527,8 +528,8 @@ typedef enum TokenType {
     TOKEN_CONST,
     TOKEN_VAR,
 
-    TOKEN_INT,
-    TOKEN_FLOAT,
+    TOKEN_INT_LIT,
+    TOKEN_FLOAT_LIT,
 
     TOKEN_U8,
     TOKEN_U16,
@@ -540,8 +541,8 @@ typedef enum TokenType {
     TOKEN_I32,
     TOKEN_I64,
 
-    TOKEN_F32,
-    TOKEN_F64,
+    TOKEN_FLOAT,
+    TOKEN_DOUBLE,
 
     TOKEN_VOID,
     TOKEN_NULL,
@@ -574,8 +575,9 @@ static const char *token_strings[] = {
     [TOKEN_NOT_EQUAL] = "!=", // !=
 
     [TOKEN_IDENT] = "identifier",
-    [TOKEN_STRING] = "string literal",
-    [TOKEN_CSTRING] = "c-string literal",
+    [TOKEN_STRING_LIT] = "string literal",
+    [TOKEN_CSTRING_LIT] = "c-string literal",
+    [TOKEN_CHAR_LIT] = "c-string literal",
     [TOKEN_PROC] = "proc",
     [TOKEN_TYPEDEF] = "typedef",
     [TOKEN_STRUCT] = "struct",
@@ -589,8 +591,8 @@ static const char *token_strings[] = {
     [TOKEN_CONST] = "const",
     [TOKEN_VAR] = "var",
 
-    [TOKEN_INT] = "integer literal",
-    [TOKEN_FLOAT] = "float literal",
+    [TOKEN_INT_LIT] = "integer literal",
+    [TOKEN_FLOAT_LIT] = "float literal",
 
     [TOKEN_U8] = "u8",
     [TOKEN_U16] = "u16",
@@ -602,8 +604,8 @@ static const char *token_strings[] = {
     [TOKEN_I32] = "i32",
     [TOKEN_I64] = "i64",
 
-    [TOKEN_F32] = "f32",
-    [TOKEN_F64] = "f64",
+    [TOKEN_FLOAT] = "float",
+    [TOKEN_DOUBLE] = "double",
 
     [TOKEN_VOID] = "void",
     [TOKEN_NULL] = "null",
@@ -657,8 +659,8 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_EQUAL);
         PRINT_TOKEN_TYPE(TOKEN_NOT_EQUAL);
 
-        PRINT_TOKEN_TYPE(TOKEN_INT);
-        PRINT_TOKEN_TYPE(TOKEN_FLOAT);
+        PRINT_TOKEN_TYPE(TOKEN_INT_LIT);
+        PRINT_TOKEN_TYPE(TOKEN_FLOAT_LIT);
 
         PRINT_TOKEN_TYPE(TOKEN_IDENT);
         PRINT_TOKEN_TYPE(TOKEN_PROC);
@@ -684,8 +686,8 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_I32);
         PRINT_TOKEN_TYPE(TOKEN_I64);
 
-        PRINT_TOKEN_TYPE(TOKEN_F32);
-        PRINT_TOKEN_TYPE(TOKEN_F64);
+        PRINT_TOKEN_TYPE(TOKEN_FLOAT);
+        PRINT_TOKEN_TYPE(TOKEN_DOUBLE);
 
         PRINT_TOKEN_TYPE(TOKEN_VOID);
         PRINT_TOKEN_TYPE(TOKEN_NULL);
@@ -694,8 +696,9 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_FALSE);
         PRINT_TOKEN_TYPE(TOKEN_TRUE);
 
-        PRINT_TOKEN_TYPE(TOKEN_STRING);
-        PRINT_TOKEN_TYPE(TOKEN_CSTRING);
+        PRINT_TOKEN_TYPE(TOKEN_STRING_LIT);
+        PRINT_TOKEN_TYPE(TOKEN_CSTRING_LIT);
+        PRINT_TOKEN_TYPE(TOKEN_CHAR_LIT);
     }
 
     printf(" \"%.*s\"\n", (int)tok->loc.length, tok->loc.buf);
@@ -862,13 +865,13 @@ void lex_token(Lexer *l)
 
             if (lex_peek(l, 0) == 'c')
             {
-                tok.type = TOKEN_CSTRING;
+                tok.type = TOKEN_CSTRING_LIT;
                 tok.loc.length = 2;
                 lex_next(l, 2);
             }
             else
             {
-                tok.type = TOKEN_STRING;
+                tok.type = TOKEN_STRING_LIT;
                 tok.loc.length = 1;
                 lex_next(l, 1);
             }
@@ -888,7 +891,7 @@ void lex_token(Lexer *l)
                 array_push(tok.str.buf, n);
             }
 
-            if (tok.type == TOKEN_CSTRING)
+            if (tok.type == TOKEN_CSTRING_LIT)
             {
                 array_push(tok.str.buf, '\0');
             }
@@ -942,8 +945,8 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("i16", TOKEN_I16);
             LEX_MATCH_STR("i32", TOKEN_I32);
             LEX_MATCH_STR("i64", TOKEN_I64);
-            LEX_MATCH_STR("f32", TOKEN_F32);
-            LEX_MATCH_STR("f64", TOKEN_F64);
+            LEX_MATCH_STR("float", TOKEN_FLOAT);
+            LEX_MATCH_STR("double", TOKEN_DOUBLE);
             LEX_MATCH_STR("void", TOKEN_VOID);
             LEX_MATCH_STR("null", TOKEN_NULL);
             LEX_MATCH_STR("bool", TOKEN_BOOL);
@@ -997,12 +1000,12 @@ void lex_token(Lexer *l)
 
             if (has_dot)
             {
-                tok.type = TOKEN_FLOAT;
+                tok.type = TOKEN_FLOAT_LIT;
                 tok.f64 = strtod(str, NULL);
             }
             else
             {
-                tok.type = TOKEN_INT;
+                tok.type = TOKEN_INT_LIT;
                 tok.i64 = strtol(str, NULL, 10);
             }
             break;
@@ -1067,8 +1070,8 @@ typedef enum PrimitiveType {
     PRIMITIVE_TYPE_I16,
     PRIMITIVE_TYPE_I32,
     PRIMITIVE_TYPE_I64,
-    PRIMITIVE_TYPE_F32,
-    PRIMITIVE_TYPE_F64,
+    PRIMITIVE_TYPE_FLOAT,
+    PRIMITIVE_TYPE_DOUBLE,
     PRIMITIVE_TYPE_BOOL,
     PRIMITIVE_TYPE_VOID,
 } PrimitiveType;
@@ -1413,8 +1416,8 @@ bool parse_primery_expr(Parser *p, Ast *ast)
     case TOKEN_VOID:
     case TOKEN_NULL:
     case TOKEN_BOOL:
-    case TOKEN_STRING:
-    case TOKEN_CSTRING:
+    case TOKEN_STRING_LIT:
+    case TOKEN_CSTRING_LIT:
     case TOKEN_U8:
     case TOKEN_U16:
     case TOKEN_U32:
@@ -1423,10 +1426,10 @@ bool parse_primery_expr(Parser *p, Ast *ast)
     case TOKEN_I16:
     case TOKEN_I32:
     case TOKEN_I64:
-    case TOKEN_F32:
-    case TOKEN_F64:
-    case TOKEN_INT:
-    case TOKEN_FLOAT: {
+    case TOKEN_FLOAT:
+    case TOKEN_DOUBLE:
+    case TOKEN_INT_LIT:
+    case TOKEN_FLOAT_LIT: {
         parser_next(p, 1);
         ast->type = AST_PRIMARY;
         ast->primary.tok = tok;
@@ -1549,9 +1552,9 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         ast->type = AST_PROC_DECL;
 
-        if (parser_peek(p, 0)->type == TOKEN_STRING)
+        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
         {
-            Token *convention_tok = parser_consume(p, TOKEN_STRING);
+            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
             ast->proc.convention = convention_tok->str;
         }
 
@@ -1789,8 +1792,8 @@ bool ast_as_type(Analyzer *a, Ast *ast)
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I16, PRIMITIVE_TYPE_I16);
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I32, PRIMITIVE_TYPE_I32);
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I64, PRIMITIVE_TYPE_I64);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_F32, PRIMITIVE_TYPE_F32);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_F64, PRIMITIVE_TYPE_F64);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_FLOAT, PRIMITIVE_TYPE_FLOAT);
+            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_DOUBLE, PRIMITIVE_TYPE_DOUBLE);
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
             AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
         case TOKEN_IDENT: {
@@ -2087,8 +2090,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TOKEN_I16:
         case TOKEN_I32:
         case TOKEN_I64:
-        case TOKEN_F32:
-        case TOKEN_F64:
+        case TOKEN_FLOAT:
+        case TOKEN_DOUBLE:
         case TOKEN_BOOL:
         case TOKEN_VOID: {
             static TypeInfo ty = {.kind = TYPE_TYPE};
@@ -2104,7 +2107,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = &ty;
             break;
         }
-        case TOKEN_INT: {
+        case TOKEN_INT_LIT: {
             static TypeInfo ty = {
                 .kind = TYPE_PRIMITIVE,
                 .primitive = PRIMITIVE_TYPE_I64,
@@ -2123,18 +2126,18 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I16);
                     TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I32);
                     TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I64);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F32);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F64);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_FLOAT);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_DOUBLE);
                 default: break;
                 }
             }
 
             break;
         }
-        case TOKEN_FLOAT: {
+        case TOKEN_FLOAT_LIT: {
             static TypeInfo ty = {
                 .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_F64,
+                .primitive = PRIMITIVE_TYPE_DOUBLE,
             };
             ast->type_info = &ty;
 
@@ -2142,14 +2145,14 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 switch (expected_type->primitive)
                 {
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F32);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_F64);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_FLOAT);
+                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_DOUBLE);
                 default: break;
                 }
             }
             break;
         }
-        case TOKEN_CSTRING: {
+        case TOKEN_CSTRING_LIT: {
             static TypeInfo u8_ty = {
                 .kind = TYPE_PRIMITIVE,
                 .primitive = PRIMITIVE_TYPE_U8,
@@ -2457,8 +2460,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         case PRIMITIVE_TYPE_I32: type->ref = LLVMInt32Type(); break;
         case PRIMITIVE_TYPE_U64:
         case PRIMITIVE_TYPE_I64: type->ref = LLVMInt64Type(); break;
-        case PRIMITIVE_TYPE_F32: type->ref = LLVMFloatType(); break;
-        case PRIMITIVE_TYPE_F64: type->ref = LLVMDoubleType(); break;
+        case PRIMITIVE_TYPE_FLOAT: type->ref = LLVMFloatType(); break;
+        case PRIMITIVE_TYPE_DOUBLE: type->ref = LLVMDoubleType(); break;
         case PRIMITIVE_TYPE_VOID: type->ref = LLVMVoidType(); break;
         case PRIMITIVE_TYPE_BOOL: type->ref = LLVMInt32Type(); break;
         }
@@ -2574,7 +2577,7 @@ void llvm_codegen_asts(
         case AST_PRIMARY: {
             switch (ast->primary.tok->type)
             {
-            case TOKEN_INT: {
+            case TOKEN_INT_LIT: {
                 assert(ast->type_info->kind == TYPE_PRIMITIVE);
                 switch (ast->type_info->primitive)
                 {
@@ -2592,8 +2595,8 @@ void llvm_codegen_asts(
                         true);
                     break;
                 }
-                case PRIMITIVE_TYPE_F32:
-                case PRIMITIVE_TYPE_F64: {
+                case PRIMITIVE_TYPE_FLOAT:
+                case PRIMITIVE_TYPE_DOUBLE: {
                     ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->i64);
@@ -2603,11 +2606,11 @@ void llvm_codegen_asts(
                 }
                 break;
             }
-            case TOKEN_FLOAT: {
+            case TOKEN_FLOAT_LIT: {
                 switch (ast->type_info->primitive)
                 {
-                case PRIMITIVE_TYPE_F32:
-                case PRIMITIVE_TYPE_F64: {
+                case PRIMITIVE_TYPE_FLOAT:
+                case PRIMITIVE_TYPE_DOUBLE: {
                     ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->f64);
@@ -2617,7 +2620,7 @@ void llvm_codegen_asts(
                 }
                 break;
             }
-            case TOKEN_CSTRING: {
+            case TOKEN_CSTRING_LIT: {
                 LLVMValueRef glob = LLVMAddGlobal(
                     mod->mod,
                     LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
