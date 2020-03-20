@@ -2319,6 +2319,31 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         case AST_PROC_DECL: {
             array_push(a->scope_stack, &ast->proc.scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+
+            // If the procedure has a void return type or doesn't have a body,
+            // say it has returned already
+            bool returned =
+                (ast->proc.return_type->as_type->kind == TYPE_PRIMITIVE &&
+                 ast->proc.return_type->as_type->primitive ==
+                     PRIMITIVE_TYPE_VOID) ||
+                !ast->proc.has_body;
+
+            if (!returned)
+            {
+                for (Ast *stmt = ast->proc.stmts;
+                     stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+                     ++stmt)
+                {
+                    if (stmt->type == AST_RETURN) returned = true;
+                }
+            }
+
+            if (!returned)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "procedure did not return");
+            }
+
             array_pop(a->scope_stack);
             break;
         }
@@ -2604,6 +2629,7 @@ void llvm_codegen_asts(
                 // Global variable
                 ast->value.value = LLVMAddGlobal(
                     mod->mod, llvm_type(l, ast->decl.type_expr->as_type), "");
+                LLVMSetLinkage(ast->value.value, LLVMInternalLinkage);
 
                 if (ast->decl.value_expr)
                 {
@@ -2697,7 +2723,7 @@ void llvm_codegen(LLContext *l, Ast *ast)
     if (LLVMVerifyModule(mod.mod, LLVMReturnStatusAction, &error))
     {
         printf("Failed to verify module:\n%s\n", error);
-        exit(1);
+        abort();
     }
 
     LLVMExecutionEngineRef engine;

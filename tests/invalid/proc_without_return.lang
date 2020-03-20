@@ -1,0 +1,3 @@
+proc return_int() i32 {
+
+}

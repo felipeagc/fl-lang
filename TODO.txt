@@ -1,3 +1,1 @@
-Throw error if function didn't return (but needed to return)
-
 Generic int type with size & sign properties
