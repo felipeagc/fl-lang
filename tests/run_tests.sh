@@ -2,6 +2,7 @@
 
 RED='\033[31;1m'
 GREEN='\033[32;1m'
+MAGENTA='\033[35;1m'
 NC='\033[0m' # No Color
 
 OUTPUT_FILE=/tmp/compiler_output
@@ -9,6 +10,7 @@ COMPILER=./compiler
 TESTS_PASSED=1
 
 for file in ./tests/valid/*; do
+	echo -e "${MAGENTA}Testing $file${NC}"
 	if ! $COMPILER $file >& $OUTPUT_FILE; then
 		echo -e "${RED}Test failed: ${file}${NC}"
 		TESTS_PASSED=0
@@ -17,6 +19,7 @@ for file in ./tests/valid/*; do
 done
 
 for file in ./tests/invalid/*; do
+	echo -e "${MAGENTA}Testing $file${NC}"
 	if $COMPILER $file >& $OUTPUT_FILE; then
 		echo -e "${RED}Test failed: ${file}${NC}"
 		TESTS_PASSED=0

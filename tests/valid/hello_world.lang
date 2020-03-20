@@ -1,4 +1,4 @@
-proc "c" puts(str: *u8) void;
+proc "c" puts(str: *i8) void;
 
 proc add(a: i32, b: i32) void {
 

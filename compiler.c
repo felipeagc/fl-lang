@@ -1106,25 +1106,14 @@ typedef enum TypeKind {
     TYPE_NONE,
     TYPE_TYPE,
     TYPE_PROC,
-    TYPE_PRIMITIVE,
     TYPE_POINTER,
     TYPE_ARRAY,
+    TYPE_INT,
+    TYPE_FLOAT,
+    TYPE_DOUBLE,
+    TYPE_BOOL,
+    TYPE_VOID,
 } TypeKind;
-
-typedef enum PrimitiveType {
-    PRIMITIVE_TYPE_U8,
-    PRIMITIVE_TYPE_U16,
-    PRIMITIVE_TYPE_U32,
-    PRIMITIVE_TYPE_U64,
-    PRIMITIVE_TYPE_I8,
-    PRIMITIVE_TYPE_I16,
-    PRIMITIVE_TYPE_I32,
-    PRIMITIVE_TYPE_I64,
-    PRIMITIVE_TYPE_FLOAT,
-    PRIMITIVE_TYPE_DOUBLE,
-    PRIMITIVE_TYPE_BOOL,
-    PRIMITIVE_TYPE_VOID,
-} PrimitiveType;
 
 typedef struct TypeInfo
 {
@@ -1136,7 +1125,11 @@ typedef struct TypeInfo
 
     union
     {
-        PrimitiveType primitive;
+        struct
+        {
+            bool is_signed;
+            uint32_t num_bits;
+        } integer;
         struct
         {
             struct TypeInfo *sub;
@@ -1161,8 +1154,11 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
     switch (received->kind)
     {
-    case TYPE_PRIMITIVE: {
-        if (received->primitive != expected->primitive) return NULL;
+    case TYPE_INT: {
+        if (received->integer.is_signed != expected->integer.is_signed)
+            return NULL;
+        if (received->integer.num_bits != expected->integer.num_bits)
+            return NULL;
         break;
     }
     case TYPE_POINTER: {
@@ -1192,6 +1188,10 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
         break;
     }
+    case TYPE_FLOAT: break;
+    case TYPE_DOUBLE: break;
+    case TYPE_BOOL: break;
+    case TYPE_VOID: break;
     case TYPE_TYPE: break;
     case TYPE_UNINITIALIZED: break;
     case TYPE_NONE: break;
@@ -1282,6 +1282,7 @@ typedef enum AstType {
     AST_RETURN,
     AST_PRIMARY,
     AST_PAREN_EXPR,
+    AST_SUBSCRIPT,
     AST_EXPR_STMT,
 } AstType;
 
@@ -1367,6 +1368,11 @@ typedef struct Ast
             struct Ast *left;
             struct Ast *right;
         } binop;
+        struct
+        {
+            struct Ast *left;
+            struct Ast *right;
+        } subscript;
     };
 } Ast;
 
@@ -1512,7 +1518,7 @@ bool parse_primary_expr(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_proc_call(Parser *p, Ast *ast)
+bool parse_proc_call_subscript(Parser *p, Ast *ast)
 {
     bool res = true;
 
@@ -1521,8 +1527,9 @@ bool parse_proc_call(Parser *p, Ast *ast)
     Location last_loc = parser_peek(p, -1)->loc;
     expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
 
-    if (parser_peek(p, 0)->type == TOKEN_LPAREN)
+    switch (parser_peek(p, 0)->type)
     {
+    case TOKEN_LPAREN: {
         // Proc call
         ast->type = AST_PROC_CALL;
         ast->proc_call.expr =
@@ -1546,10 +1553,36 @@ bool parse_proc_call(Parser *p, Ast *ast)
         }
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+        break;
     }
-    else
-    {
+    case TOKEN_LBRACK: {
+        ast->type = AST_SUBSCRIPT;
+        ast->subscript.left =
+            bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
+        *ast->subscript.left = expr;
+
+        if (!parser_consume(p, TOKEN_LBRACK)) res = false;
+
+        Ast right = {0};
+        if (parse_expr(p, &right))
+        {
+            ast->subscript.right =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.right));
+            *ast->subscript.right = right;
+        }
+        else
+        {
+            res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+        break;
+    }
+    default: {
         *ast = expr;
+        break;
+    }
     }
 
     return res;
@@ -1576,7 +1609,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         break;
     }
     default: {
-        res = parse_proc_call(p, ast);
+        res = parse_proc_call_subscript(p, ast);
         break;
     }
     }
@@ -1848,18 +1881,94 @@ bool ast_as_type(Analyzer *a, Ast *ast)
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U8, PRIMITIVE_TYPE_U8);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U16, PRIMITIVE_TYPE_U16);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U32, PRIMITIVE_TYPE_U32);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_U64, PRIMITIVE_TYPE_U64);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I8, PRIMITIVE_TYPE_I8);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I16, PRIMITIVE_TYPE_I16);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I32, PRIMITIVE_TYPE_I32);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_I64, PRIMITIVE_TYPE_I64);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_FLOAT, PRIMITIVE_TYPE_FLOAT);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_DOUBLE, PRIMITIVE_TYPE_DOUBLE);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_BOOL, PRIMITIVE_TYPE_BOOL);
-            AS_TYPE_CASE_PRIMITIVE_TYPE(TOKEN_VOID, PRIMITIVE_TYPE_VOID);
+        case TOKEN_U8: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = false, .num_bits = 8}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_U16: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = false, .num_bits = 16}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_U32: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = false, .num_bits = 32}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_U64: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = false, .num_bits = 64}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_I8: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = true, .num_bits = 8}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_I16: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = true, .num_bits = 16}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_I32: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = true, .num_bits = 32}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_I64: {
+            static TypeInfo ty = {
+                .kind = TYPE_INT,
+                .integer = {.is_signed = true, .num_bits = 64}};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_FLOAT: {
+            static TypeInfo ty = {.kind = TYPE_FLOAT};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_DOUBLE: {
+            static TypeInfo ty = {.kind = TYPE_DOUBLE};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_BOOL: {
+            static TypeInfo ty = {.kind = TYPE_BOOL};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
+        case TOKEN_VOID: {
+            static TypeInfo ty = {.kind = TYPE_VOID};
+            ast->as_type = &ty;
+            res = true;
+            break;
+        }
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
             if (sym && sym->type == AST_TYPEDEF)
@@ -2015,6 +2124,11 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->binop.right);
         break;
     }
+    case AST_SUBSCRIPT: {
+        symbol_check_ast(a, ast->subscript.left);
+        symbol_check_ast(a, ast->subscript.right);
+        break;
+    }
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
@@ -2167,34 +2281,26 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         case TOKEN_TRUE:
         case TOKEN_FALSE: {
-            static TypeInfo ty = {
-                .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_BOOL,
-            };
+            static TypeInfo ty = {.kind = TYPE_BOOL};
             ast->type_info = &ty;
             break;
         }
         case TOKEN_INT_LIT: {
             static TypeInfo ty = {
-                .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_I64,
-            };
+                .kind = TYPE_INT,
+                .integer = {.is_signed = true, .num_bits = 64}};
             ast->type_info = &ty;
 
-            if (expected_type && expected_type->kind == TYPE_PRIMITIVE)
+            if (expected_type)
             {
-                switch (expected_type->primitive)
+                switch (expected_type->kind)
                 {
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U8);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U16);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U32);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_U64);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I8);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I16);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I32);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_I64);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_FLOAT);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_DOUBLE);
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE:
+                case TYPE_INT: {
+                    ast->type_info = expected_type;
+                    break;
+                }
                 default: break;
                 }
             }
@@ -2202,39 +2308,42 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         case TOKEN_FLOAT_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_DOUBLE,
-            };
+            static TypeInfo ty = {.kind = TYPE_DOUBLE};
             ast->type_info = &ty;
 
-            if (expected_type && expected_type->kind == TYPE_PRIMITIVE)
+            if (expected_type)
             {
-                switch (expected_type->primitive)
+                switch (expected_type->kind)
                 {
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_FLOAT);
-                    TYPE_CHECK_CASE_PRIMITIVE_TYPE(PRIMITIVE_TYPE_DOUBLE);
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE: {
+                    ast->type_info = expected_type;
+                    break;
+                }
                 default: break;
                 }
             }
+
             break;
         }
         case TOKEN_CSTRING_LIT: {
-            static TypeInfo u8_ty = {
-                .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_U8,
+            static TypeInfo i8_ty = {
+                .kind = TYPE_INT,
+                .integer.is_signed = true,
+                .integer.num_bits = 8,
             };
             static TypeInfo ty = {
                 .kind = TYPE_POINTER,
-                .ptr.sub = &u8_ty,
+                .ptr.sub = &i8_ty,
             };
             ast->type_info = &ty;
             break;
         }
         case TOKEN_CHAR_LIT: {
             static TypeInfo i8_ty = {
-                .kind = TYPE_PRIMITIVE,
-                .primitive = PRIMITIVE_TYPE_I8,
+                .kind = TYPE_INT,
+                .integer.is_signed = true,
+                .integer.num_bits = 8,
             };
             ast->type_info = &i8_ty;
             break;
@@ -2386,6 +2495,39 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         type_check_ast(a, ast->binop.right, NULL);
         break;
     }
+    case AST_SUBSCRIPT: {
+        type_check_ast(a, ast->subscript.left, NULL);
+        type_check_ast(a, ast->subscript.right, NULL);
+
+        if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
+            ast->subscript.left->type_info->kind != TYPE_ARRAY)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "subscript only works on pointers or arrays");
+        }
+
+        switch (ast->subscript.left->type_info->kind)
+        {
+        case TYPE_ARRAY: {
+            ast->type_info = ast->subscript.left->type_info->array.sub;
+            break;
+        }
+        case TYPE_POINTER: {
+            ast->type_info = ast->subscript.left->type_info->ptr.sub;
+            break;
+        }
+        default: break;
+        }
+
+        if (ast->subscript.right->type_info->kind != TYPE_INT)
+        {
+            compile_error(
+                a->compiler, ast->loc, "subscript needs an integer index");
+        }
+        break;
+    }
     default: break;
     }
 
@@ -2488,13 +2630,10 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
             array_push(a->scope_stack, &ast->proc.scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
 
-            // If the procedure has a void return type or doesn't have a body,
-            // say it has returned already
-            bool returned =
-                (ast->proc.return_type->as_type->kind == TYPE_PRIMITIVE &&
-                 ast->proc.return_type->as_type->primitive ==
-                     PRIMITIVE_TYPE_VOID) ||
-                !(ast->proc.flags & PROC_FLAG_HAS_BODY);
+            // If the procedure has a void return type or doesn't have a
+            // body, say it has returned already
+            bool returned = ast->proc.return_type->as_type->kind == TYPE_VOID ||
+                            !(ast->proc.flags & PROC_FLAG_HAS_BODY);
 
             if (!returned)
             {
@@ -2543,24 +2682,15 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
     switch (type->kind)
     {
-    case TYPE_PRIMITIVE: {
-        switch (type->primitive)
-        {
-        case PRIMITIVE_TYPE_U8:
-        case PRIMITIVE_TYPE_I8: type->ref = LLVMInt8Type(); break;
-        case PRIMITIVE_TYPE_U16:
-        case PRIMITIVE_TYPE_I16: type->ref = LLVMInt16Type(); break;
-        case PRIMITIVE_TYPE_U32:
-        case PRIMITIVE_TYPE_I32: type->ref = LLVMInt32Type(); break;
-        case PRIMITIVE_TYPE_U64:
-        case PRIMITIVE_TYPE_I64: type->ref = LLVMInt64Type(); break;
-        case PRIMITIVE_TYPE_FLOAT: type->ref = LLVMFloatType(); break;
-        case PRIMITIVE_TYPE_DOUBLE: type->ref = LLVMDoubleType(); break;
-        case PRIMITIVE_TYPE_VOID: type->ref = LLVMVoidType(); break;
-        case PRIMITIVE_TYPE_BOOL: type->ref = LLVMInt32Type(); break;
-        }
+    case TYPE_INT: {
+        type->ref = LLVMIntType(type->integer.num_bits);
         break;
     }
+    case TYPE_FLOAT: type->ref = LLVMFloatType(); break;
+    case TYPE_DOUBLE: type->ref = LLVMDoubleType(); break;
+    case TYPE_BOOL: type->ref = LLVMInt32Type(); break;
+    case TYPE_VOID: type->ref = LLVMVoidType(); break;
+
     case TYPE_POINTER: {
         type->ref = LLVMPointerType(llvm_type(l, type->ptr.sub), 0);
         break;
@@ -2672,25 +2802,17 @@ void llvm_codegen_asts(
             switch (ast->primary.tok->type)
             {
             case TOKEN_INT_LIT: {
-                assert(ast->type_info->kind == TYPE_PRIMITIVE);
-                switch (ast->type_info->primitive)
+                switch (ast->type_info->kind)
                 {
-                case PRIMITIVE_TYPE_U8:
-                case PRIMITIVE_TYPE_U16:
-                case PRIMITIVE_TYPE_U32:
-                case PRIMITIVE_TYPE_U64:
-                case PRIMITIVE_TYPE_I8:
-                case PRIMITIVE_TYPE_I16:
-                case PRIMITIVE_TYPE_I32:
-                case PRIMITIVE_TYPE_I64: {
+                case TYPE_INT: {
                     ast->value.value = LLVMConstInt(
                         llvm_type(l, ast->type_info),
                         (unsigned long long)ast->primary.tok->i64,
                         true);
                     break;
                 }
-                case PRIMITIVE_TYPE_FLOAT:
-                case PRIMITIVE_TYPE_DOUBLE: {
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE: {
                     ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->i64);
@@ -2698,13 +2820,14 @@ void llvm_codegen_asts(
                 }
                 default: assert(0); break;
                 }
+
                 break;
             }
             case TOKEN_FLOAT_LIT: {
-                switch (ast->type_info->primitive)
+                switch (ast->type_info->kind)
                 {
-                case PRIMITIVE_TYPE_FLOAT:
-                case PRIMITIVE_TYPE_DOUBLE: {
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE: {
                     ast->value.value = LLVMConstReal(
                         llvm_type(l, ast->type_info),
                         (double)ast->primary.tok->f64);
@@ -2712,6 +2835,7 @@ void llvm_codegen_asts(
                 }
                 default: assert(0); break;
                 }
+
                 break;
             }
             case TOKEN_CSTRING_LIT: {
@@ -2778,7 +2902,7 @@ void llvm_codegen_asts(
                 false);
             for (size_t i = 0; i < param_count; i++)
             {
-                params[i] = ast->proc_call.params[i].value.value;
+                params[i] = load_val(mod, &ast->proc_call.params[i].value);
                 assert(params[i]);
             }
 
@@ -2875,6 +2999,34 @@ void llvm_codegen_asts(
                 break;
             }
             }
+            break;
+        }
+        case AST_SUBSCRIPT: {
+            llvm_codegen_asts(l, mod, ast->subscript.left, 1, false);
+            llvm_codegen_asts(l, mod, ast->subscript.right, 1, false);
+
+            assert(ast->subscript.left->value.value);
+            assert(ast->subscript.right->value.value);
+
+            switch (ast->subscript.left->type_info->kind)
+            {
+            case TYPE_POINTER: {
+                LLVMValueRef indices[1] = {
+                    load_val(mod, &ast->subscript.right->value),
+                };
+
+                ast->value.is_lvalue = true;
+                ast->value.value = LLVMBuildGEP(
+                    mod->builder,
+                    load_val(mod, &ast->subscript.left->value),
+                    indices,
+                    1,
+                    "");
+                break;
+            }
+            default: assert(0); break;
+            }
+
             break;
         }
         case AST_TYPEDEF: break;

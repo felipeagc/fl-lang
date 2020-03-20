@@ -4,5 +4,5 @@ proc main() void {
 	var ptr2: *i64 = &123;
 	*ptr = 321;
 
-	var my_char: u8 = *c"hello";
+	var my_char: i8 = *c"hello";
 }

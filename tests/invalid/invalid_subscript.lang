@@ -1,0 +1,4 @@
+proc main() void {
+	var a: i32 = 123;
+	var b: i32 = a[0];
+}

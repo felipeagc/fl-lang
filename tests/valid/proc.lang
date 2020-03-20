@@ -1,11 +1,11 @@
 const hello: i32 = (123);
 var global: i32 = 123;
-var global_string: *u8 = c"Hello";
+var global_string: *i8 = c"Hello";
 
 typedef MyInt i32;
 
-proc "c" puts(str: *u8) void;
-proc "c" printf(fmt: *u8, ...) void;
+proc "c" puts(str: *i8) void;
+proc "c" printf(fmt: *i8, ...) void;
 
 proc add(a: i32, b: i32) i32 {
 	return 0;
@@ -14,6 +14,7 @@ proc add(a: i32, b: i32) i32 {
 proc main() i32 {
 	var hey: i32 = 2;
 	var yo: *i32 = (&hey);
+	var a_int: i32 = yo[0];
 	*yo = (123);
 
 	global = 321;
@@ -22,14 +23,14 @@ proc main() i32 {
 	var my_u8: u8 = 255;
 	var my_float: float = 321.123;
 
-	var string: *u8 = c"cool";
+	var string: *i8 = c"cool";
 
 	var derp: i32 = add(1, 2);
 	add(1, 2);
 
 	var my_char: i8 = 'A';
 
-	printf(c"Hello, world \"%d\"!\n", add(1, 2));
+	printf(c"Hello, world \"%d\"!\n", a_int);
 
 	return 0;
 }
