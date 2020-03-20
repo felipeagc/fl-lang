@@ -2597,6 +2597,25 @@ void llvm_codegen_asts(
             break;
         }
         case AST_VAR_DECL: {
+            Ast *proc = get_scope_procedure(l->scope_stack);
+
+            if (!proc)
+            {
+                // Global variable
+                ast->value.value = LLVMAddGlobal(
+                    mod->mod, llvm_type(l, ast->decl.type_expr->as_type), "");
+
+                if (ast->decl.value_expr)
+                {
+                    llvm_codegen_asts(l, mod, ast->decl.value_expr, 1, false);
+                    LLVMSetInitializer(
+                        ast->value.value,
+                        load_val(mod, &ast->decl.value_expr->value));
+                }
+                break;
+            }
+
+            // Local variable
             ast->value.is_lvalue = true;
             ast->value.value = LLVMBuildAlloca(
                 mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");

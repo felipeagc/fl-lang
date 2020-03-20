@@ -1,4 +1,6 @@
 const hello: i32 = 123;
+var global: i32 = 123;
+var global_string: *u8 = c"Hello";
 
 typedef MyInt i32;
 
@@ -12,6 +14,8 @@ proc main() i32 {
 	var hey: i32 = 2;
 	var yo: *i32 = (&hey);
 	*yo = (123);
+
+	global = 321;
 
 	var myint: MyInt = 123;
 	var my_u8: u8 = 255;
