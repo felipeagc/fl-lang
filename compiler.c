@@ -465,6 +465,29 @@ void source_file_init(SourceFile *file, Compiler *compiler, String path)
 }
 // }}}
 
+// Printing errors {{{
+void print_errors(Compiler *compiler)
+{
+    if (array_size(compiler->errors) > 0)
+    {
+        for (Error *err = compiler->errors;
+             err != compiler->errors + array_size(compiler->errors);
+             ++err)
+        {
+            printf(
+                "%.*s (%u:%u): %.*s\n",
+                (int)err->loc.file->path.length,
+                err->loc.file->path.buf,
+                err->loc.line,
+                err->loc.col,
+                (int)err->message.length,
+                err->message.buf);
+        }
+        exit(1);
+    }
+}
+// }}}
+
 // Token {{{
 typedef enum TokenType {
     TOKEN_LPAREN,
@@ -1287,6 +1310,44 @@ typedef struct Ast
         } binop;
     };
 } Ast;
+
+static bool is_expr_const(Scope **scope_stack, Ast *ast)
+{
+    bool res = false;
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(scope_stack, ast->primary.tok->str);
+            if (sym)
+            {
+                switch (sym->type)
+                {
+                case AST_PROC_DECL:
+                case AST_CONST_DECL: {
+                    res = true;
+                    break;
+                }
+                default: break;
+                }
+            }
+            break;
+        }
+        default: res = true; break;
+        }
+        break;
+    }
+    case AST_PAREN_EXPR: {
+        res = is_expr_const(scope_stack, ast->expr);
+        break;
+    }
+    default: assert(0); break;
+    }
+
+    return res;
+}
 // }}}
 
 // Parser {{{
@@ -1837,11 +1898,21 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->expr);
         break;
     }
-    case AST_CONST_DECL:
+    case AST_CONST_DECL: {
+        symbol_check_ast(a, ast->decl.type_expr);
+        symbol_check_ast(a, ast->decl.value_expr);
+        if (!is_expr_const(a->scope_stack, ast->decl.value_expr))
+        {
+            compile_error(
+                a->compiler,
+                ast->decl.value_expr->loc,
+                "expression is not constant");
+        }
+        break;
+    }
     case AST_VAR_DECL: {
         symbol_check_ast(a, ast->decl.type_expr);
-        if ((ast->type == AST_VAR_DECL && ast->decl.value_expr) ||
-            ast->type == AST_CONST_DECL)
+        if (ast->decl.value_expr)
         {
             symbol_check_ast(a, ast->decl.value_expr);
         }
@@ -2754,29 +2825,6 @@ void llvm_codegen(LLContext *l, Ast *ast)
     LLVMDisposeBuilder(mod.builder);
 }
 #endif
-// }}}
-
-// Printing errors {{{
-void print_errors(Compiler *compiler)
-{
-    if (array_size(compiler->errors) > 0)
-    {
-        for (Error *err = compiler->errors;
-             err != compiler->errors + array_size(compiler->errors);
-             ++err)
-        {
-            printf(
-                "%.*s (%u:%u): %.*s\n",
-                (int)err->loc.file->path.length,
-                err->loc.file->path.buf,
-                err->loc.line,
-                err->loc.col,
-                (int)err->message.length,
-                err->message.buf);
-        }
-        exit(1);
-    }
-}
 // }}}
 
 int main(int argc, char **argv)
