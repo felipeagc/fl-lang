@@ -1106,6 +1106,7 @@ typedef enum TypeKind {
     TYPE_NONE,
     TYPE_TYPE,
     TYPE_PROC,
+    TYPE_STRUCT,
     TYPE_POINTER,
     TYPE_ARRAY,
     TYPE_INT,
@@ -1145,6 +1146,10 @@ typedef struct TypeInfo
             struct TypeInfo *return_type;
             /*array*/ struct TypeInfo *params;
         } proc;
+        struct
+        {
+            /*array*/ struct TypeInfo **fields;
+        } structure;
     };
 } TypeInfo;
 
@@ -1168,6 +1173,23 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     case TYPE_ARRAY: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         if (received->array.size != expected->array.size) return NULL;
+        break;
+    }
+    case TYPE_STRUCT: {
+        if (array_size(received->structure.fields) !=
+            array_size(expected->structure.fields))
+            return NULL;
+
+        size_t field_count = array_size(expected->structure.fields);
+        for (size_t i = 0; i < field_count; ++i)
+        {
+            if (!exact_types(
+                    received->structure.fields[i],
+                    expected->structure.fields[i]))
+            {
+                return NULL;
+            }
+        }
         break;
     }
     case TYPE_PROC: {
@@ -1218,7 +1240,7 @@ typedef enum BinOpType {
 typedef enum AstType {
     AST_UNINITIALIZED,
     AST_ROOT,
-    AST_STRUCT_DECL,
+    AST_STRUCT,
     AST_PROC_DECL,
     AST_BLOCK,
     AST_PROC_CALL,
@@ -1287,6 +1309,11 @@ typedef struct Ast
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
         } proc;
+        struct
+        {
+            struct Scope *scope;
+            /*array*/ struct Ast *fields;
+        } structure;
         struct
         {
             struct Ast *expr;
@@ -1707,6 +1734,56 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
         ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->unop.sub)) res = false;
+
+        break;
+    }
+    case TOKEN_STRUCT: {
+        ast->type = AST_STRUCT;
+        parser_next(p, 1);
+
+        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+        ast->structure.fields = NULL;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+            Ast field = {0};
+            field.type = AST_VAR_DECL;
+
+            Token *name_tok = parser_consume(p, TOKEN_IDENT);
+            if (!name_tok)
+                res = false;
+            else
+                field.decl.name = name_tok->str;
+
+            if (!parser_consume(p, TOKEN_COLON)) res = false;
+
+            Ast type = {0};
+            if (parse_expr(p, &type))
+            {
+                field.decl.type_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                *field.decl.type_expr = type;
+            }
+            else
+            {
+                res = false;
+            }
+
+            if (res)
+            {
+                array_push(ast->structure.fields, field);
+            }
+
+            if (parser_peek(p, 0)->type == TOKEN_RCURLY)
+            {
+                break;
+            }
+
+            if (!parser_consume(p, TOKEN_COMMA)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
 
         break;
     }
@@ -2150,6 +2227,31 @@ bool ast_as_type(Analyzer *a, Ast *ast)
         }
         break;
     }
+    case AST_STRUCT: {
+        TypeInfo **fields = NULL;
+        res = true;
+
+        for (Ast *field = ast->structure.fields;
+             field != ast->structure.fields + array_size(ast->structure.fields);
+             ++field)
+        {
+            if (!ast_as_type(a, field->decl.type_expr))
+            {
+                res = false;
+            }
+            array_push(fields, field->decl.type_expr->as_type);
+        }
+
+        if (res)
+        {
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_STRUCT;
+            ty->structure.fields = fields;
+            ast->as_type = ty;
+        }
+        break;
+    }
     default: break;
     }
 
@@ -2267,6 +2369,15 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     case AST_SUBSCRIPT: {
         symbol_check_ast(a, ast->subscript.left);
         symbol_check_ast(a, ast->subscript.right);
+        break;
+    }
+    case AST_STRUCT: {
+        for (Ast *field = ast->structure.fields;
+             field != ast->structure.fields + array_size(ast->structure.fields);
+             ++field)
+        {
+            symbol_check_ast(a, field);
+        }
         break;
     }
     case AST_ARRAY_TYPE: {
@@ -2692,6 +2803,18 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         break;
     }
+    case AST_STRUCT: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        ast->type_info = &ty_ty;
+
+        for (Ast *field = ast->structure.fields;
+             field != ast->structure.fields + array_size(ast->structure.fields);
+             ++field)
+        {
+            type_check_ast(a, field, NULL);
+        }
+        break;
+    }
     default: break;
     }
 
@@ -2886,6 +3009,17 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
         type->ref = LLVMFunctionType(
             return_type, param_types, param_count, type->proc.is_c_vararg);
+        break;
+    }
+    case TYPE_STRUCT: {
+        size_t field_count = array_size(type->structure.fields);
+        LLVMTypeRef *field_types =
+            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
+        for (size_t i = 0; i < field_count; i++)
+        {
+            field_types[i] = llvm_type(l, type->structure.fields[i]);
+        }
+        type->ref = LLVMStructType(field_types, field_count, false);
         break;
     }
     case TYPE_TYPE:

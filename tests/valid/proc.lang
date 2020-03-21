@@ -5,6 +5,11 @@ var global_string: *i8 = c"Hello";
 
 typedef MyInt i32;
 
+typedef MyStruct struct {
+	a: i32,
+	b: *u8
+};
+
 proc "c" puts(str: *i8) void;
 proc "c" printf(fmt: *i8, ...) void;
 
@@ -40,6 +45,8 @@ proc main() i32 {
 	var array: [3]i32;
 	array[0] = 1;
 	printf(c"array[0] = %d\n", array[0]);
+
+	var my_struct: MyStruct;
 
 	return 0;
 }
