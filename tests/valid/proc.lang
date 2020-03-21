@@ -10,7 +10,7 @@ typedef MyArrayType [ARRAY_SIZE]i32;
 
 typedef MyStruct struct {
 	a: i32,
-	b: *u8
+	b: *u8,
 };
 
 proc "c" puts(str: *i8) void;
@@ -25,7 +25,6 @@ proc main() i32 {
 	var yo: *i32 = (&hey);
 	var a_int: i32 = yo[0];
 	*yo = (123);
-
 
 	global = 321;
 
@@ -50,8 +49,13 @@ proc main() i32 {
 	printf(c"array[0] = %d\n", array[0]);
 
 	var a_struct: MyStruct;
+	a_struct.a = 32;
+
 	var b_struct: MyStruct;
-	a_struct = b_struct;
+	b_struct = a_struct;
+
+	printf(c"a_struct.a = %d\n", a_struct.a);
+	printf(c"b_struct.a = %d\n", b_struct.a);
 
 	return 0;
 }

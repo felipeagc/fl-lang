@@ -1,0 +1,38 @@
+typedef MyStruct struct {
+	a: i32,
+};
+
+typedef NestedStruct struct {
+	name: *i8,
+	sub: struct {
+		a: i32,
+		b: i32,
+	},
+};
+
+proc "c" printf(fmt: *i8, ...) void;
+
+proc main() i32 {
+	var a_struct: MyStruct;
+	a_struct.a = 32;
+	var b_struct: *MyStruct = &a_struct;
+
+	printf(c"a_struct.a = %d\n", a_struct.a);
+	printf(c"b_struct.a = %d\n", b_struct.a);
+
+	var anon: struct { c: i32 };
+	anon.c = 321;
+	printf(c"anon.c = %d\n", anon.c);
+
+	var nested: NestedStruct;
+	nested.name = c"yo";
+	nested.sub.a = 123;
+	nested.sub.b = 321;
+	printf(c"nested.name = %s\n", nested.name);
+	printf(c"nested.name[0] = %c\n", nested.name[0]);
+	printf(c"*nested.name = %c\n", *nested.name);
+	printf(c"nested.sub.a = %d\n", nested.sub.a);
+	printf(c"nested.sub.b = %d\n", nested.sub.b);
+
+	return 0;
+}
