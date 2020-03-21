@@ -1468,7 +1468,9 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
                 switch (sym->type)
                 {
                 case AST_CONST_DECL: {
-                    res = resolve_expr_int(scope, sym, i64);
+                    assert(sym->sym_scope);
+                    res = resolve_expr_int(
+                        sym->sym_scope, sym->decl.value_expr, i64);
                     break;
                 }
                 default: break;

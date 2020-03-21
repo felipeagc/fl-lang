@@ -3,7 +3,10 @@ var global_array: [5]i32;
 var global: i32 = 123;
 var global_string: *i8 = c"Hello";
 
+const ARRAY_SIZE: i64 = 5;
+
 typedef MyInt i32;
+typedef MyArrayType [ARRAY_SIZE]i32;
 
 typedef MyStruct struct {
 	a: i32,
@@ -46,7 +49,9 @@ proc main() i32 {
 	array[0] = 1;
 	printf(c"array[0] = %d\n", array[0]);
 
-	var my_struct: MyStruct;
+	var a_struct: MyStruct;
+	var b_struct: MyStruct;
+	a_struct = b_struct;
 
 	return 0;
 }
