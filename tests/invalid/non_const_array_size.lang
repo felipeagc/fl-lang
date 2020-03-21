@@ -1,0 +1,4 @@
+proc main() void {
+	var size: i32 = 1;
+	var array: [size]i32;
+}

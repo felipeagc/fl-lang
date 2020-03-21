@@ -1202,57 +1202,6 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
 // }}}
 
-// Scope {{{
-typedef struct Scope
-{
-    HashMap map;
-    struct Ast *procedure;
-} Scope;
-
-void scope_init(Scope *scope, size_t size, struct Ast *procedure)
-{
-    memset(scope, 0, sizeof(*scope));
-    hash_init(&scope->map, size);
-    scope->procedure = procedure;
-}
-
-void scope_set(Scope *scope, String name, struct Ast *decl)
-{
-    hash_set(&scope->map, name, decl);
-}
-
-struct Ast *scope_get_local(Scope *scope, String name)
-{
-    return hash_get(&scope->map, name);
-}
-
-struct Ast *get_symbol(Scope **scope_stack, String name)
-{
-    struct Ast *sym = NULL;
-    for (Scope **scope = scope_stack + array_size(scope_stack) - 1;
-         scope >= scope_stack;
-         --scope)
-    {
-        sym = scope_get_local(*scope, name);
-        if (sym) return sym;
-    }
-
-    return NULL;
-}
-
-struct Ast *get_scope_procedure(Scope **scope_stack)
-{
-    for (Scope **scope = scope_stack + array_size(scope_stack) - 1;
-         scope >= scope_stack;
-         --scope)
-    {
-        if ((*scope)->procedure) return (*scope)->procedure;
-    }
-
-    return NULL;
-}
-// }}}
-
 // AST {{{
 typedef enum UnOpType {
     UNOP_DEREFERENCE,
@@ -1283,6 +1232,7 @@ typedef enum AstType {
     AST_PRIMARY,
     AST_PAREN_EXPR,
     AST_SUBSCRIPT,
+    AST_ARRAY_TYPE,
     AST_EXPR_STMT,
 } AstType;
 
@@ -1311,6 +1261,7 @@ typedef struct Ast
     Location loc;
     TypeInfo *type_info;
     TypeInfo *as_type;
+    struct Scope *sym_scope;
 
     AstValue value;
 
@@ -1323,12 +1274,12 @@ typedef struct Ast
         } primary;
         struct
         {
-            Scope scope;
+            struct Scope *scope;
             /*array*/ struct Ast *stmts;
         } block;
         struct
         {
-            Scope scope;
+            struct Scope *scope;
             String convention;
             String name;
             uint32_t flags;
@@ -1373,10 +1324,66 @@ typedef struct Ast
             struct Ast *left;
             struct Ast *right;
         } subscript;
+        struct
+        {
+            struct Ast *size;
+            struct Ast *sub;
+        } array_type;
     };
 } Ast;
+// }}}
 
-static bool is_expr_const(Scope **scope_stack, Ast *ast)
+// Scope {{{
+typedef struct Scope
+{
+    HashMap map;
+    struct Scope *parent;
+    struct Ast *procedure;
+} Scope;
+
+void scope_init(Scope *scope, size_t size, struct Ast *procedure)
+{
+    memset(scope, 0, sizeof(*scope));
+    hash_init(&scope->map, size);
+    scope->procedure = procedure;
+}
+
+void scope_set(Scope *scope, String name, struct Ast *decl)
+{
+    decl->sym_scope = scope;
+    hash_set(&scope->map, name, decl);
+}
+
+struct Ast *scope_get_local(Scope *scope, String name)
+{
+    return hash_get(&scope->map, name);
+}
+
+struct Ast *get_symbol(Scope *scope, String name)
+{
+    struct Ast *sym = scope_get_local(scope, name);
+    if (sym) return sym;
+
+    if (scope->parent) return get_symbol(scope->parent, name);
+
+    return NULL;
+}
+
+struct Ast *get_scope_procedure(Scope **scope_stack)
+{
+    for (Scope **scope = scope_stack + array_size(scope_stack) - 1;
+         scope >= scope_stack;
+         --scope)
+    {
+        if ((*scope)->procedure) return (*scope)->procedure;
+    }
+
+    return NULL;
+}
+// }}}
+
+// Expression utility functions {{{
+static bool is_expr_const(Scope *scope, Ast *ast)
 {
     bool res = false;
     switch (ast->type)
@@ -1385,7 +1392,7 @@ static bool is_expr_const(Scope **scope_stack, Ast *ast)
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope_stack, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str);
             if (sym)
             {
                 switch (sym->type)
@@ -1405,7 +1412,49 @@ static bool is_expr_const(Scope **scope_stack, Ast *ast)
         break;
     }
     case AST_PAREN_EXPR: {
-        res = is_expr_const(scope_stack, ast->expr);
+        res = is_expr_const(scope, ast->expr);
+        break;
+    }
+    default: break;
+    }
+
+    return res;
+}
+
+static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
+{
+    bool res = false;
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_INT_LIT: {
+            *i64 = ast->primary.tok->i64;
+            res = true;
+            break;
+        }
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            if (sym)
+            {
+                switch (sym->type)
+                {
+                case AST_CONST_DECL: {
+                    res = resolve_expr_int(scope, sym, i64);
+                    break;
+                }
+                default: break;
+                }
+            }
+            break;
+        }
+        default: break;
+        }
+        break;
+    }
+    case AST_PAREN_EXPR: {
+        res = resolve_expr_int(scope, ast->expr, i64);
         break;
     }
     default: break;
@@ -1518,12 +1567,65 @@ bool parse_primary_expr(Parser *p, Ast *ast)
     return res;
 }
 
+bool parse_array_type(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    switch (parser_peek(p, 0)->type)
+    {
+    case TOKEN_LBRACK: {
+        parser_next(p, 1);
+        ast->type = AST_ARRAY_TYPE;
+
+        Ast size = {.loc = parser_peek(p, 0)->loc};
+        if (parse_expr(p, &size))
+        {
+            Location last_loc = parser_peek(p, -1)->loc;
+            size.loc.length = last_loc.buf + last_loc.length - size.loc.buf;
+
+            ast->array_type.size =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->array_type.size));
+            *ast->array_type.size = size;
+        }
+        else
+        {
+            res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+        Ast sub = {.loc = parser_peek(p, 0)->loc};
+        if (parse_array_type(p, &sub))
+        {
+            Location last_loc = parser_peek(p, -1)->loc;
+            sub.loc.length = last_loc.buf + last_loc.length - sub.loc.buf;
+
+            ast->array_type.sub =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->array_type.sub));
+            *ast->array_type.sub = sub;
+        }
+        else
+        {
+            res = false;
+        }
+
+        break;
+    }
+    default: {
+        if (!parse_primary_expr(p, ast)) res = false;
+        break;
+    }
+    }
+
+    return res;
+}
+
 bool parse_proc_call_subscript(Parser *p, Ast *ast)
 {
     bool res = true;
 
     Ast expr = *ast;
-    if (!parse_primary_expr(p, &expr)) res = false;
+    if (!parse_array_type(p, &expr)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
 
@@ -1744,6 +1846,14 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, ast->decl.value_expr)) res = false;
         }
+        else if (kind->type == TOKEN_CONST)
+        {
+            // Constants must have initializers
+            compile_error(
+                p->compiler,
+                ident_tok->loc,
+                "constant declaration must have initializer");
+        }
 
         if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
@@ -1860,14 +1970,6 @@ typedef struct Analyzer
     /*array*/ Scope **scope_stack;
 } Analyzer;
 
-#define AS_TYPE_CASE_PRIMITIVE_TYPE(tok_type, prim_type)                       \
-    case tok_type: {                                                           \
-        static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
-        ast->as_type = &ty;                                                    \
-        res = true;                                                            \
-    }                                                                          \
-    break
-
 bool ast_as_type(Analyzer *a, Ast *ast)
 {
     bool res = false;
@@ -1970,7 +2072,8 @@ bool ast_as_type(Analyzer *a, Ast *ast)
             break;
         }
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
+            Ast *sym =
+                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
             if (sym && sym->type == AST_TYPEDEF)
             {
                 res = ast_as_type(a, sym->type_def.type_expr);
@@ -2010,6 +2113,43 @@ bool ast_as_type(Analyzer *a, Ast *ast)
         }
         break;
     }
+    case AST_ARRAY_TYPE: {
+        int64_t size = 0;
+        bool resolves = resolve_expr_int(
+            *array_last(a->scope_stack), ast->array_type.size, &size);
+        res = true;
+
+        if (!ast_as_type(a, ast->array_type.sub)) res = false;
+
+        if (!resolves)
+        {
+            compile_error(
+                a->compiler,
+                ast->array_type.size->loc,
+                "expression does not resolve to integer");
+            res = false;
+        }
+
+        if (resolves && size <= 0)
+        {
+            compile_error(
+                a->compiler,
+                ast->array_type.size->loc,
+                "array size must be larger than zero");
+            res = false;
+        }
+
+        if (res)
+        {
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_ARRAY;
+            ty->array.sub = ast->array_type.sub->as_type;
+            ty->array.size = size;
+            ast->as_type = ty;
+        }
+        break;
+    }
     default: break;
     }
 
@@ -2036,7 +2176,7 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     case AST_PROC_DECL: {
         sym_name = ast->proc.name;
 
-        array_push(a->scope_stack, &ast->proc.scope);
+        array_push(a->scope_stack, ast->proc.scope);
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
@@ -2051,7 +2191,7 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
 
     assert(sym_name.length > 0);
 
-    if (get_symbol(a->scope_stack, sym_name))
+    if (get_symbol(*array_last(a->scope_stack), sym_name))
     {
         compile_error(
             a->compiler,
@@ -2077,7 +2217,7 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     case AST_CONST_DECL: {
         symbol_check_ast(a, ast->decl.type_expr);
         symbol_check_ast(a, ast->decl.value_expr);
-        if (!is_expr_const(a->scope_stack, ast->decl.value_expr))
+        if (!is_expr_const(*array_last(a->scope_stack), ast->decl.value_expr))
         {
             compile_error(
                 a->compiler,
@@ -2129,11 +2269,26 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->subscript.right);
         break;
     }
+    case AST_ARRAY_TYPE: {
+        symbol_check_ast(a, ast->array_type.size);
+        symbol_check_ast(a, ast->array_type.sub);
+
+        if (!is_expr_const(*array_last(a->scope_stack), ast->array_type.size))
+        {
+            compile_error(
+                a->compiler,
+                ast->array_type.size->loc,
+                "array type size must be a constant value");
+        }
+
+        break;
+    }
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
+            Ast *sym =
+                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
             if (!sym)
             {
                 compile_error(
@@ -2154,13 +2309,6 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     default: break;
     }
 }
-
-#define TYPE_CHECK_CASE_PRIMITIVE_TYPE(prim_type)                              \
-    case prim_type: {                                                          \
-        static TypeInfo ty = {.kind = TYPE_PRIMITIVE, .primitive = prim_type}; \
-        ast->type_info = &ty;                                                  \
-    }                                                                          \
-    break
 
 bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
@@ -2218,7 +2366,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         ty->proc.is_c_vararg =
             (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
 
-        array_push(a->scope_stack, &ast->proc.scope);
+        array_push(a->scope_stack, ast->proc.scope);
 
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
@@ -2349,7 +2497,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(a->scope_stack, ast->primary.tok->str);
+            Ast *sym =
+                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
             if (sym)
             {
                 switch (sym->type)
@@ -2528,6 +2677,21 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         break;
     }
+    case AST_ARRAY_TYPE: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        ast->type_info = &ty_ty;
+
+        type_check_ast(a, ast->array_type.size, NULL);
+        type_check_ast(a, ast->array_type.sub, &ty_ty);
+
+        if (ast->array_type.size->type_info->kind != TYPE_INT)
+        {
+            compile_error(
+                a->compiler, ast->loc, "array type needs an integer size");
+        }
+
+        break;
+    }
     default: break;
     }
 
@@ -2556,14 +2720,23 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_ROOT: {
-            scope_init(&ast->block.scope, array_size(ast->block.stmts), NULL);
+            ast->block.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+            memset(ast->block.scope, 0, sizeof(*ast->block.scope));
+            scope_init(ast->block.scope, array_size(ast->block.stmts), NULL);
+            if (array_size(a->scope_stack) > 0)
+            {
+                ast->block.scope->parent = *array_last(a->scope_stack);
+            }
             break;
         }
         case AST_PROC_DECL: {
+            ast->proc.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+            memset(ast->proc.scope, 0, sizeof(*ast->proc.scope));
             scope_init(
-                &ast->proc.scope,
+                ast->proc.scope,
                 array_size(ast->proc.stmts) + array_size(ast->proc.params),
                 ast);
+            ast->proc.scope->parent = *array_last(a->scope_stack);
             break;
         }
         default: break;
@@ -2621,13 +2794,13 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_ROOT: {
-            array_push(a->scope_stack, &ast->block.scope);
+            array_push(a->scope_stack, ast->block.scope);
             analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
             array_pop(a->scope_stack);
             break;
         }
         case AST_PROC_DECL: {
-            array_push(a->scope_stack, &ast->proc.scope);
+            array_push(a->scope_stack, ast->proc.scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
 
             // If the procedure has a void return type or doesn't have a
@@ -2741,7 +2914,7 @@ void llvm_codegen_asts(
         switch (ast->type)
         {
         case AST_ROOT: {
-            array_push(l->scope_stack, &ast->block.scope);
+            array_push(l->scope_stack, ast->block.scope);
             llvm_codegen_asts(
                 l, mod, ast->block.stmts, array_size(ast->block.stmts), false);
             array_pop(l->scope_stack);
@@ -2778,7 +2951,7 @@ void llvm_codegen_asts(
 
                 LLVMPositionBuilderAtEnd(mod->builder, entry);
 
-                array_push(l->scope_stack, &ast->proc.scope);
+                array_push(l->scope_stack, ast->proc.scope);
                 llvm_codegen_asts(
                     l,
                     mod,
@@ -2870,7 +3043,8 @@ void llvm_codegen_asts(
                 break;
             }
             case TOKEN_IDENT: {
-                Ast *sym = get_symbol(l->scope_stack, ast->primary.tok->str);
+                Ast *sym = get_symbol(
+                    *array_last(l->scope_stack), ast->primary.tok->str);
                 assert(sym);
                 assert(sym->value.value);
 
@@ -2925,10 +3099,12 @@ void llvm_codegen_asts(
 
             if (!proc)
             {
+                LLVMTypeRef llvm_ty =
+                    llvm_type(l, ast->decl.type_expr->as_type);
                 // Global variable
-                ast->value.value = LLVMAddGlobal(
-                    mod->mod, llvm_type(l, ast->decl.type_expr->as_type), "");
+                ast->value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
                 LLVMSetLinkage(ast->value.value, LLVMInternalLinkage);
+                LLVMSetExternallyInitialized(ast->value.value, false);
 
                 if (ast->decl.value_expr)
                 {
@@ -2936,6 +3112,11 @@ void llvm_codegen_asts(
                     LLVMSetInitializer(
                         ast->value.value,
                         load_val(mod, &ast->decl.value_expr->value));
+                }
+                else
+                {
+                    LLVMSetInitializer(
+                        ast->value.value, LLVMConstNull(llvm_ty));
                 }
                 break;
             }
@@ -3021,6 +3202,21 @@ void llvm_codegen_asts(
                     load_val(mod, &ast->subscript.left->value),
                     indices,
                     1,
+                    "");
+                break;
+            }
+            case TYPE_ARRAY: {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt64Type(), 0, false),
+                    load_val(mod, &ast->subscript.right->value),
+                };
+
+                ast->value.is_lvalue = true;
+                ast->value.value = LLVMBuildGEP(
+                    mod->builder,
+                    ast->subscript.left->value.value,
+                    indices,
+                    2,
                     "");
                 break;
             }
