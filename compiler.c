@@ -542,6 +542,7 @@ typedef enum TokenType {
     TOKEN_I32,
     TOKEN_I64,
 
+    TOKEN_CHAR,
     TOKEN_FLOAT,
     TOKEN_DOUBLE,
 
@@ -606,6 +607,7 @@ static const char *token_strings[] = {
     [TOKEN_I32] = "i32",
     [TOKEN_I64] = "i64",
 
+    [TOKEN_CHAR] = "char",
     [TOKEN_FLOAT] = "float",
     [TOKEN_DOUBLE] = "double",
 
@@ -690,6 +692,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_I32);
         PRINT_TOKEN_TYPE(TOKEN_I64);
 
+        PRINT_TOKEN_TYPE(TOKEN_CHAR);
         PRINT_TOKEN_TYPE(TOKEN_FLOAT);
         PRINT_TOKEN_TYPE(TOKEN_DOUBLE);
 
@@ -995,6 +998,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("i16", TOKEN_I16);
             LEX_MATCH_STR("i32", TOKEN_I32);
             LEX_MATCH_STR("i64", TOKEN_I64);
+            LEX_MATCH_STR("char", TOKEN_CHAR);
             LEX_MATCH_STR("float", TOKEN_FLOAT);
             LEX_MATCH_STR("double", TOKEN_DOUBLE);
             LEX_MATCH_STR("void", TOKEN_VOID);
@@ -1687,6 +1691,7 @@ bool parse_primary_expr(Parser *p, Ast *ast)
     case TOKEN_I32:
     case TOKEN_I64:
     case TOKEN_FLOAT:
+    case TOKEN_CHAR:
     case TOKEN_DOUBLE:
     case TOKEN_INT_LIT:
     case TOKEN_FLOAT_LIT: {
@@ -2228,6 +2233,7 @@ TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+        case TOKEN_CHAR:
         case TOKEN_I8: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -2791,6 +2797,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TOKEN_I16:
         case TOKEN_I32:
         case TOKEN_I64:
+        case TOKEN_CHAR:
         case TOKEN_FLOAT:
         case TOKEN_DOUBLE:
         case TOKEN_BOOL:
@@ -3579,8 +3586,8 @@ void llvm_codegen_asts(
             }
             case UNOP_DEREFERENCE: {
                 llvm_codegen_asts(l, mod, ast->unop.sub, 1, false);
-                ast->value.value = LLVMBuildLoad(
-                    mod->builder, load_val(mod, &ast->unop.sub->value), "");
+                ast->value.is_lvalue = true;
+                ast->value.value = load_val(mod, &ast->unop.sub->value);
                 break;
             }
             }

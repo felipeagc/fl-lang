@@ -3,14 +3,14 @@ typedef MyStruct struct {
 };
 
 typedef NestedStruct struct {
-	name: *i8,
+	name: *char,
 	sub: struct {
 		a: i32,
 		b: i32,
 	},
 };
 
-proc "c" printf(fmt: *i8, ...) void;
+proc "c" printf(fmt: *char, ...) void;
 
 proc main() i32 {
 	var a_struct: MyStruct;
