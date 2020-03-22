@@ -3588,6 +3588,27 @@ static inline LLVMValueRef load_val(LLModule *mod, AstValue *val)
     return ref;
 }
 
+void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
+{
+    switch (ast->type)
+    {
+    case AST_VAR_DECL: {
+        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+
+        if (proc)
+        {
+            // Local variable
+            ast->decl.value.is_lvalue = true;
+            ast->decl.value.value = LLVMBuildAlloca(
+                mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");
+        }
+
+        break;
+    }
+    default: break;
+    }
+}
+
 void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
@@ -3637,6 +3658,12 @@ void llvm_codegen_ast(
             LLVMPositionBuilderAtEnd(mod->builder, entry);
 
             array_push(l->scope_stack, ast->proc.scope);
+            for (Ast *stmt = ast->proc.stmts;
+                 stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+                 ++stmt)
+            {
+                llvm_codegen_alloca(l, mod, stmt);
+            }
             for (Ast *stmt = ast->proc.stmts;
                  stmt != ast->proc.stmts + array_size(ast->proc.stmts);
                  ++stmt)
@@ -3817,6 +3844,7 @@ void llvm_codegen_ast(
 
         if (!proc)
         {
+            assert(!ast->decl.value.value);
             LLVMTypeRef llvm_ty = llvm_type(l, ast->decl.type_expr->as_type);
             // Global variable
             ast->decl.value.is_lvalue = true;
@@ -3843,9 +3871,7 @@ void llvm_codegen_ast(
         }
 
         // Local variable
-        ast->decl.value.is_lvalue = true;
-        ast->decl.value.value = LLVMBuildAlloca(
-            mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");
+        assert(ast->decl.value.value);
 
         if (ast->decl.value_expr)
         {
