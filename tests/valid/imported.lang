@@ -1,0 +1,5 @@
+proc "c" printf(str: *char, ...) void;
+
+proc say_hello() void {
+	printf(c"Hello!\n");
+}

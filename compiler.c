@@ -17,9 +17,37 @@
 #include <llvm-c/TargetMachine.h>
 #endif
 
+#ifdef __unix__
+#include <limits.h>
+#include <unistd.h>
+#endif
+
 // Forward declarations {{{
 typedef struct SourceFile SourceFile;
 //}}}
+
+// Filesystem functions {{{
+char *get_absolute_path(char *relative_path)
+{
+#ifdef __unix__
+    return realpath(relative_path, NULL);
+#endif
+}
+
+char *get_file_dir(char *path)
+{
+    char *abs = get_absolute_path(path);
+    for (int i = strlen(abs) - 1; i >= 0; i--)
+    {
+        if (abs[i] == '/')
+        {
+            abs[i + 1] = '\0';
+            break;
+        }
+    }
+    return abs;
+}
+// }}}
 
 // String {{{
 typedef struct String
@@ -32,6 +60,12 @@ typedef struct String
     ((String){                                                                 \
         .buf = lit,                                                            \
         .length = sizeof(lit) - 1,                                             \
+    })
+
+#define CSTR(lit)                                                              \
+    ((String){                                                                 \
+        .buf = (lit),                                                          \
+        .length = strlen(lit),                                                 \
     })
 
 static inline bool string_equals(String a, String b)
@@ -401,16 +435,19 @@ typedef struct Compiler
 {
     BumpAlloc bump;
     /*array*/ Error *errors;
+    HashMap files;
 } Compiler;
 
 void compiler_init(Compiler *compiler)
 {
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
+    hash_init(&compiler->files, 521);
 }
 
 void compiler_destroy(Compiler *compiler)
 {
+    hash_destroy(&compiler->files);
     bump_destroy(&compiler->bump);
 }
 
@@ -437,6 +474,7 @@ typedef struct SourceFile
 {
     String path;
     String content;
+    struct Ast *root;
 } SourceFile;
 
 void source_file_init(SourceFile *file, Compiler *compiler, String path)
@@ -517,6 +555,7 @@ typedef enum TokenType {
     TOKEN_CSTRING_LIT,
     TOKEN_CHAR_LIT,
     TOKEN_PROC,
+    TOKEN_IMPORT,
     TOKEN_TYPEDEF,
     TOKEN_STRUCT,
     TOKEN_UNION,
@@ -582,6 +621,7 @@ static const char *token_strings[] = {
     [TOKEN_CSTRING_LIT] = "c-string literal",
     [TOKEN_CHAR_LIT] = "char literal",
     [TOKEN_PROC] = "proc",
+    [TOKEN_IMPORT] = "import",
     [TOKEN_TYPEDEF] = "typedef",
     [TOKEN_STRUCT] = "struct",
     [TOKEN_UNION] = "union",
@@ -670,6 +710,7 @@ void print_token(Token *tok)
 
         PRINT_TOKEN_TYPE(TOKEN_IDENT);
         PRINT_TOKEN_TYPE(TOKEN_PROC);
+        PRINT_TOKEN_TYPE(TOKEN_IMPORT);
         PRINT_TOKEN_TYPE(TOKEN_TYPEDEF);
         PRINT_TOKEN_TYPE(TOKEN_STRUCT);
         PRINT_TOKEN_TYPE(TOKEN_UNION);
@@ -1010,6 +1051,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("var", TOKEN_VAR);
             LEX_MATCH_STR("const", TOKEN_CONST);
             LEX_MATCH_STR("proc", TOKEN_PROC);
+            LEX_MATCH_STR("import", TOKEN_IMPORT);
             LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
             LEX_MATCH_STR("struct", TOKEN_STRUCT);
             LEX_MATCH_STR("union", TOKEN_UNION);
@@ -1118,6 +1160,7 @@ typedef enum TypeKind {
     TYPE_DOUBLE,
     TYPE_BOOL,
     TYPE_VOID,
+    TYPE_NAMESPACE,
 } TypeKind;
 
 typedef struct TypeInfo
@@ -1214,6 +1257,7 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
         break;
     }
+    case TYPE_NAMESPACE: break;
     case TYPE_FLOAT: break;
     case TYPE_DOUBLE: break;
     case TYPE_BOOL: break;
@@ -1246,6 +1290,7 @@ typedef enum AstType {
     AST_ROOT,
     AST_STRUCT,
     AST_PROC_DECL,
+    AST_IMPORT,
     AST_BLOCK,
     AST_PROC_CALL,
     AST_UNARY_EXPR,
@@ -1300,6 +1345,12 @@ typedef struct Ast
         {
             Token *tok;
         } primary;
+        struct
+        {
+            String name;
+            String path;
+            String abs_path;
+        } import;
         struct
         {
             struct Scope *scope;
@@ -1533,19 +1584,11 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
             {
                 switch (sym->type)
                 {
-                case AST_STRUCT_FIELD: {
-                    ast->alias_to = sym;
-                    break;
-                }
-                case AST_VAR_DECL: {
-                    ast->alias_to = sym;
-                    break;
-                }
+                case AST_IMPORT:
+                case AST_STRUCT_FIELD:
+                case AST_VAR_DECL:
+                case AST_CONST_DECL:
                 case AST_PROC_PARAM: {
-                    ast->alias_to = sym;
-                    break;
-                }
-                case AST_CONST_DECL: {
                     ast->alias_to = sym;
                     break;
                 }
@@ -1585,7 +1628,7 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
     return ast->alias_to;
 }
 
-static Scope *get_accessed_scope(Scope *scope, Ast *ast)
+static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast)
 {
     assert(ast->type == AST_ACCESS);
 
@@ -1608,6 +1651,12 @@ static Scope *get_accessed_scope(Scope *scope, Ast *ast)
             get_aliased_expr(aliased->sym_scope, aliased->decl.type_expr);
         break;
     }
+    case AST_IMPORT: {
+        SourceFile *file = hash_get(&compiler->files, aliased->import.abs_path);
+        assert(file);
+        accessed_scope = file->root->block.scope;
+        break;
+    }
     case AST_PROC_PARAM: {
         assert(aliased->sym_scope);
         aliased_type_expr =
@@ -1617,7 +1666,7 @@ static Scope *get_accessed_scope(Scope *scope, Ast *ast)
     default: break;
     }
 
-    if (aliased_type_expr)
+    if (!accessed_scope && aliased_type_expr)
     {
         switch (aliased_type_expr->type)
         {
@@ -2079,6 +2128,32 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         break;
     }
+    case TOKEN_IMPORT: {
+        parser_next(p, 1);
+        ast->type = AST_IMPORT;
+
+        Token *name_tok = parser_consume(p, TOKEN_IDENT);
+        if (name_tok)
+            ast->import.name = name_tok->str;
+        else
+            res = false;
+
+        Token *path_tok = parser_consume(p, TOKEN_STRING_LIT);
+        if (path_tok)
+            ast->import.path = path_tok->str;
+        else
+            res = false;
+
+        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
+        {
+            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
+            ast->proc.convention = convention_tok->str;
+        }
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+        break;
+    }
     case TOKEN_VAR:
     case TOKEN_CONST: {
         Token *kind = parser_next(p, 1);
@@ -2536,6 +2611,10 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
         sym_name = ast->type_def.name;
         break;
     }
+    case AST_IMPORT: {
+        sym_name = ast->import.name;
+        break;
+    }
     case AST_PROC_DECL: {
         sym_name = ast->proc.name;
 
@@ -2699,7 +2778,7 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->access.left);
 
         Scope *accessed_scope =
-            get_accessed_scope(*array_last(a->scope_stack), ast);
+            get_accessed_scope(a->compiler, *array_last(a->scope_stack), ast);
 
         if (!accessed_scope)
         {
@@ -2956,6 +3035,11 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     ast->type_info = sym->type_info;
                     break;
                 }
+                case AST_IMPORT: {
+                    static TypeInfo namespace_ty = {.kind = TYPE_NAMESPACE};
+                    ast->type_info = &namespace_ty;
+                    break;
+                }
                 case AST_TYPEDEF: {
                     ast->type_info = sym->type_def.type_expr->type_info;
                     break;
@@ -3177,7 +3261,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         Scope *accessed_scope =
-            get_accessed_scope(*array_last(a->scope_stack), ast);
+            get_accessed_scope(a->compiler, *array_last(a->scope_stack), ast);
 
         if (accessed_scope)
         {
@@ -3492,6 +3576,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         type->ref = LLVMStructType(field_types, field_count, false);
         break;
     }
+    case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_NONE:
     case TYPE_UNINITIALIZED: assert(0); break;
@@ -3903,6 +3988,19 @@ void llvm_codegen_ast(
         break;
     }
     case AST_ACCESS: {
+        assert(array_size(l->scope_stack) > 0);
+        Scope *accessed_scope =
+            get_accessed_scope(l->compiler, *array_last(l->scope_stack), ast);
+        assert(accessed_scope);
+
+        if (ast->access.left->type_info->kind == TYPE_NAMESPACE)
+        {
+            array_push(l->scope_stack, accessed_scope);
+            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+            array_pop(l->scope_stack);
+            break;
+        }
+
         AstValue accessed_value = {0};
         llvm_codegen_ast(l, mod, ast->access.left, false, &accessed_value);
 
@@ -3911,17 +4009,15 @@ void llvm_codegen_ast(
             accessed_value.value = load_val(mod, &accessed_value);
         }
 
-        assert(array_size(l->scope_stack) > 0);
-        Scope *accessed_scope =
-            get_accessed_scope(*array_last(l->scope_stack), ast);
-        assert(accessed_scope);
-
         array_push(l->scope_stack, accessed_scope);
         array_push(l->value_stack, &accessed_value);
         llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
         array_pop(l->value_stack);
         array_pop(l->scope_stack);
 
+        break;
+    }
+    case AST_IMPORT: {
         break;
     }
     case AST_TYPEDEF: break;
@@ -3977,6 +4073,107 @@ void llvm_codegen(LLContext *l, Ast *ast)
 #endif
 // }}}
 
+// File processing {{{
+SourceFile *process_file(Compiler *compiler, String absolute_path);
+
+void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
+{
+
+    switch (ast->type)
+    {
+    case AST_IMPORT: {
+        char *c_dir = get_file_dir(bump_c_str(&compiler->bump, file->path));
+        char *c_imported = bump_c_str(&compiler->bump, ast->import.path);
+
+        size_t new_path_size = strlen(c_dir) + 1 + strlen(c_imported) + 1;
+        char *c_new_path = bump_alloc(&compiler->bump, new_path_size);
+        snprintf(c_new_path, new_path_size, "%s/%s", c_dir, c_imported);
+
+        // Normalize the path
+        char *c_abs_path = get_absolute_path(c_new_path);
+        String abs_path = CSTR(c_abs_path);
+        ast->import.abs_path = abs_path;
+
+        process_file(compiler, abs_path);
+        break;
+    }
+    default: break;
+    }
+
+    // Analyze children ASTs
+    switch (ast->type)
+    {
+    case AST_ROOT: {
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            process_imports(compiler, file, stmt);
+        }
+        break;
+    }
+    case AST_PROC_DECL: {
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            process_imports(compiler, file, stmt);
+        }
+        break;
+    }
+    default: break;
+    }
+}
+
+SourceFile *process_file(Compiler *compiler, String absolute_path)
+{
+    /* printf( */
+    /*     "Processing file: '%.*s'\n", */
+    /*     (int)absolute_path.length, */
+    /*     absolute_path.buf); */
+
+    SourceFile *file = hash_get(&compiler->files, absolute_path);
+    if (file)
+    {
+        return file;
+    }
+
+    file = bump_alloc(&compiler->bump, sizeof(*file));
+    source_file_init(file, compiler, absolute_path);
+
+    hash_set(&compiler->files, absolute_path, file);
+
+    Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
+    lex_file(lexer, compiler, file);
+    print_errors(compiler);
+
+    Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
+    parse_file(parser, compiler, lexer);
+    print_errors(compiler);
+
+    process_imports(compiler, file, parser->ast);
+
+    Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
+    memset(analyzer, 0, sizeof(*analyzer));
+    analyzer->compiler = compiler;
+
+    create_scopes_asts(analyzer, parser->ast, 1);
+    print_errors(compiler);
+
+    register_symbol_asts(analyzer, parser->ast, 1);
+    print_errors(compiler);
+
+    symbol_check_asts(analyzer, parser->ast, 1);
+    print_errors(compiler);
+
+    type_check_asts(analyzer, parser->ast, 1);
+    print_errors(compiler);
+
+    file->root = parser->ast;
+    return file;
+}
+// }}}
+
 int main(int argc, char **argv)
 {
     Compiler *compiler = malloc(sizeof(*compiler));
@@ -3990,42 +4187,15 @@ int main(int argc, char **argv)
 
     if (argc == 2)
     {
-        SourceFile *file = bump_alloc(&compiler->bump, sizeof(*file));
-        source_file_init(
-            file,
-            compiler,
-            (String){.buf = argv[1], .length = strlen(argv[1])});
-
-        Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
-        lex_file(lexer, compiler, file);
-        print_errors(compiler);
-
-        Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
-        parse_file(parser, compiler, lexer);
-        print_errors(compiler);
-
-        Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
-        memset(analyzer, 0, sizeof(*analyzer));
-        analyzer->compiler = compiler;
-
-        create_scopes_asts(analyzer, parser->ast, 1);
-        print_errors(compiler);
-
-        register_symbol_asts(analyzer, parser->ast, 1);
-        print_errors(compiler);
-
-        symbol_check_asts(analyzer, parser->ast, 1);
-        print_errors(compiler);
-
-        type_check_asts(analyzer, parser->ast, 1);
-        print_errors(compiler);
+        char *absolute_path = get_absolute_path(argv[1]);
+        SourceFile *file = process_file(compiler, CSTR(absolute_path));
 
 #if defined(LLVM_BACKEND)
         LLContext *llvm_context =
             bump_alloc(&compiler->bump, sizeof(*llvm_context));
         memset(llvm_context, 0, sizeof(*llvm_context));
         llvm_context->compiler = compiler;
-        llvm_codegen(llvm_context, parser->ast);
+        llvm_codegen(llvm_context, file->root);
         print_errors(compiler);
 #else
         printf("No compiler backend\n");

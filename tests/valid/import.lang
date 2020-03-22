@@ -1,0 +1,5 @@
+import hello "imported.lang";
+
+proc main() void {
+	hello.say_hello();
+}
