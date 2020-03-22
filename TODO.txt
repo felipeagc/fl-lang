@@ -1,1 +1,12 @@
-Generic int type with size & sign properties
+Imports
+Comments
+Intrinsics (sizeof, alignof)
+Arithmetic operations
+Default struct member initialization
+String type
+Cast expression
+Defer statement
+Using statement
+
+Bugs:
+- I think struct fields don't have location information

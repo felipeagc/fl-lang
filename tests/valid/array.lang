@@ -1,0 +1,31 @@
+const ARRAY_SIZE: i64 = 5;
+typedef MyArrayType [ARRAY_SIZE]i32;
+
+var global_array1: MyArrayType;
+var global_array2: [ARRAY_SIZE]*char;
+var global_array3: [2]i32;
+var global_array4: [2][3]i32;
+
+proc "c" printf(fmt: *char, ...) void;
+
+proc main() i32 {
+	global_array1[1] = 321;
+	printf(c"global_array1[1] = %d\n", global_array1[1]);
+
+	global_array2[1] = c"Yo";
+	printf(c"global_array2[1] = \"%s\"\n", global_array2[1]);
+
+	global_array3[0] = 123;
+	printf(c"global_array3[0] = %d\n", global_array3[0]);
+
+	global_array4[0][1] = 123;
+	printf(c"global_array4[0][1] = %d\n", global_array4[0][1]);
+
+	var ptr_to_array: *[3]i32 = &global_array4[0];
+	(*ptr_to_array)[1] = 321;
+
+	var local_array1: [3]i32 = global_array4[0];
+	printf(c"local_array1[1] = %d\n", local_array1[1]);
+
+	return 0;
+}

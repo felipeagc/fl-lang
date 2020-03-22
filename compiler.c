@@ -1764,12 +1764,9 @@ bool parse_array_type(Parser *p, Ast *ast)
 
         if (!parser_consume(p, TOKEN_RBRACK)) res = false;
 
-        Ast sub = {.loc = parser_peek(p, 0)->loc};
-        if (parse_array_type(p, &sub))
+        Ast sub = {0};
+        if (parse_expr(p, &sub))
         {
-            Location last_loc = parser_peek(p, -1)->loc;
-            sub.loc.length = last_loc.buf + last_loc.length - sub.loc.buf;
-
             ast->array_type.sub =
                 bump_alloc(&p->compiler->bump, sizeof(*ast->array_type.sub));
             *ast->array_type.sub = sub;
@@ -1799,84 +1796,102 @@ bool parse_proc_call_subscript_access(Parser *p, Ast *ast)
     Location last_loc = parser_peek(p, -1)->loc;
     expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
 
-    switch (parser_peek(p, 0)->type)
+    while (1)
     {
-    case TOKEN_LPAREN: {
-        // Proc call
-        ast->type = AST_PROC_CALL;
-        ast->proc_call.expr =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
-        *ast->proc_call.expr = expr;
+        bool matched = true;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
-
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
+        switch (parser_peek(p, 0)->type)
         {
-            Ast param = {0};
-            if (!parse_expr(p, &param))
-                res = false;
-            else
-                array_push(ast->proc_call.params, param);
+        case TOKEN_LPAREN: {
+            // Proc call
+            ast->type = AST_PROC_CALL;
+            ast->proc_call.expr =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
+            *ast->proc_call.expr = expr;
 
-            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                   !parser_is_at_end(p))
             {
-                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                Ast param = {0};
+                if (parse_expr(p, &param))
+                    array_push(ast->proc_call.params, param);
+                else
+                    res = false;
+
+                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
             }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+            break;
+        }
+        case TOKEN_LBRACK: {
+            ast->type = AST_SUBSCRIPT;
+            ast->subscript.left =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.left));
+            *ast->subscript.left = expr;
+
+            if (!parser_consume(p, TOKEN_LBRACK)) res = false;
+
+            Ast right = {0};
+            if (parse_expr(p, &right))
+            {
+                ast->subscript.right = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript.right));
+                *ast->subscript.right = right;
+            }
+            else
+            {
+                res = false;
+            }
+
+            if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+            break;
+        }
+        case TOKEN_DOT: {
+            ast->type = AST_ACCESS;
+            ast->access.left =
+                bump_alloc(&p->compiler->bump, sizeof(*ast->access.left));
+            *ast->access.left = expr;
+
+            if (!parser_consume(p, TOKEN_DOT)) res = false;
+
+            Ast right = {0};
+            if (parse_expr(p, &right))
+            {
+                ast->access.right =
+                    bump_alloc(&p->compiler->bump, sizeof(*ast->access.right));
+                *ast->access.right = right;
+            }
+            else
+            {
+                res = false;
+            }
+
+            break;
+        }
+        default: {
+            matched = false;
+            *ast = expr;
+            break;
+        }
         }
 
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-        break;
-    }
-    case TOKEN_LBRACK: {
-        ast->type = AST_SUBSCRIPT;
-        ast->subscript.left =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.left));
-        *ast->subscript.left = expr;
-
-        if (!parser_consume(p, TOKEN_LBRACK)) res = false;
-
-        Ast right = {0};
-        if (parse_expr(p, &right))
+        if (matched)
         {
-            ast->subscript.right =
-                bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.right));
-            *ast->subscript.right = right;
+            expr = *ast;
+            Location last_loc = parser_peek(p, -1)->loc;
+            expr.loc.length = last_loc.buf + last_loc.length - expr.loc.buf;
         }
         else
         {
-            res = false;
+            break;
         }
-
-        if (!parser_consume(p, TOKEN_RBRACK)) res = false;
-
-        break;
-    }
-    case TOKEN_DOT: {
-        ast->type = AST_ACCESS;
-        ast->access.left =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->access.left));
-        *ast->access.left = expr;
-
-        if (!parser_consume(p, TOKEN_DOT)) res = false;
-
-        Ast right = {0};
-        if (parse_expr(p, &right))
-        {
-            ast->access.right =
-                bump_alloc(&p->compiler->bump, sizeof(*ast->access.right));
-            *ast->access.right = right;
-        }
-        else
-        {
-            res = false;
-        }
-
-        break;
-    }
-    default: {
-        *ast = expr;
-        break;
-    }
     }
 
     return res;
@@ -3074,6 +3089,24 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_SUBSCRIPT: {
         type_check_ast(a, ast->subscript.left, NULL);
         type_check_ast(a, ast->subscript.right, NULL);
+
+        if (!ast->subscript.left->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for left expression of subscript");
+            break;
+        }
+
+        if (!ast->subscript.right->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for right expression of subscript");
+            break;
+        }
 
         if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
             ast->subscript.left->type_info->kind != TYPE_ARRAY)

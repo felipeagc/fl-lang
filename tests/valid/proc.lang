@@ -13,8 +13,8 @@ typedef MyStruct struct {
 	b: *u8,
 };
 
-proc "c" puts(str: *i8) void;
-proc "c" printf(fmt: *i8, ...) void;
+proc "c" puts(str: *char) void;
+proc "c" printf(fmt: *char, ...) void;
 
 proc add(a: i32, b: i32) i32 {
 	return 0;
