@@ -7,7 +7,6 @@
 #include <string.h>
 #include <assert.h>
 
-#if defined(LLVM_BACKEND)
 #include <llvm-c/Analysis.h>
 #include <llvm-c/BitWriter.h>
 #include <llvm-c/Core.h>
@@ -15,7 +14,6 @@
 #include <llvm-c/ExecutionEngine.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
-#endif
 
 #ifdef __unix__
 #include <limits.h>
@@ -436,6 +434,7 @@ typedef struct Compiler
     BumpAlloc bump;
     /*array*/ Error *errors;
     HashMap files;
+    struct LLContext *backend;
 } Compiler;
 
 void compiler_init(Compiler *compiler)
@@ -1167,9 +1166,7 @@ typedef struct TypeInfo
 {
     TypeKind kind;
 
-#if defined(LLVM_BACKEND)
     LLVMTypeRef ref;
-#endif
 
     union
     {
@@ -1315,12 +1312,8 @@ typedef struct AstValue
     bool is_lvalue;
     union
     {
-#if defined(LLVM_BACKEND)
         LLVMValueRef value;
         LLVMTypeRef type;
-#else
-        void *dummy; // can't have an empty union
-#endif
     };
 } AstValue;
 
@@ -3511,20 +3504,20 @@ void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
 // }}}
 
 // LLVM Codegen {{{
-#if defined(LLVM_BACKEND)
-typedef struct LLContext
-{
-    Compiler *compiler;
-    /*array*/ Scope **scope_stack;
-    /*array*/ AstValue **value_stack;
-} LLContext;
-
 typedef struct LLModule
 {
     LLVMModuleRef mod;
     LLVMBuilderRef builder;
     LLVMTargetDataRef data;
 } LLModule;
+
+typedef struct LLContext
+{
+    Compiler *compiler;
+    LLModule mod;
+    /*array*/ Scope **scope_stack;
+    /*array*/ AstValue **value_stack;
+} LLContext;
 
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 {
@@ -3753,19 +3746,13 @@ void llvm_codegen_ast(
             switch (sym->type)
             {
             case AST_PROC_DECL: {
-                if (!sym->proc.value.value)
-                {
-                    llvm_codegen_ast(l, mod, sym, false, NULL);
-                }
+                assert(sym->proc.value.value);
                 if (out_value) *out_value = sym->proc.value;
                 break;
             }
             case AST_VAR_DECL:
             case AST_CONST_DECL: {
-                if (!sym->decl.value.value)
-                {
-                    llvm_codegen_ast(l, mod, sym, false, NULL);
-                }
+                assert(sym->decl.value.value);
                 if (out_value) *out_value = sym->decl.value;
                 break;
             }
@@ -3832,6 +3819,7 @@ void llvm_codegen_ast(
         {
             LLVMTypeRef llvm_ty = llvm_type(l, ast->decl.type_expr->as_type);
             // Global variable
+            ast->decl.value.is_lvalue = true;
             ast->decl.value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
             LLVMSetLinkage(ast->decl.value.value, LLVMInternalLinkage);
             LLVMSetExternallyInitialized(ast->decl.value.value, false);
@@ -4025,31 +4013,37 @@ void llvm_codegen_ast(
     }
 }
 
-void llvm_codegen(LLContext *l, Ast *ast)
+void llvm_init(LLContext *l, Compiler *compiler)
 {
-    LLModule mod = {0};
-    mod.mod = LLVMModuleCreateWithName("main");
-    mod.builder = LLVMCreateBuilder();
-    mod.data = LLVMGetModuleDataLayout(mod.mod);
+    l->compiler = compiler;
 
-    llvm_codegen_ast(l, &mod, ast, false, NULL);
+    memset(&l->mod, 0, sizeof(l->mod));
+    l->mod.mod = LLVMModuleCreateWithName("main");
+    l->mod.builder = LLVMCreateBuilder();
+    l->mod.data = LLVMGetModuleDataLayout(l->mod.mod);
+}
 
-    printf("%s\n", LLVMPrintModuleToString(mod.mod));
+void llvm_verify_module(LLContext *l)
+{
+    printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
 
     char *error = NULL;
-    if (LLVMVerifyModule(mod.mod, LLVMReturnStatusAction, &error))
+    if (LLVMVerifyModule(l->mod.mod, LLVMReturnStatusAction, &error))
     {
         printf("Failed to verify module:\n%s\n", error);
         abort();
     }
+}
 
+void llvm_run_module(LLContext *l)
+{
     LLVMExecutionEngineRef engine;
-    error = NULL;
+    char *error = NULL;
 
     LLVMLinkInMCJIT();
     LLVMInitializeNativeTarget();
     LLVMInitializeNativeAsmPrinter();
-    if (LLVMCreateExecutionEngineForModule(&engine, mod.mod, &error) != 0)
+    if (LLVMCreateExecutionEngineForModule(&engine, l->mod.mod, &error) != 0)
     {
         fprintf(stderr, "failed to create execution engine\n");
         abort();
@@ -4067,10 +4061,7 @@ void llvm_codegen(LLContext *l, Ast *ast)
     {
         main_func();
     }
-
-    LLVMDisposeBuilder(mod.builder);
 }
-#endif
 // }}}
 
 // File processing {{{
@@ -4078,7 +4069,6 @@ SourceFile *process_file(Compiler *compiler, String absolute_path);
 
 void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
 {
-
     switch (ast->type)
     {
     case AST_IMPORT: {
@@ -4150,6 +4140,7 @@ SourceFile *process_file(Compiler *compiler, String absolute_path)
     Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
     parse_file(parser, compiler, lexer);
     print_errors(compiler);
+    file->root = parser->ast;
 
     process_imports(compiler, file, parser->ast);
 
@@ -4169,7 +4160,9 @@ SourceFile *process_file(Compiler *compiler, String absolute_path)
     type_check_asts(analyzer, parser->ast, 1);
     print_errors(compiler);
 
-    file->root = parser->ast;
+    llvm_codegen_ast(
+        compiler->backend, &compiler->backend->mod, file->root, false, NULL);
+
     return file;
 }
 // }}}
@@ -4187,19 +4180,17 @@ int main(int argc, char **argv)
 
     if (argc == 2)
     {
-        char *absolute_path = get_absolute_path(argv[1]);
-        SourceFile *file = process_file(compiler, CSTR(absolute_path));
-
-#if defined(LLVM_BACKEND)
         LLContext *llvm_context =
             bump_alloc(&compiler->bump, sizeof(*llvm_context));
         memset(llvm_context, 0, sizeof(*llvm_context));
-        llvm_context->compiler = compiler;
-        llvm_codegen(llvm_context, file->root);
-        print_errors(compiler);
-#else
-        printf("No compiler backend\n");
-#endif
+        llvm_init(llvm_context, compiler);
+        compiler->backend = llvm_context;
+
+        char *absolute_path = get_absolute_path(argv[1]);
+        process_file(compiler, CSTR(absolute_path));
+
+        llvm_verify_module(llvm_context);
+        llvm_run_module(llvm_context);
     }
     else
     {
