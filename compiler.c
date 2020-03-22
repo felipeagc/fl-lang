@@ -1262,6 +1262,7 @@ typedef enum AstType {
     AST_EXPR_STMT,
     AST_ACCESS,
     AST_STRUCT_FIELD,
+    AST_PROC_PARAM,
 } AstType;
 
 typedef struct AstValue
@@ -1292,8 +1293,6 @@ typedef struct Ast
     struct Scope *sym_scope;
     struct Ast *alias_to;
 
-    AstValue value;
-
     union
     {
         struct Ast *expr;
@@ -1315,6 +1314,7 @@ typedef struct Ast
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
+            AstValue value;
         } proc;
         struct
         {
@@ -1336,7 +1336,15 @@ typedef struct Ast
             String name;
             struct Ast *type_expr;
             struct Ast *value_expr;
+            AstValue value;
         } decl;
+        struct
+        {
+            String name;
+            struct Ast *type_expr;
+            struct Ast *value_expr;
+            AstValue value;
+        } proc_param;
         struct
         {
             size_t index;
@@ -1533,6 +1541,10 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
                     ast->alias_to = sym;
                     break;
                 }
+                case AST_PROC_PARAM: {
+                    ast->alias_to = sym;
+                    break;
+                }
                 case AST_CONST_DECL: {
                     ast->alias_to = sym;
                     break;
@@ -1594,7 +1606,12 @@ static Scope *get_accessed_scope(Scope *scope, Ast *ast)
         assert(aliased->sym_scope);
         aliased_type_expr =
             get_aliased_expr(aliased->sym_scope, aliased->decl.type_expr);
-
+        break;
+    }
+    case AST_PROC_PARAM: {
+        assert(aliased->sym_scope);
+        aliased_type_expr =
+            get_aliased_expr(aliased->sym_scope, aliased->proc_param.type_expr);
         break;
     }
     default: break;
@@ -1994,20 +2011,21 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             }
 
             Ast param = {0};
-            param.type = AST_VAR_DECL;
+            param.type = AST_PROC_PARAM;
 
             Token *ident_tok = parser_consume(p, TOKEN_IDENT);
             if (!ident_tok)
                 res = false;
             else
-                param.decl.name = ident_tok->str;
+                param.proc_param.name = ident_tok->str;
 
             if (ident_tok) param.loc = ident_tok->loc;
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
-            param.decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, param.decl.type_expr)) res = false;
+            param.proc_param.type_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, param.proc_param.type_expr)) res = false;
 
             array_push(ast->proc.params, param);
 
@@ -2491,6 +2509,10 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
         sym_name = ast->decl.name;
         break;
     }
+    case AST_PROC_PARAM: {
+        sym_name = ast->proc_param.name;
+        break;
+    }
     case AST_STRUCT_FIELD: {
         sym_name = ast->field.name;
         break;
@@ -2557,6 +2579,14 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         if (ast->decl.value_expr)
         {
             symbol_check_ast(a, ast->decl.value_expr);
+        }
+        break;
+    }
+    case AST_PROC_PARAM: {
+        symbol_check_ast(a, ast->proc_param.type_expr);
+        if (ast->proc_param.value_expr)
+        {
+            symbol_check_ast(a, ast->proc_param.value_expr);
         }
         break;
     }
@@ -2713,6 +2743,18 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             type_check_ast(
                 a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+        }
+        break;
+    }
+    case AST_PROC_PARAM: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        type_check_ast(a, ast->proc_param.type_expr, &ty_ty);
+        if (ast->proc_param.value_expr)
+        {
+            type_check_ast(
+                a,
+                ast->proc_param.value_expr,
+                ast->proc_param.type_expr->as_type);
         }
         break;
     }
@@ -2887,6 +2929,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     ast->type_info = sym->decl.type_expr->as_type;
                     break;
                 }
+                case AST_PROC_PARAM: {
+                    ast->type_info = sym->proc_param.type_expr->as_type;
+                    break;
+                }
                 case AST_STRUCT_FIELD: {
                     ast->type_info = sym->field.type_expr->as_type;
                     break;
@@ -2995,6 +3041,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             ast->type_info = ast->unop.sub->type_info->ptr.sub;
+            assert(ast->type_info);
 
             break;
         }
@@ -3131,13 +3178,38 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     return res;
 }
 
-void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
+void create_scopes_asts(Analyzer *a, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         create_scopes_ast(a, ast);
     }
 
+    // Analyze children ASTs
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT: {
+            array_push(a->scope_stack, ast->block.scope);
+            create_scopes_asts(
+                a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        case AST_PROC_DECL: {
+            array_push(a->scope_stack, ast->proc.scope);
+            create_scopes_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        default: break;
+        }
+    }
+}
+
+void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
+{
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         switch (ast->type)
@@ -3145,20 +3217,6 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         case AST_CONST_DECL:
         case AST_PROC_DECL: {
             register_symbol_ast(a, ast);
-            break;
-        }
-        default: break;
-        }
-    }
-
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        switch (ast->type)
-        {
-        case AST_CONST_DECL:
-        case AST_PROC_DECL: {
-            symbol_check_ast(a, ast);
-            type_check_ast(a, ast, NULL);
             break;
         }
         default: break;
@@ -3176,7 +3234,114 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         }
         default: {
             register_symbol_ast(a, ast);
+            break;
+        }
+        }
+    }
+
+    // Analyze children ASTs
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT: {
+            array_push(a->scope_stack, ast->block.scope);
+            register_symbol_asts(
+                a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        case AST_PROC_DECL: {
+            array_push(a->scope_stack, ast->proc.scope);
+            register_symbol_asts(
+                a, ast->proc.stmts, array_size(ast->proc.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        default: break;
+        }
+    }
+}
+
+void symbol_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
+{
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
             symbol_check_ast(a, ast);
+            break;
+        }
+        default: break;
+        }
+    }
+
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT:
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            break;
+        }
+        default: {
+            symbol_check_ast(a, ast);
+            break;
+        }
+        }
+    }
+
+    // Analyze children ASTs
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT: {
+            array_push(a->scope_stack, ast->block.scope);
+            symbol_check_asts(
+                a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        case AST_PROC_DECL: {
+            array_push(a->scope_stack, ast->proc.scope);
+            symbol_check_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        default: break;
+        }
+    }
+}
+
+void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
+{
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            type_check_ast(a, ast, NULL);
+            break;
+        }
+        default: break;
+        }
+    }
+
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_ROOT:
+        case AST_CONST_DECL:
+        case AST_PROC_DECL: {
+            break;
+        }
+        default: {
             type_check_ast(a, ast, NULL);
             break;
         }
@@ -3190,13 +3355,13 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         {
         case AST_ROOT: {
             array_push(a->scope_stack, ast->block.scope);
-            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+            type_check_asts(a, ast->block.stmts, array_size(ast->block.stmts));
             array_pop(a->scope_stack);
             break;
         }
         case AST_PROC_DECL: {
             array_push(a->scope_stack, ast->proc.scope);
-            analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            type_check_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
 
             // If the procedure has a void return type or doesn't have a
             // body, say it has returned already
@@ -3226,7 +3391,6 @@ void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         }
     }
 }
-
 // }}}
 
 // LLVM Codegen {{{
@@ -3313,363 +3477,422 @@ static inline LLVMValueRef load_val(LLModule *mod, AstValue *val)
     return ref;
 }
 
-void llvm_codegen_asts(
-    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const)
+void llvm_codegen_ast(
+    LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    switch (ast->type)
     {
-        switch (ast->type)
+    case AST_ROOT: {
+        array_push(l->scope_stack, ast->block.scope);
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
         {
-        case AST_ROOT: {
-            array_push(l->scope_stack, ast->block.scope);
-            llvm_codegen_asts(
-                l, mod, ast->block.stmts, array_size(ast->block.stmts), false);
+            llvm_codegen_ast(l, mod, stmt, false, NULL);
+        }
+        array_pop(l->scope_stack);
+        break;
+    }
+    case AST_PROC_DECL: {
+        LLVMTypeRef fun_type = llvm_type(l, ast->type_info);
+
+        char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
+        LLVMValueRef fun = LLVMAddFunction(mod->mod, fun_name, fun_type);
+        ast->proc.value.value = fun;
+
+        LLVMSetLinkage(fun, LLVMInternalLinkage);
+        if (string_equals(ast->proc.convention, STR("c")))
+        {
+            LLVMSetLinkage(fun, LLVMExternalLinkage);
+        }
+
+        if (ast->proc.flags & PROC_FLAG_HAS_BODY)
+        {
+            size_t param_count = array_size(ast->proc.params);
+            for (size_t i = 0; i < param_count; i++)
+            {
+                Ast *param = &ast->proc.params[i];
+                param->proc_param.value.is_lvalue = false;
+                param->proc_param.value.value = LLVMGetParam(fun, i);
+
+                char *param_name =
+                    bump_c_str(&l->compiler->bump, param->proc_param.name);
+                LLVMSetValueName(param->proc_param.value.value, param_name);
+            }
+
+            LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
+            LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
+
+            LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+            array_push(l->scope_stack, ast->proc.scope);
+            for (Ast *stmt = ast->proc.stmts;
+                 stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+                 ++stmt)
+            {
+                llvm_codegen_ast(l, mod, stmt, false, NULL);
+            }
             array_pop(l->scope_stack);
-            break;
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+            {
+                LLVMBuildRetVoid(mod->builder); // Add void return
+            }
+
+            LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
         }
-        case AST_PROC_DECL: {
-            LLVMTypeRef fun_type = llvm_type(l, ast->type_info);
 
-            char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
-            ast->value.value = LLVMAddFunction(mod->mod, fun_name, fun_type);
+        if (out_value) *out_value = ast->proc.value;
 
-            LLVMSetLinkage(ast->value.value, LLVMInternalLinkage);
-            if (string_equals(ast->proc.convention, STR("c")))
+        break;
+    }
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_INT_LIT: {
+            switch (ast->type_info->kind)
             {
-                LLVMSetLinkage(ast->value.value, LLVMExternalLinkage);
-            }
-
-            if (ast->proc.flags & PROC_FLAG_HAS_BODY)
-            {
-                size_t param_count = array_size(ast->proc.params);
-                for (size_t i = 0; i < param_count; i++)
-                {
-                    Ast *param = &ast->proc.params[i];
-                    param->value.value = LLVMGetParam(ast->value.value, i);
-
-                    char *param_name =
-                        bump_c_str(&l->compiler->bump, param->decl.name);
-                    LLVMSetValueName(param->value.value, param_name);
-                }
-
-                LLVMBasicBlockRef entry =
-                    LLVMAppendBasicBlock(ast->value.value, "entry");
-                LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
-
-                LLVMPositionBuilderAtEnd(mod->builder, entry);
-
-                array_push(l->scope_stack, ast->proc.scope);
-                llvm_codegen_asts(
-                    l,
-                    mod,
-                    ast->proc.stmts,
-                    array_size(ast->proc.stmts),
-                    false);
-                array_pop(l->scope_stack);
-
-                if (!LLVMGetBasicBlockTerminator(
-                        LLVMGetInsertBlock(mod->builder)))
-                {
-                    LLVMBuildRetVoid(mod->builder); // Add void return
-                }
-
-                LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
-            }
-
-            break;
-        }
-        case AST_PRIMARY: {
-            switch (ast->primary.tok->type)
-            {
-            case TOKEN_INT_LIT: {
-                switch (ast->type_info->kind)
-                {
-                case TYPE_INT: {
-                    ast->value.value = LLVMConstInt(
-                        llvm_type(l, ast->type_info),
-                        (unsigned long long)ast->primary.tok->i64,
-                        true);
-                    break;
-                }
-                case TYPE_FLOAT:
-                case TYPE_DOUBLE: {
-                    ast->value.value = LLVMConstReal(
-                        llvm_type(l, ast->type_info),
-                        (double)ast->primary.tok->i64);
-                    break;
-                }
-                default: assert(0); break;
-                }
-
-                break;
-            }
-            case TOKEN_FLOAT_LIT: {
-                switch (ast->type_info->kind)
-                {
-                case TYPE_FLOAT:
-                case TYPE_DOUBLE: {
-                    ast->value.value = LLVMConstReal(
-                        llvm_type(l, ast->type_info),
-                        (double)ast->primary.tok->f64);
-                    break;
-                }
-                default: assert(0); break;
-                }
-
-                break;
-            }
-            case TOKEN_CSTRING_LIT: {
-                LLVMValueRef glob = LLVMAddGlobal(
-                    mod->mod,
-                    LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
-                    "");
-
-                // set as internal linkage and constant
-                LLVMSetLinkage(glob, LLVMInternalLinkage);
-                LLVMSetGlobalConstant(glob, true);
-
-                // Initialize with string:
-                LLVMSetInitializer(
-                    glob,
-                    LLVMConstString(
-                        ast->primary.tok->str.buf,
-                        ast->primary.tok->str.length,
-                        true));
-
-                LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, false);
-                LLVMValueRef indices[2] = {zero, zero};
-
-                ast->value.value = LLVMConstGEP(glob, indices, 2);
-                break;
-            }
-            case TOKEN_CHAR_LIT: {
-                ast->value.value = LLVMConstInt(
+            case TYPE_INT: {
+                AstValue value = {0};
+                value.value = LLVMConstInt(
                     llvm_type(l, ast->type_info),
-                    (unsigned long long)ast->primary.tok->chr,
+                    (unsigned long long)ast->primary.tok->i64,
                     true);
+                if (out_value) *out_value = value;
                 break;
             }
-            case TOKEN_IDENT: {
-                Ast *sym = get_symbol(
-                    *array_last(l->scope_stack), ast->primary.tok->str);
-                assert(sym);
-
-                if (!sym->value.value)
-                {
-                    llvm_codegen_asts(l, mod, sym, 1, false);
-                }
-
-                ast->value = sym->value;
+            case TYPE_FLOAT:
+            case TYPE_DOUBLE: {
+                AstValue value = {0};
+                value.value = LLVMConstReal(
+                    llvm_type(l, ast->type_info),
+                    (double)ast->primary.tok->i64);
+                if (out_value) *out_value = value;
                 break;
             }
             default: assert(0); break;
             }
+
             break;
         }
-        case AST_PAREN_EXPR: {
-            llvm_codegen_asts(l, mod, ast->expr, 1, is_const);
-            ast->value = ast->expr->value;
-            break;
-        }
-        case AST_PROC_CALL: {
-            llvm_codegen_asts(l, mod, ast->proc_call.expr, 1, false);
-            LLVMValueRef fun = ast->proc_call.expr->value.value;
-
-            unsigned param_count = (unsigned)array_size(ast->proc_call.params);
-            LLVMValueRef *params = bump_alloc(
-                &l->compiler->bump, sizeof(LLVMValueRef) * param_count);
-
-            llvm_codegen_asts(
-                l,
-                mod,
-                ast->proc_call.params,
-                array_size(ast->proc_call.params),
-                false);
-            for (size_t i = 0; i < param_count; i++)
+        case TOKEN_FLOAT_LIT: {
+            switch (ast->type_info->kind)
             {
-                params[i] = load_val(mod, &ast->proc_call.params[i].value);
-                assert(params[i]);
-            }
-
-            ast->value.value =
-                LLVMBuildCall(mod->builder, fun, params, param_count, "");
-
-            break;
-        }
-        case AST_EXPR_STMT: {
-            llvm_codegen_asts(l, mod, ast->expr, 1, false);
-            break;
-        }
-        case AST_CONST_DECL: {
-            llvm_codegen_asts(l, mod, ast->decl.value_expr, 1, true);
-            ast->value = ast->decl.value_expr->value;
-            break;
-        }
-        case AST_VAR_DECL: {
-            Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
-
-            if (!proc)
-            {
-                LLVMTypeRef llvm_ty =
-                    llvm_type(l, ast->decl.type_expr->as_type);
-                // Global variable
-                ast->value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
-                LLVMSetLinkage(ast->value.value, LLVMInternalLinkage);
-                LLVMSetExternallyInitialized(ast->value.value, false);
-
-                if (ast->decl.value_expr)
-                {
-                    llvm_codegen_asts(l, mod, ast->decl.value_expr, 1, false);
-                    LLVMSetInitializer(
-                        ast->value.value,
-                        load_val(mod, &ast->decl.value_expr->value));
-                }
-                else
-                {
-                    LLVMSetInitializer(
-                        ast->value.value, LLVMConstNull(llvm_ty));
-                }
+            case TYPE_FLOAT:
+            case TYPE_DOUBLE: {
+                AstValue value = {0};
+                value.value = LLVMConstReal(
+                    llvm_type(l, ast->type_info),
+                    (double)ast->primary.tok->f64);
+                if (out_value) *out_value = value;
                 break;
             }
+            default: assert(0); break;
+            }
 
-            // Local variable
-            ast->value.is_lvalue = true;
-            ast->value.value = LLVMBuildAlloca(
-                mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");
+            break;
+        }
+        case TOKEN_CSTRING_LIT: {
+            LLVMValueRef glob = LLVMAddGlobal(
+                mod->mod,
+                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
+                "");
+
+            // set as internal linkage and constant
+            LLVMSetLinkage(glob, LLVMInternalLinkage);
+            LLVMSetGlobalConstant(glob, true);
+
+            // Initialize with string:
+            LLVMSetInitializer(
+                glob,
+                LLVMConstString(
+                    ast->primary.tok->str.buf,
+                    ast->primary.tok->str.length,
+                    true));
+
+            LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, false);
+            LLVMValueRef indices[2] = {zero, zero};
+
+            AstValue value = {0};
+            value.value = LLVMConstGEP(glob, indices, 2);
+            if (out_value) *out_value = value;
+            break;
+        }
+        case TOKEN_CHAR_LIT: {
+            AstValue value = {0};
+            value.value = LLVMConstInt(
+                llvm_type(l, ast->type_info),
+                (unsigned long long)ast->primary.tok->chr,
+                true);
+            if (out_value) *out_value = value;
+            break;
+        }
+        case TOKEN_IDENT: {
+            Ast *sym =
+                get_symbol(*array_last(l->scope_stack), ast->primary.tok->str);
+            assert(sym);
+
+            switch (sym->type)
+            {
+            case AST_PROC_DECL: {
+                if (!sym->proc.value.value)
+                {
+                    llvm_codegen_ast(l, mod, sym, false, NULL);
+                }
+                if (out_value) *out_value = sym->proc.value;
+                break;
+            }
+            case AST_VAR_DECL:
+            case AST_CONST_DECL: {
+                if (!sym->decl.value.value)
+                {
+                    llvm_codegen_ast(l, mod, sym, false, NULL);
+                }
+                if (out_value) *out_value = sym->decl.value;
+                break;
+            }
+            case AST_PROC_PARAM: {
+                assert(sym->proc_param.value.value);
+                if (out_value) *out_value = sym->proc_param.value;
+                break;
+            }
+            case AST_STRUCT_FIELD: {
+                llvm_codegen_ast(l, mod, sym, false, out_value);
+                break;
+            }
+            default: assert(0); break;
+            }
+
+            break;
+        }
+        default: assert(0); break;
+        }
+        break;
+    }
+    case AST_PAREN_EXPR: {
+        llvm_codegen_ast(l, mod, ast->expr, is_const, out_value);
+        break;
+    }
+    case AST_PROC_CALL: {
+        AstValue function_value = {0};
+        llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);
+        LLVMValueRef fun = function_value.value;
+
+        unsigned param_count = (unsigned)array_size(ast->proc_call.params);
+        LLVMValueRef *params =
+            bump_alloc(&l->compiler->bump, sizeof(LLVMValueRef) * param_count);
+
+        for (size_t i = 0; i < param_count; i++)
+        {
+            AstValue param_value = {0};
+            llvm_codegen_ast(
+                l, mod, &ast->proc_call.params[i], false, &param_value);
+            params[i] = load_val(mod, &param_value);
+            assert(params[i]);
+        }
+
+        AstValue result_value = {0};
+        result_value.value =
+            LLVMBuildCall(mod->builder, fun, params, param_count, "");
+        if (out_value) *out_value = result_value;
+
+        break;
+    }
+    case AST_EXPR_STMT: {
+        llvm_codegen_ast(l, mod, ast->expr, false, NULL);
+        break;
+    }
+    case AST_CONST_DECL: {
+        llvm_codegen_ast(l, mod, ast->decl.value_expr, true, &ast->decl.value);
+        if (out_value) *out_value = ast->decl.value;
+        break;
+    }
+    case AST_VAR_DECL: {
+        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+
+        if (!proc)
+        {
+            LLVMTypeRef llvm_ty = llvm_type(l, ast->decl.type_expr->as_type);
+            // Global variable
+            ast->decl.value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
+            LLVMSetLinkage(ast->decl.value.value, LLVMInternalLinkage);
+            LLVMSetExternallyInitialized(ast->decl.value.value, false);
 
             if (ast->decl.value_expr)
             {
-                llvm_codegen_asts(l, mod, ast->decl.value_expr, 1, false);
-                LLVMBuildStore(
-                    mod->builder,
-                    load_val(mod, &ast->decl.value_expr->value),
-                    ast->value.value);
+                AstValue init_value = {0};
+                llvm_codegen_ast(
+                    l, mod, ast->decl.value_expr, false, &init_value);
+                LLVMSetInitializer(
+                    ast->decl.value.value, load_val(mod, &init_value));
             }
+            else
+            {
+                LLVMSetInitializer(
+                    ast->decl.value.value, LLVMConstNull(llvm_ty));
+            }
+
+            if (out_value) *out_value = ast->decl.value;
             break;
         }
-        case AST_VAR_ASSIGN: {
-            llvm_codegen_asts(l, mod, ast->assign.assigned_expr, 1, false);
-            llvm_codegen_asts(l, mod, ast->assign.value_expr, 1, false);
 
+        // Local variable
+        ast->decl.value.is_lvalue = true;
+        ast->decl.value.value = LLVMBuildAlloca(
+            mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");
+
+        if (ast->decl.value_expr)
+        {
+            AstValue init_value = {0};
+            llvm_codegen_ast(l, mod, ast->decl.value_expr, false, &init_value);
             LLVMBuildStore(
                 mod->builder,
-                load_val(mod, &ast->assign.value_expr->value),
-                ast->assign.assigned_expr->value.value);
-            break;
+                load_val(mod, &init_value),
+                ast->decl.value.value);
         }
-        case AST_RETURN: {
-            llvm_codegen_asts(l, mod, ast->expr, 1, false);
-            LLVMBuildRet(mod->builder, load_val(mod, &ast->expr->value));
-            break;
-        }
-        case AST_UNARY_EXPR: {
-            switch (ast->unop.type)
+
+        if (out_value) *out_value = ast->decl.value;
+
+        break;
+    }
+    case AST_VAR_ASSIGN: {
+        AstValue assigned_value = {0};
+        llvm_codegen_ast(
+            l, mod, ast->assign.assigned_expr, false, &assigned_value);
+        AstValue value = {0};
+        llvm_codegen_ast(l, mod, ast->assign.value_expr, false, &value);
+
+        LLVMBuildStore(
+            mod->builder, load_val(mod, &value), assigned_value.value);
+        break;
+    }
+    case AST_RETURN: {
+        AstValue return_value = {0};
+        llvm_codegen_ast(l, mod, ast->expr, false, &return_value);
+        LLVMBuildRet(mod->builder, load_val(mod, &return_value));
+        break;
+    }
+    case AST_UNARY_EXPR: {
+        switch (ast->unop.type)
+        {
+        case UNOP_ADDRESS: {
+            AstValue value = {0};
+            llvm_codegen_ast(l, mod, ast->unop.sub, false, &value);
+
+            if (!value.is_lvalue)
             {
-            case UNOP_ADDRESS: {
-                llvm_codegen_asts(l, mod, ast->unop.sub, 1, false);
+                AstValue address_value = {0};
+                address_value.value = LLVMBuildAlloca(
+                    mod->builder, llvm_type(l, ast->unop.sub->type_info), "");
+                LLVMBuildStore(mod->builder, value.value, address_value.value);
 
-                if (!ast->unop.sub->value.is_lvalue)
-                {
-                    ast->value.value = LLVMBuildAlloca(
-                        mod->builder,
-                        llvm_type(l, ast->unop.sub->type_info),
-                        "");
-                    LLVMBuildStore(
-                        mod->builder,
-                        ast->unop.sub->value.value,
-                        ast->value.value);
-                    break;
-                }
+                if (out_value) *out_value = address_value;
 
-                ast->value.value = ast->unop.sub->value.value;
                 break;
             }
-            case UNOP_DEREFERENCE: {
-                llvm_codegen_asts(l, mod, ast->unop.sub, 1, false);
-                ast->value.is_lvalue = true;
-                ast->value.value = load_val(mod, &ast->unop.sub->value);
-                break;
-            }
-            }
+
+            value.is_lvalue = false;
+            if (out_value) *out_value = value;
             break;
         }
-        case AST_SUBSCRIPT: {
-            llvm_codegen_asts(l, mod, ast->subscript.left, 1, false);
-            llvm_codegen_asts(l, mod, ast->subscript.right, 1, false);
+        case UNOP_DEREFERENCE: {
+            AstValue value = {0};
+            llvm_codegen_ast(l, mod, ast->unop.sub, false, &value);
 
-            assert(ast->subscript.left->value.value);
-            assert(ast->subscript.right->value.value);
+            AstValue deref_value = {0};
+            deref_value.is_lvalue = true;
+            deref_value.value = load_val(mod, &value);
 
-            switch (ast->subscript.left->type_info->kind)
-            {
-            case TYPE_POINTER: {
-                LLVMValueRef indices[1] = {
-                    load_val(mod, &ast->subscript.right->value),
-                };
-
-                ast->value.is_lvalue = true;
-                ast->value.value = LLVMBuildGEP(
-                    mod->builder,
-                    load_val(mod, &ast->subscript.left->value),
-                    indices,
-                    1,
-                    "");
-                break;
-            }
-            case TYPE_ARRAY: {
-                LLVMValueRef indices[2] = {
-                    LLVMConstInt(LLVMInt64Type(), 0, false),
-                    load_val(mod, &ast->subscript.right->value),
-                };
-
-                ast->value.is_lvalue = true;
-                ast->value.value = LLVMBuildGEP(
-                    mod->builder,
-                    ast->subscript.left->value.value,
-                    indices,
-                    2,
-                    "");
-                break;
-            }
-            default: assert(0); break;
-            }
-
+            if (out_value) *out_value = deref_value;
             break;
         }
-        case AST_STRUCT_FIELD: {
-            assert(array_size(l->value_stack) > 0);
+        }
+        break;
+    }
+    case AST_SUBSCRIPT: {
+        AstValue left_value = {0};
+        llvm_codegen_ast(l, mod, ast->subscript.left, false, &left_value);
+        AstValue right_value = {0};
+        llvm_codegen_ast(l, mod, ast->subscript.right, false, &right_value);
 
-            LLVMValueRef indices[2] = {
-                LLVMConstInt(LLVMInt32Type(), 0, false),
-                LLVMConstInt(LLVMInt32Type(), ast->field.index, false),
+        assert(left_value.value);
+        assert(right_value.value);
+
+        switch (ast->subscript.left->type_info->kind)
+        {
+        case TYPE_POINTER: {
+            LLVMValueRef indices[1] = {
+                load_val(mod, &right_value),
             };
 
-            AstValue *struct_val = (*array_last(l->value_stack));
-
-            ast->value.is_lvalue = true;
-            ast->value.value =
-                LLVMBuildGEP(mod->builder, struct_val->value, indices, 2, "");
+            AstValue subscript_value = {0};
+            subscript_value.is_lvalue = true;
+            subscript_value.value = LLVMBuildGEP(
+                mod->builder, load_val(mod, &left_value), indices, 1, "");
+            if (out_value) *out_value = subscript_value;
             break;
         }
-        case AST_ACCESS: {
-            llvm_codegen_asts(l, mod, ast->access.left, 1, false);
+        case TYPE_ARRAY: {
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt64Type(), 0, false),
+                load_val(mod, &right_value),
+            };
 
-            Scope *accessed_scope =
-                get_accessed_scope(*array_last(l->scope_stack), ast);
-            assert(accessed_scope);
-
-            array_push(l->scope_stack, accessed_scope);
-            array_push(l->value_stack, &ast->access.left->value);
-            llvm_codegen_asts(l, mod, ast->access.right, 1, false);
-            array_pop(l->value_stack);
-            array_pop(l->scope_stack);
-            ast->value = ast->access.right->value;
-
+            AstValue subscript_value = {0};
+            subscript_value.is_lvalue = true;
+            subscript_value.value =
+                LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
+            if (out_value) *out_value = subscript_value;
             break;
         }
-        case AST_TYPEDEF: break;
         default: assert(0); break;
         }
+
+        break;
+    }
+    case AST_STRUCT_FIELD: {
+        assert(array_size(l->value_stack) > 0);
+
+        AstValue *struct_val = (*array_last(l->value_stack));
+        assert(struct_val);
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            LLVMConstInt(LLVMInt32Type(), ast->field.index, false),
+        };
+
+        AstValue field_value = {0};
+        field_value.is_lvalue = true;
+        field_value.value =
+            LLVMBuildGEP(mod->builder, struct_val->value, indices, 2, "");
+        if (out_value) *out_value = field_value;
+
+        break;
+    }
+    case AST_ACCESS: {
+        AstValue accessed_value = {0};
+        llvm_codegen_ast(l, mod, ast->access.left, false, &accessed_value);
+
+        if (ast->access.left->type_info->kind == TYPE_POINTER)
+        {
+            accessed_value.value = load_val(mod, &accessed_value);
+        }
+
+        assert(array_size(l->scope_stack) > 0);
+        Scope *accessed_scope =
+            get_accessed_scope(*array_last(l->scope_stack), ast);
+        assert(accessed_scope);
+
+        array_push(l->scope_stack, accessed_scope);
+        array_push(l->value_stack, &accessed_value);
+        llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+        array_pop(l->value_stack);
+        array_pop(l->scope_stack);
+
+        break;
+    }
+    case AST_TYPEDEF: break;
+    default: assert(0); break;
     }
 }
 
@@ -3680,7 +3903,7 @@ void llvm_codegen(LLContext *l, Ast *ast)
     mod.builder = LLVMCreateBuilder();
     mod.data = LLVMGetModuleDataLayout(mod.mod);
 
-    llvm_codegen_asts(l, &mod, ast, 1, false);
+    llvm_codegen_ast(l, &mod, ast, false, NULL);
 
     printf("%s\n", LLVMPrintModuleToString(mod.mod));
 
@@ -3751,7 +3974,17 @@ int main(int argc, char **argv)
         Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
         memset(analyzer, 0, sizeof(*analyzer));
         analyzer->compiler = compiler;
-        analyze_asts(analyzer, parser->ast, 1);
+
+        create_scopes_asts(analyzer, parser->ast, 1);
+        print_errors(compiler);
+
+        register_symbol_asts(analyzer, parser->ast, 1);
+        print_errors(compiler);
+
+        symbol_check_asts(analyzer, parser->ast, 1);
+        print_errors(compiler);
+
+        type_check_asts(analyzer, parser->ast, 1);
         print_errors(compiler);
 
 #if defined(LLVM_BACKEND)

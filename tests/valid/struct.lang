@@ -12,6 +12,17 @@ typedef NestedStruct struct {
 
 proc "c" printf(fmt: *char, ...) void;
 
+proc print_nested(n: *NestedStruct) void {
+	printf(c"n = %p\n", n);
+	printf(c"n.name = %s\n", n.name);
+	printf(c"n.name[0] = %c\n", n.name[0]);
+	printf(c"*n.name = %c\n", *n.name);
+	printf(c"n.sub.a = %d\n", n.sub.a);
+	printf(c"n.sub.b = %d\n", n.sub.b);
+	printf(c"(*n).sub.b = %d\n", (*n).sub.b);
+	printf(c"(*n).(sub).b = %d\n", (*n).(sub).b);
+}
+
 proc main() i32 {
 	var a_struct: MyStruct;
 	a_struct.a = 32;
@@ -28,11 +39,9 @@ proc main() i32 {
 	nested.name = c"yo";
 	nested.sub.a = 123;
 	nested.sub.b = 321;
+	printf(c"&nested = %p\n", &nested);
 	printf(c"nested.name = %s\n", nested.name);
-	printf(c"nested.name[0] = %c\n", nested.name[0]);
-	printf(c"*nested.name = %c\n", *nested.name);
-	printf(c"nested.sub.a = %d\n", nested.sub.a);
-	printf(c"nested.sub.b = %d\n", nested.sub.b);
+	print_nested(&nested);
 
 	return 0;
 }
