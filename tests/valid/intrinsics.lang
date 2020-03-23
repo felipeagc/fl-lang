@@ -1,0 +1,5 @@
+const my_const: u64 = @sizeof(i32);
+
+proc main() void {
+
+}

@@ -1576,6 +1576,14 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         res = is_expr_const(scope, ast->expr);
         break;
     }
+    case AST_INTRINSIC_CALL: {
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_SIZEOF:
+        case INTRINSIC_ALIGNOF: res = true; break;
+        }
+        break;
+    }
     default: break;
     }
 
