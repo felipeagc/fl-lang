@@ -1328,6 +1328,7 @@ typedef enum BinOpType {
 
 typedef enum IntrinsicType {
     INTRINSIC_SIZEOF,
+    INTRINSIC_ALIGNOF,
 } IntrinsicType;
 
 typedef enum AstType {
@@ -1909,6 +1910,10 @@ bool parse_proc_call_subscript_access(Parser *p, Ast *ast)
                 if (string_equals(expr.primary.tok->str, STR("sizeof")))
                 {
                     ast->intrinsic_call.type = INTRINSIC_SIZEOF;
+                }
+                else if (string_equals(expr.primary.tok->str, STR("alignof")))
+                {
+                    ast->intrinsic_call.type = INTRINSIC_ALIGNOF;
                 }
                 else
                 {
@@ -2822,6 +2827,19 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 
             break;
         }
+        case INTRINSIC_ALIGNOF: {
+            if (array_size(ast->intrinsic_call.params) > 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "@alignof takes one parameter");
+                break;
+            }
+
+            Ast *param = &ast->intrinsic_call.params[0];
+            symbol_check_ast(a, param);
+
+            break;
+        }
         }
 
         break;
@@ -3239,7 +3257,30 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "sizeof does not apply for this type");
+                    "@sizeof does not apply for this type");
+                break;
+            }
+
+            static TypeInfo u64_ty = {
+                .kind = TYPE_INT,
+                .integer.is_signed = false,
+                .integer.num_bits = 64,
+            };
+            ast->type_info = &u64_ty;
+
+            break;
+        }
+        case INTRINSIC_ALIGNOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            type_check_ast(a, param, NULL);
+
+            if (param->type_info->kind == TYPE_VOID ||
+                param->type_info->kind == TYPE_NAMESPACE)
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "@alignof does not apply for this type");
                 break;
             }
 
@@ -4032,6 +4073,26 @@ void llvm_codegen_ast(
             assert(llvm_ty);
             AstValue size_val = {0};
             size_val.value = LLVMSizeOf(llvm_ty);
+            if (out_value) *out_value = size_val;
+
+            break;
+        }
+        case INTRINSIC_ALIGNOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            LLVMTypeRef llvm_ty = NULL;
+
+            if (param->type_info->kind == TYPE_TYPE)
+            {
+                llvm_ty = llvm_type(l, param->as_type);
+            }
+            else
+            {
+                llvm_ty = llvm_type(l, param->type_info);
+            }
+
+            assert(llvm_ty);
+            AstValue size_val = {0};
+            size_val.value = LLVMAlignOf(llvm_ty);
             if (out_value) *out_value = size_val;
 
             break;
