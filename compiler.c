@@ -1340,6 +1340,7 @@ typedef enum AstType {
     AST_ROOT,
     AST_STRUCT,
     AST_PROC_DECL,
+    AST_PROC_TYPE,
     AST_IMPORT,
     AST_BLOCK,
     AST_INTRINSIC_CALL,
@@ -2157,6 +2158,62 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
         break;
     }
+    case TOKEN_PROC: {
+        parser_next(p, 1);
+
+        ast->type = AST_PROC_TYPE;
+
+        if (!parser_consume(p, TOKEN_ASTERISK)) res = false;
+
+        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
+        {
+            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
+            ast->proc.convention = convention_tok->str;
+        }
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        {
+            if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
+            {
+                parser_next(p, 1);
+                ast->proc.flags |= PROC_FLAG_IS_C_VARARGS;
+                break;
+            }
+
+            Ast param = {0};
+            param.type = AST_PROC_PARAM;
+
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (!ident_tok)
+                res = false;
+            else
+                param.proc_param.name = ident_tok->str;
+
+            if (ident_tok) param.loc = ident_tok->loc;
+
+            if (!parser_consume(p, TOKEN_COLON)) res = false;
+
+            param.proc_param.type_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, param.proc_param.type_expr)) res = false;
+
+            array_push(ast->proc.params, param);
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->proc.return_type)) res = false;
+
+        break;
+    }
     default: {
         res = parse_proc_call_subscript_access(p, ast);
         break;
@@ -2630,6 +2687,32 @@ TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast)
         }
         break;
     }
+    case AST_PROC_TYPE: {
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_PROC;
+
+        ty->proc.is_c_vararg =
+            (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
+
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            array_push(
+                ty->proc.params, *ast_as_type(a, scope, param->decl.type_expr));
+        }
+
+        ty->proc.return_type = ast_as_type(a, scope, ast->proc.return_type);
+
+        TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
+        memset(ptr_ty, 0, sizeof(*ptr_ty));
+        ptr_ty->kind = TYPE_POINTER;
+        ptr_ty->ptr.sub = ty;
+
+        ast->as_type = ptr_ty;
+        break;
+    }
     case AST_ACCESS: {
         // TODO
         break;
@@ -2952,6 +3035,18 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 
         break;
     }
+    case AST_PROC_TYPE: {
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            symbol_check_ast(a, param);
+        }
+
+        symbol_check_ast(a, ast->proc.return_type);
+
+        break;
+    }
     case AST_ACCESS: {
         symbol_check_ast(a, ast->access.left);
 
@@ -3058,8 +3153,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         ty->proc.is_c_vararg =
             (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
 
-        array_push(a->scope_stack, ast->proc.scope);
-
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
@@ -3080,9 +3173,27 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ty->proc.return_type = ast->proc.return_type->as_type;
         }
 
-        array_pop(a->scope_stack);
+        TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
+        memset(ptr_ty, 0, sizeof(*ptr_ty));
+        ptr_ty->kind = TYPE_POINTER;
+        ptr_ty->ptr.sub = ty;
 
-        ast->type_info = ty;
+        ast->type_info = ptr_ty;
+        break;
+    }
+    case AST_PROC_TYPE: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            type_check_ast(a, param, NULL);
+        }
+
+        type_check_ast(a, ast->proc.return_type, &ty_ty);
+
+        ast->type_info = &ty_ty;
         break;
     }
     default: {
@@ -3241,7 +3352,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (!type_check_ast(a, ast->proc_call.expr, NULL)) res = false;
         if (!res) break;
 
-        if (ast->proc_call.expr->type_info->kind != TYPE_PROC)
+        TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
+
+        if (ast->proc_call.expr->type_info->kind != TYPE_POINTER ||
+            ast->proc_call.expr->type_info->ptr.sub->kind != TYPE_PROC)
         {
             res = false;
             compile_error(
@@ -3249,13 +3363,15 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        assert(ast->proc_call.expr->type_info);
-        ast->type_info = ast->proc_call.expr->type_info->proc.return_type;
+        TypeInfo *proc_ty = proc_ptr_ty->ptr.sub;
 
-        if (!ast->proc_call.expr->type_info->proc.is_c_vararg)
+        assert(proc_ty);
+        ast->type_info = proc_ty->proc.return_type;
+
+        if (!proc_ty->proc.is_c_vararg)
         {
             if (array_size(ast->proc_call.params) !=
-                array_size(ast->proc_call.expr->type_info->proc.params))
+                array_size(proc_ty->proc.params))
             {
                 res = false;
                 compile_error(
@@ -3268,7 +3384,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         else
         {
             if (array_size(ast->proc_call.params) <
-                array_size(ast->proc_call.expr->type_info->proc.params))
+                array_size(proc_ty->proc.params))
             {
                 res = false;
                 compile_error(
@@ -3282,10 +3398,9 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         for (size_t i = 0; i < array_size(ast->proc_call.params); ++i)
         {
             TypeInfo *param_expected_type = NULL;
-            if (i < array_size(ast->proc_call.expr->type_info->proc.params))
+            if (i < array_size(proc_ty->proc.params))
             {
-                param_expected_type =
-                    &ast->proc_call.expr->type_info->proc.params[i];
+                param_expected_type = &proc_ty->proc.params[i];
             }
             type_check_ast(a, &ast->proc_call.params[i], param_expected_type);
         }
@@ -3921,7 +4036,8 @@ void llvm_codegen_ast(
         break;
     }
     case AST_PROC_DECL: {
-        LLVMTypeRef fun_type = llvm_type(l, ast->type_info);
+        assert(ast->type_info->kind == TYPE_POINTER);
+        LLVMTypeRef fun_type = llvm_type(l, ast->type_info->ptr.sub);
 
         char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
         LLVMValueRef fun = LLVMAddFunction(mod->mod, fun_name, fun_type);
@@ -4103,13 +4219,14 @@ void llvm_codegen_ast(
     case AST_PROC_CALL: {
         AstValue function_value = {0};
         llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);
-        LLVMValueRef fun = function_value.value;
+        LLVMValueRef fun = load_val(mod, &function_value);
 
         unsigned param_count = (unsigned)array_size(ast->proc_call.params);
         LLVMValueRef *params =
             bump_alloc(&l->compiler->bump, sizeof(LLVMValueRef) * param_count);
 
-        TypeInfo *proc_ty = ast->proc_call.expr->type_info;
+        TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
+        TypeInfo *proc_ty = proc_ptr_ty->ptr.sub;
 
         for (size_t i = 0; i < param_count; i++)
         {
@@ -4503,9 +4620,8 @@ void llvm_codegen_ast(
 
         break;
     }
-    case AST_IMPORT: {
-        break;
-    }
+    case AST_PROC_TYPE: break;
+    case AST_IMPORT: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
     }

@@ -1,0 +1,12 @@
+typedef MyFunc proc* () void;
+
+proc "c" printf(fmt: *char, ...) i32;
+
+proc callback() void {
+    printf(c"Hey!\n");
+}
+
+proc main() void {
+    var my_func: MyFunc = callback;
+    my_func();
+}
