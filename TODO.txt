@@ -1,9 +1,7 @@
 Comments
-Intrinsics (sizeof, alignof)
 Arithmetic operations
 Default struct member initialization
 String type
-Cast expression
 Defer statement
 Using statement
 

@@ -555,6 +555,7 @@ typedef enum TokenType {
     TOKEN_CSTRING_LIT,
     TOKEN_CHAR_LIT,
     TOKEN_PROC,
+    TOKEN_CAST,
     TOKEN_IMPORT,
     TOKEN_TYPEDEF,
     TOKEN_STRUCT,
@@ -622,6 +623,7 @@ static const char *token_strings[] = {
     [TOKEN_CSTRING_LIT] = "c-string literal",
     [TOKEN_CHAR_LIT] = "char literal",
     [TOKEN_PROC] = "proc",
+    [TOKEN_CAST] = "cast",
     [TOKEN_IMPORT] = "import",
     [TOKEN_TYPEDEF] = "typedef",
     [TOKEN_STRUCT] = "struct",
@@ -712,6 +714,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_IDENT);
         PRINT_TOKEN_TYPE(TOKEN_INTRINSIC);
         PRINT_TOKEN_TYPE(TOKEN_PROC);
+        PRINT_TOKEN_TYPE(TOKEN_CAST);
         PRINT_TOKEN_TYPE(TOKEN_IMPORT);
         PRINT_TOKEN_TYPE(TOKEN_TYPEDEF);
         PRINT_TOKEN_TYPE(TOKEN_STRUCT);
@@ -1069,6 +1072,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("var", TOKEN_VAR);
             LEX_MATCH_STR("const", TOKEN_CONST);
             LEX_MATCH_STR("proc", TOKEN_PROC);
+            LEX_MATCH_STR("cast", TOKEN_CAST);
             LEX_MATCH_STR("import", TOKEN_IMPORT);
             LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
             LEX_MATCH_STR("struct", TOKEN_STRUCT);
@@ -1355,6 +1359,7 @@ typedef enum AstType {
     AST_ACCESS,
     AST_STRUCT_FIELD,
     AST_PROC_PARAM,
+    AST_CAST,
 } AstType;
 
 typedef struct AstValue
@@ -1430,6 +1435,11 @@ typedef struct Ast
             String name;
             struct Ast *type_expr;
         } type_def;
+        struct
+        {
+            struct Ast *type_expr;
+            struct Ast *value_expr;
+        } cast;
         struct
         {
             String name;
@@ -2112,6 +2122,38 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         }
 
         if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+    case TOKEN_CAST: {
+        ast->type = AST_CAST;
+        parser_next(p, 1);
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        Ast type = {0};
+        if (parse_expr(p, &type))
+        {
+            ast->cast.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->cast.type_expr = type;
+        }
+        else
+        {
+            res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        Ast value = {0};
+        if (parse_expr(p, &value))
+        {
+            ast->cast.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->cast.value_expr = value;
+        }
+        else
+        {
+            res = false;
+        }
 
         break;
     }
@@ -2844,6 +2886,11 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 
         break;
     }
+    case AST_CAST: {
+        symbol_check_ast(a, ast->cast.type_expr);
+        symbol_check_ast(a, ast->cast.value_expr);
+        break;
+    }
     case AST_UNARY_EXPR: {
         symbol_check_ast(a, ast->unop.sub);
         break;
@@ -3294,6 +3341,46 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         }
+
+        break;
+    }
+    case AST_CAST: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        type_check_ast(a, ast->cast.type_expr, &ty_ty);
+        type_check_ast(a, ast->cast.value_expr, NULL);
+
+        TypeInfo *dest_ty = ast->cast.type_expr->as_type;
+        TypeInfo *src_ty = ast->cast.value_expr->type_info;
+
+        if (dest_ty && src_ty)
+        {
+            // Check if type is castable
+
+            if (!((dest_ty->kind == TYPE_POINTER &&
+                   src_ty->kind == TYPE_POINTER) ||
+                  (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_INT) ||
+                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_POINTER) ||
+                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_INT) ||
+                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_FLOAT) ||
+                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT) ||
+                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_DOUBLE) ||
+                  (dest_ty->kind == TYPE_DOUBLE && src_ty->kind == TYPE_INT) ||
+                  (dest_ty->kind == TYPE_FLOAT &&
+                   src_ty->kind == TYPE_DOUBLE) ||
+                  (dest_ty->kind == TYPE_DOUBLE && src_ty->kind == TYPE_FLOAT)))
+            {
+                compile_error(a->compiler, ast->loc, "invalid cast");
+                break;
+            }
+        }
+        else
+        {
+            compile_error(
+                a->compiler, ast->loc, "could not resolve types for cast");
+            break;
+        }
+
+        ast->type_info = dest_ty;
 
         break;
     }
@@ -4022,13 +4109,14 @@ void llvm_codegen_ast(
         LLVMValueRef *params =
             bump_alloc(&l->compiler->bump, sizeof(LLVMValueRef) * param_count);
 
+        TypeInfo *proc_ty = ast->proc_call.expr->type_info;
+
         for (size_t i = 0; i < param_count; i++)
         {
             TypeInfo *param_expected_type = NULL;
-            if (i < array_size(ast->proc_call.expr->type_info->proc.params))
+            if (i < array_size(proc_ty->proc.params))
             {
-                param_expected_type =
-                    &ast->proc_call.expr->type_info->proc.params[i];
+                param_expected_type = &proc_ty->proc.params[i];
             }
 
             AstValue param_value = {0};
@@ -4043,6 +4131,16 @@ void llvm_codegen_ast(
                     ast->proc_call.params[i].type_info,
                     param_expected_type,
                     params[i]);
+            }
+            else if (proc_ty->proc.is_c_vararg)
+            {
+                // Promote float to double when passed as variadic argument
+                // as per section 6.5.2.2 of the C standard
+                if (ast->proc_call.params[i].type_info->kind == TYPE_FLOAT)
+                {
+                    params[i] = LLVMBuildFPExt(
+                        mod->builder, params[i], LLVMDoubleType(), "");
+                }
             }
             assert(params[i]);
         }
@@ -4193,6 +4291,89 @@ void llvm_codegen_ast(
             l, mod, ast->expr->type_info, proc->proc.return_type->as_type, ref);
 
         LLVMBuildRet(mod->builder, ref);
+        break;
+    }
+    case AST_CAST: {
+        // Check if type is castable
+        TypeInfo *dest_ty = ast->cast.type_expr->as_type;
+        TypeInfo *src_ty = ast->cast.value_expr->type_info;
+
+        AstValue src_val = {0};
+        llvm_codegen_ast(l, mod, ast->cast.value_expr, false, &src_val);
+        LLVMValueRef src_llvm_val = load_val(mod, &src_val);
+
+        LLVMTypeRef dest_llvm_ty = llvm_type(l, dest_ty);
+
+        AstValue cast_val = {0};
+
+        if (src_ty->kind == TYPE_POINTER && dest_ty->kind == TYPE_POINTER)
+        {
+            cast_val.value = LLVMBuildPointerCast(
+                mod->builder, src_llvm_val, dest_llvm_ty, "");
+        }
+        else if (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_POINTER)
+        {
+            cast_val.value =
+                LLVMBuildIntToPtr(mod->builder, src_llvm_val, dest_llvm_ty, "");
+        }
+        else if (src_ty->kind == TYPE_POINTER && dest_ty->kind == TYPE_INT)
+        {
+            cast_val.value =
+                LLVMBuildPtrToInt(mod->builder, src_llvm_val, dest_llvm_ty, "");
+        }
+        else if (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_INT)
+        {
+            cast_val.value = LLVMBuildIntCast2(
+                mod->builder,
+                src_llvm_val,
+                dest_llvm_ty,
+                dest_ty->integer.is_signed,
+                "");
+        }
+        else if (
+            (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_INT) ||
+            (src_ty->kind == TYPE_DOUBLE && dest_ty->kind == TYPE_INT))
+        {
+            if (dest_ty->integer.is_signed)
+            {
+                cast_val.value = LLVMBuildFPToSI(
+                    mod->builder, src_llvm_val, dest_llvm_ty, "");
+            }
+            else
+            {
+                cast_val.value = LLVMBuildFPToUI(
+                    mod->builder, src_llvm_val, dest_llvm_ty, "");
+            }
+        }
+        else if (
+            (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_FLOAT) ||
+            (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_DOUBLE))
+        {
+            if (src_ty->integer.is_signed)
+            {
+                cast_val.value = LLVMBuildSIToFP(
+                    mod->builder, src_llvm_val, dest_llvm_ty, "");
+            }
+            else
+            {
+                cast_val.value = LLVMBuildUIToFP(
+                    mod->builder, src_llvm_val, dest_llvm_ty, "");
+            }
+        }
+        else if (
+            (src_ty->kind == TYPE_DOUBLE && dest_ty->kind == TYPE_FLOAT) ||
+            (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_DOUBLE))
+        {
+            cast_val.value =
+                LLVMBuildFPCast(mod->builder, src_llvm_val, dest_llvm_ty, "");
+        }
+        else
+        {
+            assert(0);
+        }
+
+        if (out_value) *out_value = cast_val;
+
         break;
     }
     case AST_UNARY_EXPR: {
