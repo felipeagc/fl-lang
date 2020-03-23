@@ -1,6 +1,9 @@
 Comments
 Arithmetic operations
 Default struct member initialization
+If
+For
+Ternary
 String type
 Defer statement
 Using statement

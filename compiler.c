@@ -1366,11 +1366,7 @@ typedef enum AstType {
 typedef struct AstValue
 {
     bool is_lvalue;
-    union
-    {
-        LLVMValueRef value;
-        LLVMTypeRef type;
-    };
+    LLVMValueRef value;
 } AstValue;
 
 enum {
@@ -1498,29 +1494,43 @@ typedef struct Ast
 // }}}
 
 // Scope {{{
+typedef enum ScopeType {
+    SCOPE_DEFAULT,
+    SCOPE_STRUCT,
+} ScopeType;
+
 typedef struct Scope
 {
-    HashMap map;
+    ScopeType type;
+    HashMap *map;
     struct Scope *parent;
     struct Ast *procedure;
+    struct AstValue value;
 } Scope;
 
-void scope_init(Scope *scope, size_t size, struct Ast *procedure)
+void scope_init(
+    Scope *scope,
+    Compiler *compiler,
+    ScopeType type,
+    size_t size,
+    struct Ast *procedure)
 {
     memset(scope, 0, sizeof(*scope));
-    hash_init(&scope->map, size);
+    scope->type = type;
+    scope->map = bump_alloc(&compiler->bump, sizeof(*scope->map));
+    hash_init(scope->map, size);
     scope->procedure = procedure;
 }
 
 void scope_set(Scope *scope, String name, struct Ast *decl)
 {
     decl->sym_scope = scope;
-    hash_set(&scope->map, name, decl);
+    hash_set(scope->map, name, decl);
 }
 
 struct Ast *scope_get_local(Scope *scope, String name)
 {
-    return hash_get(&scope->map, name);
+    return hash_get(scope->map, name);
 }
 
 struct Ast *get_symbol(Scope *scope, String name)
@@ -2739,7 +2749,12 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         assert(!ast->block.scope);
         ast->block.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
         memset(ast->block.scope, 0, sizeof(*ast->block.scope));
-        scope_init(ast->block.scope, array_size(ast->block.stmts), NULL);
+        scope_init(
+            ast->block.scope,
+            a->compiler,
+            SCOPE_DEFAULT,
+            array_size(ast->block.stmts),
+            NULL);
         if (array_size(a->scope_stack) > 0)
         {
             ast->block.scope->parent = *array_last(a->scope_stack);
@@ -2752,6 +2767,8 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         memset(ast->proc.scope, 0, sizeof(*ast->proc.scope));
         scope_init(
             ast->proc.scope,
+            a->compiler,
+            SCOPE_DEFAULT,
             array_size(ast->proc.stmts) + array_size(ast->proc.params),
             ast);
         ast->proc.scope->parent = *array_last(a->scope_stack);
@@ -2794,7 +2811,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         ast->structure.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
         memset(ast->structure.scope, 0, sizeof(*ast->structure.scope));
         scope_init(
-            ast->structure.scope, array_size(ast->structure.fields), ast);
+            ast->structure.scope,
+            a->compiler,
+            SCOPE_STRUCT,
+            array_size(ast->structure.fields),
+            ast);
 
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);
@@ -3918,7 +3939,6 @@ typedef struct LLContext
     Compiler *compiler;
     LLModule mod;
     /*array*/ Scope **scope_stack;
-    /*array*/ AstValue **value_stack;
 } LLContext;
 
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
@@ -4580,10 +4600,7 @@ void llvm_codegen_ast(
         break;
     }
     case AST_STRUCT_FIELD: {
-        assert(array_size(l->value_stack) > 0);
-
-        AstValue *struct_val = (*array_last(l->value_stack));
-        assert(struct_val);
+        AstValue struct_val = (*array_last(l->scope_stack))->value;
 
         LLVMValueRef indices[2] = {
             LLVMConstInt(LLVMInt32Type(), 0, false),
@@ -4593,38 +4610,41 @@ void llvm_codegen_ast(
         AstValue field_value = {0};
         field_value.is_lvalue = true;
         field_value.value =
-            LLVMBuildGEP(mod->builder, struct_val->value, indices, 2, "");
+            LLVMBuildGEP(mod->builder, struct_val.value, indices, 2, "");
         if (out_value) *out_value = field_value;
 
         break;
     }
     case AST_ACCESS: {
         assert(array_size(l->scope_stack) > 0);
-        Scope *accessed_scope =
-            get_accessed_scope(l->compiler, *array_last(l->scope_stack), ast);
-        assert(accessed_scope);
+        Scope accessed_scope =
+            *get_accessed_scope(l->compiler, *array_last(l->scope_stack), ast);
 
-        if (ast->access.left->type_info->kind == TYPE_NAMESPACE)
+        switch (accessed_scope.type)
         {
-            array_push(l->scope_stack, accessed_scope);
+        case SCOPE_DEFAULT: {
+            array_push(l->scope_stack, &accessed_scope);
             llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
             array_pop(l->scope_stack);
             break;
         }
+        case SCOPE_STRUCT: {
+            AstValue accessed_value = {0};
+            llvm_codegen_ast(l, mod, ast->access.left, false, &accessed_value);
 
-        AstValue accessed_value = {0};
-        llvm_codegen_ast(l, mod, ast->access.left, false, &accessed_value);
+            if (ast->access.left->type_info->kind == TYPE_POINTER)
+            {
+                accessed_value.value = load_val(mod, &accessed_value);
+            }
 
-        if (ast->access.left->type_info->kind == TYPE_POINTER)
-        {
-            accessed_value.value = load_val(mod, &accessed_value);
+            accessed_scope.value = accessed_value;
+
+            array_push(l->scope_stack, &accessed_scope);
+            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+            array_pop(l->scope_stack);
+            break;
         }
-
-        array_push(l->scope_stack, accessed_scope);
-        array_push(l->value_stack, &accessed_value);
-        llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-        array_pop(l->value_stack);
-        array_pop(l->scope_stack);
+        }
 
         break;
     }
