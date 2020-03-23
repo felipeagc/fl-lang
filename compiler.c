@@ -1267,6 +1267,31 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     return received;
 }
 
+TypeInfo *compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
+{
+    if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
+    {
+        return compatible_pointer_types_aux(
+            received->ptr.sub, expected->ptr.sub);
+    }
+    else if (received->kind != TYPE_POINTER && expected->kind != TYPE_POINTER)
+    {
+        return received;
+    }
+
+    return NULL;
+}
+
+TypeInfo *compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
+{
+    if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
+    {
+        return compatible_pointer_types_aux(
+            received->ptr.sub, expected->ptr.sub);
+    }
+
+    return NULL;
+}
 // }}}
 
 // AST {{{
@@ -3278,7 +3303,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     if (res && ast->type_info && expected_type)
     {
-        if (!exact_types(ast->type_info, expected_type))
+        if (!exact_types(ast->type_info, expected_type) &&
+            !compatible_pointer_types(ast->type_info, expected_type))
         {
             compile_error(a->compiler, ast->loc, "wrong type");
             res = false;
@@ -3588,6 +3614,22 @@ static inline LLVMValueRef load_val(LLModule *mod, AstValue *val)
     return ref;
 }
 
+static inline LLVMValueRef autocast_value(
+    LLContext *l,
+    LLModule *mod,
+    TypeInfo *received,
+    TypeInfo *expected,
+    LLVMValueRef to_cast)
+{
+    if (compatible_pointer_types(received, expected) &&
+        !exact_types(received, expected))
+    {
+        to_cast = LLVMBuildPointerCast(
+            mod->builder, to_cast, llvm_type(l, expected), "");
+    }
+    return to_cast;
+}
+
 void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
 {
     switch (ast->type)
@@ -3816,10 +3858,26 @@ void llvm_codegen_ast(
 
         for (size_t i = 0; i < param_count; i++)
         {
+            TypeInfo *param_expected_type = NULL;
+            if (i < array_size(ast->proc_call.expr->type_info->proc.params))
+            {
+                param_expected_type =
+                    &ast->proc_call.expr->type_info->proc.params[i];
+            }
+
             AstValue param_value = {0};
             llvm_codegen_ast(
                 l, mod, &ast->proc_call.params[i], false, &param_value);
             params[i] = load_val(mod, &param_value);
+            if (param_expected_type)
+            {
+                params[i] = autocast_value(
+                    l,
+                    mod,
+                    ast->proc_call.params[i].type_info,
+                    param_expected_type,
+                    params[i]);
+            }
             assert(params[i]);
         }
 
@@ -3877,10 +3935,15 @@ void llvm_codegen_ast(
         {
             AstValue init_value = {0};
             llvm_codegen_ast(l, mod, ast->decl.value_expr, false, &init_value);
-            LLVMBuildStore(
-                mod->builder,
-                load_val(mod, &init_value),
-                ast->decl.value.value);
+
+            LLVMValueRef to_store = load_val(mod, &init_value);
+            to_store = autocast_value(
+                l,
+                mod,
+                ast->decl.value_expr->type_info,
+                ast->decl.type_expr->as_type,
+                to_store);
+            LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
         }
 
         if (out_value) *out_value = ast->decl.value;
@@ -3894,14 +3957,28 @@ void llvm_codegen_ast(
         AstValue value = {0};
         llvm_codegen_ast(l, mod, ast->assign.value_expr, false, &value);
 
-        LLVMBuildStore(
-            mod->builder, load_val(mod, &value), assigned_value.value);
+        LLVMValueRef to_store = load_val(mod, &value);
+        to_store = autocast_value(
+            l,
+            mod,
+            ast->assign.value_expr->type_info,
+            ast->assign.assigned_expr->type_info,
+            to_store);
+        LLVMBuildStore(mod->builder, to_store, assigned_value.value);
         break;
     }
     case AST_RETURN: {
+        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+        assert(proc);
+
         AstValue return_value = {0};
         llvm_codegen_ast(l, mod, ast->expr, false, &return_value);
-        LLVMBuildRet(mod->builder, load_val(mod, &return_value));
+
+        LLVMValueRef ref = load_val(mod, &return_value);
+        ref = autocast_value(
+            l, mod, ast->expr->type_info, proc->proc.return_type->as_type, ref);
+
+        LLVMBuildRet(mod->builder, ref);
         break;
     }
     case AST_UNARY_EXPR: {
