@@ -5,12 +5,12 @@ proc add(a: i32, b: i32) void {
 }
 
 proc "c" main() i32 {
-	var a: i32 = 123;
-	const b: i32 = 321;
-	a = b;
-	const c: i32 = b;
-	puts(c"Hello, world!");
-	add(1, 2);
+    var a: i32 = 123;
+    const b: i32 = 321;
+    a = b;
+    const c: i32 = b;
+    puts(c"Hello, world!");
+    add(1, 2);
 
-	return 0;
+    return 0;
 }

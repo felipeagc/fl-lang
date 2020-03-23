@@ -4,5 +4,5 @@ const some_const: i32 = 512;
 var some_var: i32 = 123;
 
 proc say_hello() void {
-	printf(c"Hello!\n");
+    printf(c"Hello!\n");
 }

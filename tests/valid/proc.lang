@@ -9,53 +9,53 @@ typedef MyInt i32;
 typedef MyArrayType [ARRAY_SIZE]i32;
 
 typedef MyStruct struct {
-	a: i32,
-	b: *u8,
+    a: i32,
+    b: *u8,
 };
 
 proc "c" puts(str: *char) void;
 proc "c" printf(fmt: *char, ...) void;
 
 proc add(a: i32, b: i32) i32 {
-	return 0;
+    return 0;
 }
 
 proc main() i32 {
-	var hey: i32 = 2;
-	var yo: *i32 = (&hey);
-	var a_int: i32 = yo[0];
-	*yo = (123);
+    var hey: i32 = 2;
+    var yo: *i32 = (&hey);
+    var a_int: i32 = yo[0];
+    *yo = (123);
 
-	global = 321;
+    global = 321;
 
-	var myint: MyInt = 123;
-	var my_u8: u8 = 255;
-	var my_float: float = 321.123;
+    var myint: MyInt = 123;
+    var my_u8: u8 = 255;
+    var my_float: float = 321.123;
 
-	var string: *i8 = c"cool";
+    var string: *i8 = c"cool";
 
-	var derp: i32 = add(1, 2);
-	add(1, 2);
+    var derp: i32 = add(1, 2);
+    add(1, 2);
 
-	var my_char: i8 = 'A';
+    var my_char: i8 = 'A';
 
-	printf(c"Hello, world \"%d\"!\n", a_int);
-	printf(c"global_array[2] = %d\n", global_array[2]);
-	global_array[2] = 3;
-	printf(c"global_array[2] = %d\n", global_array[2]);
+    printf(c"Hello, world \"%d\"!\n", a_int);
+    printf(c"global_array[2] = %d\n", global_array[2]);
+    global_array[2] = 3;
+    printf(c"global_array[2] = %d\n", global_array[2]);
 
-	var array: [3]i32;
-	array[0] = 1;
-	printf(c"array[0] = %d\n", array[0]);
+    var array: [3]i32;
+    array[0] = 1;
+    printf(c"array[0] = %d\n", array[0]);
 
-	var a_struct: MyStruct;
-	a_struct.a = 32;
+    var a_struct: MyStruct;
+    a_struct.a = 32;
 
-	var b_struct: MyStruct;
-	b_struct = a_struct;
+    var b_struct: MyStruct;
+    b_struct = a_struct;
 
-	printf(c"a_struct.a = %d\n", a_struct.a);
-	printf(c"b_struct.a = %d\n", b_struct.a);
+    printf(c"a_struct.a = %d\n", a_struct.a);
+    printf(c"b_struct.a = %d\n", b_struct.a);
 
-	return 0;
+    return 0;
 }

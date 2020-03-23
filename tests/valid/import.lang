@@ -1,7 +1,7 @@
 import hello "imported.lang";
 
 proc main() void {
-	hello.say_hello();
-	var a: i32 = hello.some_const;
-	var b: i32 = hello.some_var;
+    hello.say_hello();
+    var a: i32 = hello.some_const;
+    var b: i32 = hello.some_var;
 }

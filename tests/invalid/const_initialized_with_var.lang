@@ -1,5 +1,5 @@
 var hello: i32 = 32;
 
 proc main() void {
-	const a: i32 = hello;
+    const a: i32 = hello;
 }

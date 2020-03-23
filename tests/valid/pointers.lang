@@ -1,21 +1,21 @@
 proc "c" printf(fmt: *char, ...) void;
 
 proc some_func(a: *void) void {
-	printf(c"Ptr: %p\n", a);
+    printf(c"Ptr: %p\n", a);
 }
 
 proc main() void {
-	var my_int: i32 = 123;
-	var ptr: *i32 = &my_int;
-	var ptr2: *i64 = &123;
-	*ptr = 321;
-	var ptr_ptr: **i32 = &ptr;
+    var my_int: i32 = 123;
+    var ptr: *i32 = &my_int;
+    var ptr2: *i64 = &123;
+    *ptr = 321;
+    var ptr_ptr: **i32 = &ptr;
 
-	var my_char: i8 = *c"hello";
+    var my_char: i8 = *c"hello";
 
-	var void_ptr: **void = ptr_ptr;
-	void_ptr = ptr_ptr;
+    var void_ptr: **void = ptr_ptr;
+    void_ptr = ptr_ptr;
 
-	printf(c"Ptr: %p\n", ptr);
-	some_func(ptr);
+    printf(c"Ptr: %p\n", ptr);
+    some_func(ptr);
 }
