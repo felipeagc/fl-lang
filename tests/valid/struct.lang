@@ -10,6 +10,8 @@ typedef NestedStruct struct {
     },
 };
 
+proc "c" malloc(size: u64) *void;
+proc "c" free(ptr: *void) void;
 proc "c" printf(fmt: *char, ...) void;
 
 proc print_nested(n: *NestedStruct) void {
@@ -42,6 +44,9 @@ proc main() i32 {
     printf(c"&nested = %p\n", &nested);
     printf(c"nested.name = %s\n", nested.name);
     print_nested(&nested);
+
+    var ptr: *NestedStruct = malloc(@sizeof(NestedStruct));
+    free(ptr);
 
     return 0;
 }

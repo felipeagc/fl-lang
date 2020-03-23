@@ -550,6 +550,7 @@ typedef enum TokenType {
     TOKEN_NOT_EQUAL, // !=
 
     TOKEN_IDENT,
+    TOKEN_INTRINSIC,
     TOKEN_STRING_LIT,
     TOKEN_CSTRING_LIT,
     TOKEN_CHAR_LIT,
@@ -616,6 +617,7 @@ static const char *token_strings[] = {
     [TOKEN_NOT_EQUAL] = "!=", // !=
 
     [TOKEN_IDENT] = "identifier",
+    [TOKEN_INTRINSIC] = "intrinsic",
     [TOKEN_STRING_LIT] = "string literal",
     [TOKEN_CSTRING_LIT] = "c-string literal",
     [TOKEN_CHAR_LIT] = "char literal",
@@ -708,6 +710,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_FLOAT_LIT);
 
         PRINT_TOKEN_TYPE(TOKEN_IDENT);
+        PRINT_TOKEN_TYPE(TOKEN_INTRINSIC);
         PRINT_TOKEN_TYPE(TOKEN_PROC);
         PRINT_TOKEN_TYPE(TOKEN_IMPORT);
         PRINT_TOKEN_TYPE(TOKEN_TYPEDEF);
@@ -908,6 +911,22 @@ void lex_token(Lexer *l)
             lex_next(l, 1);
             tok.type = TOKEN_EQUAL;
         }
+        break;
+    }
+    case '@': {
+        tok.loc.length = 1;
+        while (is_alphanum(tok.loc.buf[tok.loc.length]))
+        {
+            tok.loc.length++;
+        }
+
+        l->col += tok.loc.length;
+
+        lex_next(l, tok.loc.length);
+
+        tok.type = TOKEN_INTRINSIC;
+        tok.str.buf = tok.loc.buf + 1;
+        tok.str.length = tok.loc.length - 1;
         break;
     }
     case '\'': {
@@ -1307,6 +1326,10 @@ typedef enum BinOpType {
     BINOP_DIV,
 } BinOpType;
 
+typedef enum IntrinsicType {
+    INTRINSIC_SIZEOF,
+} IntrinsicType;
+
 typedef enum AstType {
     AST_UNINITIALIZED,
     AST_ROOT,
@@ -1314,6 +1337,7 @@ typedef enum AstType {
     AST_PROC_DECL,
     AST_IMPORT,
     AST_BLOCK,
+    AST_INTRINSIC_CALL,
     AST_PROC_CALL,
     AST_UNARY_EXPR,
     AST_BINARY_EXPR,
@@ -1395,6 +1419,11 @@ typedef struct Ast
             struct Ast *expr;
             /*array*/ struct Ast *params;
         } proc_call;
+        struct
+        {
+            IntrinsicType type;
+            /*array*/ struct Ast *params;
+        } intrinsic_call;
         struct
         {
             String name;
@@ -1758,6 +1787,7 @@ bool parse_primary_expr(Parser *p, Ast *ast)
     switch (tok->type)
     {
     case TOKEN_IDENT:
+    case TOKEN_INTRINSIC:
     case TOKEN_TRUE:
     case TOKEN_FALSE:
     case TOKEN_VOID:
@@ -1870,8 +1900,53 @@ bool parse_proc_call_subscript_access(Parser *p, Ast *ast)
         switch (parser_peek(p, 0)->type)
         {
         case TOKEN_LPAREN: {
+            if (expr.type == AST_PRIMARY &&
+                expr.primary.tok->type == TOKEN_INTRINSIC)
+            {
+                // Intrinsic call
+
+                ast->type = AST_INTRINSIC_CALL;
+                if (string_equals(expr.primary.tok->str, STR("sizeof")))
+                {
+                    ast->intrinsic_call.type = INTRINSIC_SIZEOF;
+                }
+                else
+                {
+                    compile_error(
+                        p->compiler,
+                        expr.loc,
+                        "unknown intrinsic: '%.*s'",
+                        (int)expr.primary.tok->str.length,
+                        expr.primary.tok->str.buf);
+                    res = false;
+                }
+
+                if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+                while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                       !parser_is_at_end(p))
+                {
+                    Ast param = {0};
+                    if (parse_expr(p, &param))
+                        array_push(ast->intrinsic_call.params, param);
+                    else
+                        res = false;
+
+                    if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                    {
+                        if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                    }
+                }
+
+                if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+                break;
+            }
+
             // Proc call
+
             ast->type = AST_PROC_CALL;
+
             ast->proc_call.expr =
                 bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
             *ast->proc_call.expr = expr;
@@ -2731,6 +2806,26 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
 
         break;
     }
+    case AST_INTRINSIC_CALL: {
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_SIZEOF: {
+            if (array_size(ast->intrinsic_call.params) > 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "@sizeof takes one parameter");
+                break;
+            }
+
+            Ast *param = &ast->intrinsic_call.params[0];
+            symbol_check_ast(a, param);
+
+            break;
+        }
+        }
+
+        break;
+    }
     case AST_UNARY_EXPR: {
         symbol_check_ast(a, ast->unop.sub);
         break;
@@ -3129,6 +3224,36 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
             type_check_ast(a, &ast->proc_call.params[i], param_expected_type);
         }
+        break;
+    }
+    case AST_INTRINSIC_CALL: {
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_SIZEOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            type_check_ast(a, param, NULL);
+
+            if (param->type_info->kind == TYPE_VOID ||
+                param->type_info->kind == TYPE_NAMESPACE)
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "sizeof does not apply for this type");
+                break;
+            }
+
+            static TypeInfo u64_ty = {
+                .kind = TYPE_INT,
+                .integer.is_signed = false,
+                .integer.num_bits = 64,
+            };
+            ast->type_info = &u64_ty;
+
+            break;
+        }
+        }
+
         break;
     }
     case AST_UNARY_EXPR: {
@@ -3888,6 +4013,34 @@ void llvm_codegen_ast(
 
         break;
     }
+    case AST_INTRINSIC_CALL: {
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_SIZEOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            LLVMTypeRef llvm_ty = NULL;
+
+            if (param->type_info->kind == TYPE_TYPE)
+            {
+                llvm_ty = llvm_type(l, param->as_type);
+            }
+            else
+            {
+                llvm_ty = llvm_type(l, param->type_info);
+            }
+
+            assert(llvm_ty);
+            AstValue size_val = {0};
+            size_val.value = LLVMSizeOf(llvm_ty);
+            if (out_value) *out_value = size_val;
+
+            break;
+        }
+        }
+
+        break;
+    }
+    break;
     case AST_EXPR_STMT: {
         llvm_codegen_ast(l, mod, ast->expr, false, NULL);
         break;
