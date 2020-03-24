@@ -2534,6 +2534,22 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
     Token *tok = parser_peek(p, 0);
     switch (tok->type)
     {
+    case TOKEN_LCURLY: {
+        parser_next(p, 1);
+
+        ast->type = AST_BLOCK;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+            Ast stmt = {0};
+            if (!parse_stmt(p, &stmt, true)) res = false;
+            array_push(ast->block.stmts, stmt);
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
     case TOKEN_PROC: {
         parser_next(p, 1);
 
@@ -3044,6 +3060,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
+    case AST_BLOCK:
     case AST_ROOT: {
         assert(!ast->block.scope);
         ast->block.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
@@ -3058,6 +3075,16 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         {
             ast->block.scope->parent = *array_last(a->scope_stack);
         }
+
+        array_push(a->scope_stack, ast->block.scope);
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            create_scopes_ast(a, stmt);
+        }
+        array_pop(a->scope_stack);
+
         break;
     }
     case AST_PROC_DECL: {
@@ -3071,6 +3098,15 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             array_size(ast->proc.stmts) + array_size(ast->proc.params),
             ast);
         ast->proc.scope->parent = *array_last(a->scope_stack);
+
+        array_push(a->scope_stack, ast->proc.scope);
+        for (Ast *stmt = ast->proc.stmts;
+             stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+             ++stmt)
+        {
+            create_scopes_ast(a, stmt);
+        }
+        array_pop(a->scope_stack);
         break;
     }
     case AST_UNARY_EXPR: {
@@ -3083,6 +3119,15 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         default: break;
         }
 
+        break;
+    }
+    case AST_IF: {
+        create_scopes_ast(a, ast->if_stmt.cond_expr);
+        create_scopes_ast(a, ast->if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt)
+        {
+            create_scopes_ast(a, ast->if_stmt.else_stmt);
+        }
         break;
     }
     case AST_PAREN_EXPR: {
@@ -3133,7 +3178,21 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         array_pop(a->scope_stack);
         break;
     }
-    default: break;
+    case AST_UNINITIALIZED:
+    case AST_RETURN:
+    case AST_PRIMARY:
+    case AST_SUBSCRIPT:
+    case AST_ARRAY_TYPE:
+    case AST_EXPR_STMT:
+    case AST_ACCESS:
+    case AST_PROC_PARAM:
+    case AST_CAST:
+    case AST_VAR_ASSIGN:
+    case AST_BINARY_EXPR:
+    case AST_INTRINSIC_CALL:
+    case AST_PROC_CALL:
+    case AST_PROC_TYPE:
+    case AST_IMPORT: break;
     }
 }
 
@@ -3234,6 +3293,17 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         {
             symbol_check_ast(a, ast->if_stmt.else_stmt);
         }
+        break;
+    }
+    case AST_BLOCK: {
+        array_push(a->scope_stack, ast->block.scope);
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            symbol_check_ast(a, stmt);
+        }
+        array_pop(a->scope_stack);
         break;
     }
     case AST_PROC_PARAM: {
@@ -3427,6 +3497,17 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         assert(proc->proc.return_type->as_type);
         type_check_ast(a, ast->expr, proc->proc.return_type->as_type);
+        break;
+    }
+    case AST_BLOCK: {
+        array_push(a->scope_stack, ast->block.scope);
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            type_check_ast(a, stmt, NULL);
+        }
+        array_pop(a->scope_stack);
         break;
     }
     case AST_TYPEDEF: {
@@ -4210,36 +4291,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     return res;
 }
 
-void create_scopes_asts(Analyzer *a, Ast *asts, size_t ast_count)
-{
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        create_scopes_ast(a, ast);
-    }
-
-    // Analyze children ASTs
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        switch (ast->type)
-        {
-        case AST_ROOT: {
-            array_push(a->scope_stack, ast->block.scope);
-            create_scopes_asts(
-                a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->scope_stack);
-            break;
-        }
-        case AST_PROC_DECL: {
-            array_push(a->scope_stack, ast->proc.scope);
-            create_scopes_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
-            array_pop(a->scope_stack);
-            break;
-        }
-        default: break;
-        }
-    }
-}
-
 void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
@@ -4288,6 +4339,21 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
             register_symbol_asts(
                 a, ast->proc.stmts, array_size(ast->proc.stmts));
             array_pop(a->scope_stack);
+            break;
+        }
+        case AST_BLOCK: {
+            array_push(a->scope_stack, ast->block.scope);
+            register_symbol_asts(
+                a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        case AST_IF: {
+            register_symbol_asts(a, ast->if_stmt.cond_stmt, 1);
+            if (ast->if_stmt.else_stmt)
+            {
+                register_symbol_asts(a, ast->if_stmt.else_stmt, 1);
+            }
             break;
         }
         default: break;
@@ -4542,6 +4608,23 @@ void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
 
         break;
     }
+    case AST_BLOCK: {
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            llvm_codegen_alloca(l, mod, stmt);
+        }
+        break;
+    }
+    case AST_IF: {
+        llvm_codegen_alloca(l, mod, ast->if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt)
+        {
+            llvm_codegen_alloca(l, mod, ast->if_stmt.else_stmt);
+        }
+        break;
+    }
     default: break;
     }
 }
@@ -4552,6 +4635,17 @@ void llvm_codegen_ast(
     switch (ast->type)
     {
     case AST_ROOT: {
+        array_push(l->scope_stack, ast->block.scope);
+        for (Ast *stmt = ast->block.stmts;
+             stmt != ast->block.stmts + array_size(ast->block.stmts);
+             ++stmt)
+        {
+            llvm_codegen_ast(l, mod, stmt, false, NULL);
+        }
+        array_pop(l->scope_stack);
+        break;
+    }
+    case AST_BLOCK: {
         array_push(l->scope_stack, ast->block.scope);
         for (Ast *stmt = ast->block.stmts;
              stmt != ast->block.stmts + array_size(ast->block.stmts);
@@ -6011,7 +6105,7 @@ SourceFile *process_file(Compiler *compiler, String absolute_path)
     memset(analyzer, 0, sizeof(*analyzer));
     analyzer->compiler = compiler;
 
-    create_scopes_asts(analyzer, parser->ast, 1);
+    create_scopes_ast(analyzer, parser->ast);
     print_errors(compiler);
 
     register_symbol_asts(analyzer, parser->ast, 1);
