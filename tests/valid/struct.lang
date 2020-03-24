@@ -55,9 +55,6 @@ proc main() i32 {
 
     printf(c"@sizeof(*ptr) = %lu\n", @sizeof(*ptr));
 
-    // Hello I'm a comment
-
-    /*
     var my_u32: u32 = 123;
     printf(c"my_u32 = %u\n", my_u32);
 
@@ -69,9 +66,6 @@ proc main() i32 {
 
     var my_float: float = cast(float) my_u32;
     printf(c"my_float = %f\n", my_float);
-    */
-
-    printf(c"my_float = %f\n", 3.21);
 
     return 0;
 }

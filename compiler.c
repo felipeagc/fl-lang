@@ -540,6 +540,8 @@ typedef enum TokenType {
     TOKEN_ASTERISK,
     TOKEN_AMPERSAND,
     TOKEN_SLASH,
+    TOKEN_PLUS,
+    TOKEN_MINUS,
 
     TOKEN_DOT,
     TOKEN_ELLIPSIS,
@@ -609,6 +611,8 @@ static const char *token_strings[] = {
     [TOKEN_ASTERISK] = "*",
     [TOKEN_AMPERSAND] = "&",
     [TOKEN_SLASH] = "/",
+    [TOKEN_PLUS] = "+",
+    [TOKEN_MINUS] = "-",
 
     [TOKEN_DOT] = ".",
     [TOKEN_ELLIPSIS] = "...",
@@ -701,6 +705,8 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_ASTERISK);
         PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
         PRINT_TOKEN_TYPE(TOKEN_SLASH);
+        PRINT_TOKEN_TYPE(TOKEN_PLUS);
+        PRINT_TOKEN_TYPE(TOKEN_MINUS);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
         PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
@@ -921,6 +927,18 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_SLASH;
+        break;
+    }
+    case '+': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_PLUS;
+        break;
+    }
+    case '-': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_MINUS;
         break;
     }
     case ':': {

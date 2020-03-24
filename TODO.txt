@@ -1,4 +1,3 @@
-Comments
 Arithmetic operations
 Default struct member initialization
 If
@@ -7,6 +6,11 @@ Ternary
 String type
 Defer statement
 Using statement
+
+Struct literals
+Array literals
+Slices
+Dynamic arrays
 
 Bugs:
 - I think struct fields don't have location information
