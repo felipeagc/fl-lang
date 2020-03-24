@@ -1,7 +1,7 @@
 CC=clang
 LLVM_CFLAGS=$(shell llvm-config-10 --cflags)
 LLVM_LDFLAGS=$(shell llvm-config-10 --ldflags)
-CFLAGS=-Wall -g $(LLVM_CFLAGS) -DLLVM_BACKEND
+CFLAGS=-Wall -g $(LLVM_CFLAGS)
 LDFLAGS=$(LLVM_LDFLAGS) -lLLVM-10
 
 compiler: compiler.c

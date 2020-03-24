@@ -547,10 +547,15 @@ typedef enum TokenType {
     TOKEN_ELLIPSIS,
     TOKEN_COMMA,
 
-    TOKEN_NOT,       // !
-    TOKEN_ASSIGN,    // =
+    TOKEN_NOT,    // !
+    TOKEN_ASSIGN, // =
+
     TOKEN_EQUAL,     // ==
-    TOKEN_NOT_EQUAL, // !=
+    TOKEN_NOTEQ,     // !=
+    TOKEN_LESS,      // <
+    TOKEN_LESSEQ,    // <=
+    TOKEN_GREATER,   // >
+    TOKEN_GREATEREQ, // >=
 
     TOKEN_IDENT,
     TOKEN_INTRINSIC,
@@ -618,10 +623,15 @@ static const char *token_strings[] = {
     [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
 
-    [TOKEN_NOT] = "!",        // !
-    [TOKEN_ASSIGN] = "=",     // =
-    [TOKEN_EQUAL] = "==",     // ==
-    [TOKEN_NOT_EQUAL] = "!=", // !=
+    [TOKEN_NOT] = "!",
+    [TOKEN_ASSIGN] = "=",
+
+    [TOKEN_EQUAL] = "==",
+    [TOKEN_NOTEQ] = "!=",
+    [TOKEN_LESS] = "<",
+    [TOKEN_LESSEQ] = "<=",
+    [TOKEN_GREATER] = ">",
+    [TOKEN_GREATEREQ] = ">=",
 
     [TOKEN_IDENT] = "identifier",
     [TOKEN_INTRINSIC] = "intrinsic",
@@ -714,8 +724,13 @@ void print_token(Token *tok)
 
         PRINT_TOKEN_TYPE(TOKEN_NOT);
         PRINT_TOKEN_TYPE(TOKEN_ASSIGN);
+
         PRINT_TOKEN_TYPE(TOKEN_EQUAL);
-        PRINT_TOKEN_TYPE(TOKEN_NOT_EQUAL);
+        PRINT_TOKEN_TYPE(TOKEN_NOTEQ);
+        PRINT_TOKEN_TYPE(TOKEN_LESS);
+        PRINT_TOKEN_TYPE(TOKEN_LESSEQ);
+        PRINT_TOKEN_TYPE(TOKEN_GREATER);
+        PRINT_TOKEN_TYPE(TOKEN_GREATEREQ);
 
         PRINT_TOKEN_TYPE(TOKEN_INT_LIT);
         PRINT_TOKEN_TYPE(TOKEN_FLOAT_LIT);
@@ -980,6 +995,42 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             lex_next(l, 1);
             tok.type = TOKEN_EQUAL;
+        }
+        break;
+    }
+    case '!': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_NOT;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_NOTEQ;
+        }
+        break;
+    }
+    case '>': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_GREATER;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_GREATEREQ;
+        }
+        break;
+    }
+    case '<': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_LESS;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_LESSEQ;
         }
         break;
     }
@@ -1385,6 +1436,12 @@ typedef enum BinOpType {
     BINOP_SUB,
     BINOP_MUL,
     BINOP_DIV,
+    BINOP_EQ,
+    BINOP_NOTEQ,
+    BINOP_LESS,
+    BINOP_LESSEQ,
+    BINOP_GREATER,
+    BINOP_GREATEREQ,
 } BinOpType;
 
 typedef enum IntrinsicType {
@@ -2361,6 +2418,7 @@ bool parse_multiplication(Parser *p, Ast *ast)
 
     return res;
 }
+
 bool parse_addition(Parser *p, Ast *ast)
 {
     bool res = true;
@@ -2399,12 +2457,58 @@ bool parse_addition(Parser *p, Ast *ast)
     return res;
 }
 
+bool parse_comparison(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_addition(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_EQUAL) ||
+           (parser_peek(p, 0)->type == TOKEN_NOTEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_LESS) ||
+           (parser_peek(p, 0)->type == TOKEN_LESSEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_GREATER) ||
+           (parser_peek(p, 0)->type == TOKEN_GREATEREQ))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_addition(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        switch (op_tok->type)
+        {
+        case TOKEN_EQUAL: ast->binop.type = BINOP_EQ; break;
+        case TOKEN_NOTEQ: ast->binop.type = BINOP_NOTEQ; break;
+        case TOKEN_LESS: ast->binop.type = BINOP_LESS; break;
+        case TOKEN_LESSEQ: ast->binop.type = BINOP_LESSEQ; break;
+        case TOKEN_GREATER: ast->binop.type = BINOP_GREATER; break;
+        case TOKEN_GREATEREQ: ast->binop.type = BINOP_GREATEREQ; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+
 bool parse_expr(Parser *p, Ast *ast)
 {
     assert(!parser_is_at_end(p));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
-    bool res = parse_addition(p, ast);
+    bool res = parse_comparison(p, ast);
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
     return res;
@@ -3774,6 +3878,12 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_SUB:
         case BINOP_MUL:
         case BINOP_DIV: operand_expected_type = expected_type; break;
+        case BINOP_EQ:
+        case BINOP_NOTEQ:
+        case BINOP_LESS:
+        case BINOP_LESSEQ:
+        case BINOP_GREATER:
+        case BINOP_GREATEREQ: break;
         }
 
         type_check_ast(a, ast->binop.left, operand_expected_type);
@@ -3834,6 +3944,29 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             ast->type_info = ast->binop.left->type_info;
+            break;
+        }
+        case BINOP_EQ:
+        case BINOP_NOTEQ:
+        case BINOP_LESS:
+        case BINOP_LESSEQ:
+        case BINOP_GREATER:
+        case BINOP_GREATEREQ: {
+            if (ast->binop.left->type_info->kind != TYPE_BOOL &&
+                ast->binop.left->type_info->kind != TYPE_INT &&
+                ast->binop.left->type_info->kind != TYPE_FLOAT &&
+                ast->binop.left->type_info->kind != TYPE_DOUBLE &&
+                ast->binop.left->type_info->kind != TYPE_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "can only do comparison on numeric types");
+                break;
+            }
+
+            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
+            ast->type_info = &bool_ty;
             break;
         }
         }
@@ -4212,7 +4345,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
     case TYPE_FLOAT: type->ref = LLVMFloatType(); break;
     case TYPE_DOUBLE: type->ref = LLVMDoubleType(); break;
-    case TYPE_BOOL: type->ref = LLVMInt32Type(); break;
+    case TYPE_BOOL: type->ref = LLVMInt8Type(); break;
     case TYPE_VOID: type->ref = LLVMVoidType(); break;
 
     case TYPE_POINTER: {
@@ -5035,6 +5168,136 @@ void llvm_codegen_ast(
                 }
                 break;
             }
+            case BINOP_EQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntEQ, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealOEQ, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
+            case BINOP_NOTEQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntNE, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealUNE, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
+            case BINOP_GREATER: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntSGT, lhs, rhs, "");
+                    else
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntUGT, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealOGT, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
+            case BINOP_GREATEREQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntSGE, lhs, rhs, "");
+                    else
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntUGE, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealOGE, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
+            case BINOP_LESS: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntSLT, lhs, rhs, "");
+                    else
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntULT, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealOLT, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
+            case BINOP_LESSEQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntSLE, lhs, rhs, "");
+                    else
+                        result_value.value = LLVMBuildICmp(
+                            mod->builder, LLVMIntULE, lhs, rhs, "");
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value =
+                        LLVMBuildFCmp(mod->builder, LLVMRealOLE, lhs, rhs, "");
+                    break;
+                default: break;
+                }
+
+                result_value.value = LLVMBuildZExt(
+                    mod->builder, result_value.value, LLVMInt8Type(), "");
+                break;
+            }
             }
         }
         else
@@ -5115,6 +5378,128 @@ void llvm_codegen_ast(
                 }
                 default: break;
                 }
+                break;
+            }
+            case BINOP_EQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    result_value.value = LLVMConstICmp(LLVMIntEQ, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealOEQ, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_NOTEQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    result_value.value = LLVMConstICmp(LLVMIntNE, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealUNE, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_GREATER: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntSGT, lhs, rhs);
+                    else
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntUGT, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealOGT, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_GREATEREQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntSGE, lhs, rhs);
+                    else
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntUGE, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealOGE, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_LESS: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntSLT, lhs, rhs);
+                    else
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntULT, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealOLT, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_LESSEQ: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntSLE, lhs, rhs);
+                    else
+                        result_value.value =
+                            LLVMConstICmp(LLVMIntULE, lhs, rhs);
+                    break;
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFCmp(LLVMRealOLE, lhs, rhs);
+                    break;
+                default: break;
+                }
+
+                result_value.value =
+                    LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
             }

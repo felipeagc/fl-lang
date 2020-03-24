@@ -1,7 +1,6 @@
-Arithmetic operations
-Default struct member initialization
 If
 For
+Default struct member initialization
 Ternary
 String type
 Defer statement
