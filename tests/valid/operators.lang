@@ -1,6 +1,6 @@
 const const1: float = -3 * 5.8 + 9.1;
 const const2: i32 = (123 + 321) * 2;
-const const3: bool = (123 + 321) > 2.2;
+const const3: bool = !(-(123 + 321) > 2.2);
 
 proc "c" printf(fmt: *char, ...) void;
 
@@ -32,8 +32,27 @@ proc main() i32 {
 
     var cmp3: bool = (4 + 10) > 10.5;
     printf(c"cmp3 = %hhu\n", cmp3);
+    var not_cmp3: bool = !cmp3;
+    printf(c"not_cmp3 = %hhu\n", not_cmp3);
 
     printf(c"cmp4 = %hhu\n", 99.9 > 5);
+
+    1 == 1;
+    (1 != 1) != (1 == 1);
+
+    false != true;
+
+    var ptr1: *void = cast(*void) 0;
+    var ptr2: *void = cast(*void) 1;
+
+    printf(c"!ptr1 = %hhu\n", !ptr1);
+    printf(c"!ptr2 = %hhu\n", !ptr2);
+
+    ptr1 != ptr2;
+    ptr1 == ptr2;
+    ptr1 < ptr2;
+    ptr1 >= ptr2;
+
 
     return 0;
 }

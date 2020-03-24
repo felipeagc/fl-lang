@@ -1429,6 +1429,7 @@ typedef enum UnOpType {
     UNOP_DEREFERENCE,
     UNOP_ADDRESS,
     UNOP_NEG,
+    UNOP_NOT,
 } UnOpType;
 
 typedef enum BinOpType {
@@ -1713,6 +1714,7 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         {
         case UNOP_DEREFERENCE:
         case UNOP_ADDRESS: res = false; break;
+        case UNOP_NOT:
         case UNOP_NEG: {
             res = is_expr_const(scope, ast->unop.sub);
             break;
@@ -2213,6 +2215,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
     switch (tok->type)
     {
     case TOKEN_MINUS:
+    case TOKEN_NOT:
     case TOKEN_ASTERISK:
     case TOKEN_AMPERSAND: {
         parser_next(p, 1);
@@ -2221,6 +2224,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
         if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
         if (tok->type == TOKEN_MINUS) ast->unop.type = UNOP_NEG;
+        if (tok->type == TOKEN_NOT) ast->unop.type = UNOP_NOT;
 
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
@@ -3805,6 +3809,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         case UNOP_NEG: sub_expected_type = expected_type; break;
+        case UNOP_NOT: break;
         }
 
         type_check_ast(a, ast->unop.sub, sub_expected_type);
@@ -3864,6 +3869,24 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             ast->type_info = ast->unop.sub->type_info;
 
+            break;
+        }
+        case UNOP_NOT: {
+            if (ast->unop.sub->type_info->kind != TYPE_INT &&
+                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
+                ast->unop.sub->type_info->kind != TYPE_DOUBLE &&
+                ast->unop.sub->type_info->kind != TYPE_BOOL &&
+                ast->unop.sub->type_info->kind != TYPE_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "operator '!' only works on logical types");
+                break;
+            }
+
+            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
+            ast->type_info = &bool_ty;
             break;
         }
         }
@@ -4518,6 +4541,18 @@ void llvm_codegen_ast(
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
+        case TOKEN_TRUE: {
+            AstValue value = {0};
+            value.value = LLVMConstInt(llvm_type(l, ast->type_info), 1, false);
+            if (out_value) *out_value = value;
+            break;
+        }
+        case TOKEN_FALSE: {
+            AstValue value = {0};
+            value.value = LLVMConstInt(llvm_type(l, ast->type_info), 0, false);
+            if (out_value) *out_value = value;
+            break;
+        }
         case TOKEN_INT_LIT: {
             switch (ast->type_info->kind)
             {
@@ -4945,25 +4980,134 @@ void llvm_codegen_ast(
         }
         case UNOP_NEG: {
             LLVMValueRef sub = load_val(mod, &sub_value);
-            switch (op_type->kind)
+            if (!is_const)
             {
-            case TYPE_INT: {
-                if (op_type->integer.is_signed)
+                switch (op_type->kind)
                 {
-                    result_value.value = LLVMBuildNSWNeg(mod->builder, sub, "");
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildNSWNeg(mod->builder, sub, "");
+                    else
+                        result_value.value =
+                            LLVMBuildNeg(mod->builder, sub, "");
+                    break;
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE:
+                    result_value.value = LLVMBuildFNeg(mod->builder, sub, "");
+                    break;
+                default: assert(0); break;
                 }
-                else
+            }
+            else
+            {
+                switch (op_type->kind)
                 {
-                    result_value.value = LLVMBuildNeg(mod->builder, sub, "");
+                case TYPE_INT:
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMConstNSWNeg(sub);
+                    else
+                        result_value.value = LLVMConstNeg(sub);
+                    break;
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE:
+                    result_value.value = LLVMConstFNeg(sub);
+                    break;
+                default: assert(0); break;
                 }
-                break;
             }
-            case TYPE_FLOAT:
-            case TYPE_DOUBLE: {
-                result_value.value = LLVMBuildFNeg(mod->builder, sub, "");
-                break;
+
+            break;
+        }
+        case UNOP_NOT: {
+            LLVMValueRef sub = load_val(mod, &sub_value);
+
+            if (!is_const)
+            {
+                switch (op_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT:
+                    result_value.value = LLVMBuildICmp(
+                        mod->builder,
+                        LLVMIntNE,
+                        sub,
+                        LLVMConstInt(llvm_type(l, op_type), 0, false),
+                        "");
+                    result_value.value = LLVMBuildXor(
+                        mod->builder,
+                        result_value.value,
+                        LLVMConstInt(LLVMInt1Type(), 1, false),
+                        "");
+                    result_value.value = LLVMBuildZExt(
+                        mod->builder, result_value.value, LLVMInt8Type(), "");
+                    break;
+                case TYPE_POINTER:
+                    result_value.value = LLVMBuildICmp(
+                        mod->builder,
+                        LLVMIntNE,
+                        sub,
+                        LLVMConstPointerNull(llvm_type(l, op_type)),
+                        "");
+                    result_value.value = LLVMBuildXor(
+                        mod->builder,
+                        result_value.value,
+                        LLVMConstInt(LLVMInt1Type(), 1, false),
+                        "");
+                    result_value.value = LLVMBuildZExt(
+                        mod->builder, result_value.value, LLVMInt8Type(), "");
+                    break;
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE:
+                    result_value.value = LLVMBuildFNeg(mod->builder, sub, "");
+                    result_value.value = LLVMBuildFCmp(
+                        mod->builder,
+                        LLVMRealUNE,
+                        sub,
+                        LLVMConstReal(llvm_type(l, op_type), (double)0.0f),
+                        "");
+                    result_value.value = LLVMBuildXor(
+                        mod->builder,
+                        result_value.value,
+                        LLVMConstInt(LLVMInt1Type(), 1, false),
+                        "");
+                    result_value.value = LLVMBuildZExt(
+                        mod->builder, result_value.value, LLVMInt8Type(), "");
+                    break;
+                default: assert(0); break;
+                }
             }
-            default: break;
+            else
+            {
+                switch (op_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT:
+                    result_value.value = LLVMConstICmp(
+                        LLVMIntNE,
+                        sub,
+                        LLVMConstInt(llvm_type(l, op_type), 0, false));
+                    result_value.value = LLVMConstXor(
+                        result_value.value,
+                        LLVMConstInt(LLVMInt1Type(), 1, false));
+                    result_value.value =
+                        LLVMConstZExt(result_value.value, LLVMInt8Type());
+                    break;
+                case TYPE_FLOAT:
+                case TYPE_DOUBLE:
+                    result_value.value = LLVMConstFNeg(sub);
+                    result_value.value = LLVMConstFCmp(
+                        LLVMRealUNE,
+                        sub,
+                        LLVMConstReal(llvm_type(l, op_type), (double)0.0f));
+                    result_value.value = LLVMConstXor(
+                        result_value.value,
+                        LLVMConstInt(LLVMInt1Type(), 1, false));
+                    result_value.value =
+                        LLVMConstZExt(result_value.value, LLVMInt8Type());
+                    break;
+                default: assert(0); break;
+                }
             }
 
             break;
@@ -5098,7 +5242,7 @@ void llvm_codegen_ast(
                         LLVMBuildFAdd(mod->builder, lhs, rhs, "");
                     break;
                 }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
@@ -5120,7 +5264,7 @@ void llvm_codegen_ast(
                         LLVMBuildFSub(mod->builder, lhs, rhs, "");
                     break;
                 }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
@@ -5142,7 +5286,7 @@ void llvm_codegen_ast(
                         LLVMBuildFMul(mod->builder, lhs, rhs, "");
                     break;
                 }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
@@ -5164,7 +5308,7 @@ void llvm_codegen_ast(
                         LLVMBuildFDiv(mod->builder, lhs, rhs, "");
                     break;
                 }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
@@ -5175,12 +5319,17 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntEQ, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntEQ, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOEQ, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5194,12 +5343,17 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntNE, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntNE, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealUNE, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5217,12 +5371,17 @@ void llvm_codegen_ast(
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntUGT, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntUGT, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOGT, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5240,12 +5399,17 @@ void llvm_codegen_ast(
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntUGE, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntUGE, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOGE, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5263,12 +5427,17 @@ void llvm_codegen_ast(
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntULT, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntULT, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOLT, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5286,12 +5455,17 @@ void llvm_codegen_ast(
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntULE, lhs, rhs, "");
                     break;
+                case TYPE_BOOL:
+                case TYPE_POINTER:
+                    result_value.value =
+                        LLVMBuildICmp(mod->builder, LLVMIntULE, lhs, rhs, "");
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOLE, lhs, rhs, "");
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value = LLVMBuildZExt(
@@ -5307,76 +5481,69 @@ void llvm_codegen_ast(
             case BINOP_ADD: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT: {
+                case TYPE_INT:
                     if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWAdd(lhs, rhs);
                     else
                         result_value.value = LLVMConstAdd(lhs, rhs);
                     break;
-                }
                 case TYPE_DOUBLE:
-                case TYPE_FLOAT: {
+                case TYPE_FLOAT:
                     result_value.value = LLVMConstFAdd(lhs, rhs);
                     break;
-                }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
             case BINOP_SUB: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT: {
+                case TYPE_INT:
                     if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWSub(lhs, rhs);
                     else
                         result_value.value = LLVMConstSub(lhs, rhs);
                     break;
-                }
                 case TYPE_DOUBLE:
-                case TYPE_FLOAT: {
+                case TYPE_FLOAT:
                     result_value.value = LLVMConstFSub(lhs, rhs);
                     break;
-                }
-                default: break;
+
+                default: assert(0); break;
                 }
                 break;
             }
             case BINOP_MUL: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT: {
+                case TYPE_INT:
                     if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWMul(lhs, rhs);
                     else
                         result_value.value = LLVMConstMul(lhs, rhs);
                     break;
-                }
                 case TYPE_DOUBLE:
-                case TYPE_FLOAT: {
+                case TYPE_FLOAT:
                     result_value.value = LLVMConstFMul(lhs, rhs);
                     break;
-                }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
             case BINOP_DIV: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT: {
+                case TYPE_INT:
                     if (op_type->integer.is_signed)
                         result_value.value = LLVMConstSDiv(lhs, rhs);
                     else
                         result_value.value = LLVMConstUDiv(lhs, rhs);
                     break;
-                }
                 case TYPE_DOUBLE:
-                case TYPE_FLOAT: {
+                case TYPE_FLOAT:
                     result_value.value = LLVMConstFDiv(lhs, rhs);
                     break;
-                }
-                default: break;
+                default: assert(0); break;
                 }
                 break;
             }
@@ -5386,11 +5553,14 @@ void llvm_codegen_ast(
                 case TYPE_INT:
                     result_value.value = LLVMConstICmp(LLVMIntEQ, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntEQ, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOEQ, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
@@ -5403,11 +5573,14 @@ void llvm_codegen_ast(
                 case TYPE_INT:
                     result_value.value = LLVMConstICmp(LLVMIntNE, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntNE, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealUNE, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
@@ -5425,11 +5598,14 @@ void llvm_codegen_ast(
                         result_value.value =
                             LLVMConstICmp(LLVMIntUGT, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntUGT, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOGT, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
@@ -5447,11 +5623,14 @@ void llvm_codegen_ast(
                         result_value.value =
                             LLVMConstICmp(LLVMIntUGE, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntUGE, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOGE, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
@@ -5469,11 +5648,14 @@ void llvm_codegen_ast(
                         result_value.value =
                             LLVMConstICmp(LLVMIntULT, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntULT, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOLT, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
@@ -5491,11 +5673,14 @@ void llvm_codegen_ast(
                         result_value.value =
                             LLVMConstICmp(LLVMIntULE, lhs, rhs);
                     break;
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstICmp(LLVMIntULE, lhs, rhs);
+                    break;
                 case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOLE, lhs, rhs);
                     break;
-                default: break;
+                default: assert(0); break;
                 }
 
                 result_value.value =
