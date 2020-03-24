@@ -3526,6 +3526,25 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = &ty;
             break;
         }
+        case TOKEN_NULL: {
+            static TypeInfo void_ty = {.kind = TYPE_VOID};
+            static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
+                                           .ptr.sub = &void_ty};
+            ast->type_info = &void_ptr_ty;
+
+            if (expected_type)
+            {
+                switch (expected_type->kind)
+                {
+                case TYPE_POINTER: {
+                    ast->type_info = expected_type;
+                    break;
+                }
+                default: break;
+                }
+            }
+            break;
+        }
         case TOKEN_TRUE:
         case TOKEN_FALSE: {
             static TypeInfo ty = {.kind = TYPE_BOOL};
@@ -4550,6 +4569,12 @@ void llvm_codegen_ast(
         case TOKEN_FALSE: {
             AstValue value = {0};
             value.value = LLVMConstInt(llvm_type(l, ast->type_info), 0, false);
+            if (out_value) *out_value = value;
+            break;
+        }
+        case TOKEN_NULL: {
+            AstValue value = {0};
+            value.value = LLVMConstPointerNull(llvm_type(l, ast->type_info));
             if (out_value) *out_value = value;
             break;
         }

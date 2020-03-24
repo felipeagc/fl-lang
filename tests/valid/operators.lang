@@ -42,7 +42,7 @@ proc main() i32 {
 
     false != true;
 
-    var ptr1: *void = cast(*void) 0;
+    var ptr1: *void = null;
     var ptr2: *void = cast(*void) 1;
 
     printf(c"!ptr1 = %hhu\n", !ptr1);
