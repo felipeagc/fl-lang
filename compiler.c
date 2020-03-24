@@ -2298,12 +2298,87 @@ bool parse_unary_expr(Parser *p, Ast *ast)
     return res;
 }
 
+bool parse_multiplication(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_unary_expr(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_ASTERISK) ||
+           (parser_peek(p, 0)->type == TOKEN_SLASH))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_unary_expr(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        switch (op_tok->type)
+        {
+        case TOKEN_ASTERISK: ast->binop.type = BINOP_MUL; break;
+        case TOKEN_SLASH: ast->binop.type = BINOP_DIV; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+bool parse_addition(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_multiplication(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_PLUS) ||
+           (parser_peek(p, 0)->type == TOKEN_MINUS))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_multiplication(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        switch (op_tok->type)
+        {
+        case TOKEN_PLUS: ast->binop.type = BINOP_ADD; break;
+        case TOKEN_MINUS: ast->binop.type = BINOP_SUB; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+
 bool parse_expr(Parser *p, Ast *ast)
 {
     assert(!parser_is_at_end(p));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
-    bool res = parse_unary_expr(p, ast);
+    bool res = parse_addition(p, ast);
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
     return res;
@@ -3638,8 +3713,59 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
     case AST_BINARY_EXPR: {
-        type_check_ast(a, ast->binop.left, NULL);
-        type_check_ast(a, ast->binop.right, NULL);
+        TypeInfo *operand_expected_type = NULL;
+        switch (ast->binop.type)
+        {
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV: operand_expected_type = expected_type; break;
+        }
+
+        type_check_ast(a, ast->binop.left, operand_expected_type);
+        type_check_ast(a, ast->binop.right, operand_expected_type);
+
+        if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for binary operands");
+            break;
+        }
+
+        if (!exact_types(
+                ast->binop.left->type_info, ast->binop.right->type_info))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "binary operands are of different types");
+            break;
+        }
+
+        switch (ast->binop.type)
+        {
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV: {
+            if (ast->binop.left->type_info->kind != TYPE_INT &&
+                ast->binop.left->type_info->kind != TYPE_FLOAT &&
+                ast->binop.left->type_info->kind != TYPE_DOUBLE)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "can only do arithmetic on numeric types");
+                break;
+            }
+
+            ast->type_info = ast->binop.left->type_info;
+            break;
+        }
+        }
+
         break;
     }
     case AST_SUBSCRIPT: {
@@ -4702,6 +4828,127 @@ void llvm_codegen_ast(
             break;
         }
         }
+
+        break;
+    }
+    case AST_BINARY_EXPR: {
+        AstValue left_val = {0};
+        AstValue right_val = {0};
+        llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
+        llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
+
+        TypeInfo *op_type = ast->binop.left->type_info;
+
+        AstValue result_value = {0};
+
+        LLVMValueRef lhs = load_val(mod, &left_val);
+        LLVMValueRef rhs = load_val(mod, &right_val);
+
+        switch (ast->binop.type)
+        {
+        case BINOP_ADD: {
+            switch (op_type->kind)
+            {
+            case TYPE_INT: {
+                if (op_type->integer.is_signed)
+                {
+                    result_value.value =
+                        LLVMBuildNSWAdd(mod->builder, lhs, rhs, "");
+                }
+                else
+                {
+                    result_value.value =
+                        LLVMBuildAdd(mod->builder, lhs, rhs, "");
+                }
+                break;
+            }
+            case TYPE_DOUBLE:
+            case TYPE_FLOAT: {
+                result_value.value = LLVMBuildFAdd(mod->builder, lhs, rhs, "");
+                break;
+            }
+            default: break;
+            }
+            break;
+        }
+        case BINOP_SUB: {
+            switch (op_type->kind)
+            {
+            case TYPE_INT: {
+                if (op_type->integer.is_signed)
+                {
+                    result_value.value =
+                        LLVMBuildNSWSub(mod->builder, lhs, rhs, "");
+                }
+                else
+                {
+                    result_value.value =
+                        LLVMBuildSub(mod->builder, lhs, rhs, "");
+                }
+                break;
+            }
+            case TYPE_DOUBLE:
+            case TYPE_FLOAT: {
+                result_value.value = LLVMBuildFSub(mod->builder, lhs, rhs, "");
+                break;
+            }
+            default: break;
+            }
+            break;
+        }
+        case BINOP_MUL: {
+            switch (op_type->kind)
+            {
+            case TYPE_INT: {
+                if (op_type->integer.is_signed)
+                {
+                    result_value.value =
+                        LLVMBuildNSWMul(mod->builder, lhs, rhs, "");
+                }
+                else
+                {
+                    result_value.value =
+                        LLVMBuildMul(mod->builder, lhs, rhs, "");
+                }
+                break;
+            }
+            case TYPE_DOUBLE:
+            case TYPE_FLOAT: {
+                result_value.value = LLVMBuildFMul(mod->builder, lhs, rhs, "");
+                break;
+            }
+            default: break;
+            }
+            break;
+        }
+        case BINOP_DIV: {
+            switch (op_type->kind)
+            {
+            case TYPE_INT: {
+                if (op_type->integer.is_signed)
+                {
+                    result_value.value =
+                        LLVMBuildSDiv(mod->builder, lhs, rhs, "");
+                }
+                else
+                {
+                    result_value.value =
+                        LLVMBuildUDiv(mod->builder, lhs, rhs, "");
+                }
+                break;
+            }
+            case TYPE_DOUBLE:
+            case TYPE_FLOAT: {
+                result_value.value = LLVMBuildFDiv(mod->builder, lhs, rhs, "");
+                break;
+            }
+            default: break;
+            }
+            break;
+        }
+        }
+
+        if (out_value) *out_value = result_value;
 
         break;
     }
