@@ -1,5 +1,3 @@
-proc "c" printf(fmt: *char, ...) i32;
-
 proc main() void {
     var test: i32 = 321;
 
@@ -8,7 +6,8 @@ proc main() void {
     if (test) {
         printf(c"Hello!\n");
     } else {
-        printf(c"No!\n");
+        printf(c"No: %d!\n", constant);
+        const constant: i32 = 9;
     }
 
     printf(c"Yo: %d!\n", test);
@@ -18,5 +17,9 @@ proc main() void {
         printf(c"Yo: %d!\n", test);
         printf(c"Yo: %d!\n", test);
         printf(c"Yo: %d!\n", test2);
+        printf(c"Yo: %d!\n", constant);
+        const constant: i32 = 534;
     }
 }
+
+proc "c" printf(fmt: *char, ...) i32;

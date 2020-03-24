@@ -4457,6 +4457,20 @@ void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
             array_pop(a->scope_stack);
             break;
         }
+        case AST_BLOCK: {
+            array_push(a->scope_stack, ast->block.scope);
+            type_check_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+            array_pop(a->scope_stack);
+            break;
+        }
+        case AST_IF: {
+            type_check_asts(a, ast->if_stmt.cond_stmt, 1);
+            if (ast->if_stmt.else_stmt)
+            {
+                type_check_asts(a, ast->if_stmt.else_stmt, 1);
+            }
+            break;
+        }
         case AST_PROC_DECL: {
             array_push(a->scope_stack, ast->proc.scope);
             type_check_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
@@ -4629,6 +4643,26 @@ void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
     }
 }
 
+void llvm_codegen_ast_children(
+    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
+
+void llvm_add_proc(LLContext *l, LLModule *mod, Ast *ast)
+{
+    assert(ast->type == AST_PROC_DECL);
+
+    LLVMTypeRef fun_type = llvm_type(l, ast->type_info->ptr.sub);
+
+    char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
+    LLVMValueRef fun = LLVMAddFunction(mod->mod, fun_name, fun_type);
+    ast->proc.value.value = fun;
+
+    LLVMSetLinkage(fun, LLVMInternalLinkage);
+    if (string_equals(ast->proc.convention, STR("c")))
+    {
+        LLVMSetLinkage(fun, LLVMExternalLinkage);
+    }
+}
+
 void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
@@ -4636,39 +4670,23 @@ void llvm_codegen_ast(
     {
     case AST_ROOT: {
         array_push(l->scope_stack, ast->block.scope);
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
-             ++stmt)
-        {
-            llvm_codegen_ast(l, mod, stmt, false, NULL);
-        }
+        llvm_codegen_ast_children(
+            l, mod, ast->block.stmts, array_size(ast->block.stmts), is_const);
         array_pop(l->scope_stack);
         break;
     }
     case AST_BLOCK: {
         array_push(l->scope_stack, ast->block.scope);
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
-             ++stmt)
-        {
-            llvm_codegen_ast(l, mod, stmt, false, NULL);
-        }
+        llvm_codegen_ast_children(
+            l, mod, ast->block.stmts, array_size(ast->block.stmts), is_const);
         array_pop(l->scope_stack);
         break;
     }
     case AST_PROC_DECL: {
         assert(ast->type_info->kind == TYPE_POINTER);
-        LLVMTypeRef fun_type = llvm_type(l, ast->type_info->ptr.sub);
 
-        char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
-        LLVMValueRef fun = LLVMAddFunction(mod->mod, fun_name, fun_type);
-        ast->proc.value.value = fun;
-
-        LLVMSetLinkage(fun, LLVMInternalLinkage);
-        if (string_equals(ast->proc.convention, STR("c")))
-        {
-            LLVMSetLinkage(fun, LLVMExternalLinkage);
-        }
+        LLVMValueRef fun = ast->proc.value.value;
+        assert(fun);
 
         if (ast->proc.flags & PROC_FLAG_HAS_BODY)
         {
@@ -4696,12 +4714,8 @@ void llvm_codegen_ast(
             {
                 llvm_codegen_alloca(l, mod, stmt);
             }
-            for (Ast *stmt = ast->proc.stmts;
-                 stmt != ast->proc.stmts + array_size(ast->proc.stmts);
-                 ++stmt)
-            {
-                llvm_codegen_ast(l, mod, stmt, false, NULL);
-            }
+            llvm_codegen_ast_children(
+                l, mod, ast->proc.stmts, array_size(ast->proc.stmts), is_const);
             array_pop(l->scope_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
@@ -5967,6 +5981,57 @@ void llvm_codegen_ast(
     case AST_IMPORT: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
+    }
+}
+
+void llvm_codegen_ast_children(
+    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const)
+{
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_PROC_DECL: llvm_add_proc(l, mod, ast); break;
+        default: break;
+        }
+    }
+
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_CONST_DECL:
+        case AST_PROC_DECL:
+        case AST_TYPEDEF: llvm_codegen_ast(l, mod, ast, is_const, NULL); break;
+        case AST_VAR_DECL: {
+            Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+            if (!proc)
+            {
+                llvm_codegen_ast(l, mod, ast, is_const, NULL);
+            }
+            break;
+        }
+        default: break;
+        }
+    }
+
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_CONST_DECL:
+        case AST_PROC_DECL:
+        case AST_TYPEDEF: break;
+        case AST_VAR_DECL: {
+            Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+            if (proc)
+            {
+                llvm_codegen_ast(l, mod, ast, is_const, NULL);
+            }
+            break;
+        }
+        default: llvm_codegen_ast(l, mod, ast, is_const, NULL); break;
+        }
     }
 }
 
