@@ -3,6 +3,10 @@ proc "c" printf(str: *char, ...) void;
 const some_const: i32 = 512;
 var some_var: i32 = 123;
 
+typedef SomeType struct {
+    field: i64,
+};
+
 proc say_hello() void {
     printf(c"Hello!\n");
 }

@@ -1785,7 +1785,9 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
     return res;
 }
 
-static Ast *get_aliased_expr(Scope *scope, Ast *ast)
+static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast);
+
+static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
 {
     if (ast->alias_to) return ast->alias_to;
 
@@ -1813,7 +1815,7 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
                 case AST_TYPEDEF: {
                     assert(sym->sym_scope);
                     ast->alias_to = get_aliased_expr(
-                        sym->sym_scope, sym->type_def.type_expr);
+                        compiler, sym->sym_scope, sym->type_def.type_expr);
                     break;
                 }
                 default: break;
@@ -1829,7 +1831,7 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            ast->alias_to = get_aliased_expr(scope, ast->unop.sub);
+            ast->alias_to = get_aliased_expr(compiler, scope, ast->unop.sub);
             break;
         }
         default: break;
@@ -1837,7 +1839,14 @@ static Ast *get_aliased_expr(Scope *scope, Ast *ast)
         break;
     }
     case AST_PAREN_EXPR: {
-        ast->alias_to = get_aliased_expr(scope, ast->expr);
+        ast->alias_to = get_aliased_expr(compiler, scope, ast->expr);
+        break;
+    }
+    case AST_ACCESS: {
+        Scope *accessed_scope = get_accessed_scope(compiler, scope, ast);
+        assert(accessed_scope);
+        ast->alias_to =
+            get_aliased_expr(compiler, accessed_scope, ast->access.right);
         break;
     }
     default: break;
@@ -1853,20 +1862,20 @@ static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast)
     Scope *accessed_scope = NULL;
     Ast *aliased_type_expr = NULL;
 
-    Ast *aliased = get_aliased_expr(scope, ast->access.left);
+    Ast *aliased = get_aliased_expr(compiler, scope, ast->access.left);
     switch (aliased->type)
     {
     case AST_STRUCT_FIELD: {
         assert(aliased->sym_scope);
-        aliased_type_expr =
-            get_aliased_expr(aliased->sym_scope, aliased->field.type_expr);
+        aliased_type_expr = get_aliased_expr(
+            compiler, aliased->sym_scope, aliased->field.type_expr);
         break;
     }
     case AST_VAR_DECL:
     case AST_CONST_DECL: {
         assert(aliased->sym_scope);
-        aliased_type_expr =
-            get_aliased_expr(aliased->sym_scope, aliased->decl.type_expr);
+        aliased_type_expr = get_aliased_expr(
+            compiler, aliased->sym_scope, aliased->decl.type_expr);
         break;
     }
     case AST_IMPORT: {
@@ -1877,8 +1886,8 @@ static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast)
     }
     case AST_PROC_PARAM: {
         assert(aliased->sym_scope);
-        aliased_type_expr =
-            get_aliased_expr(aliased->sym_scope, aliased->proc_param.type_expr);
+        aliased_type_expr = get_aliased_expr(
+            compiler, aliased->sym_scope, aliased->proc_param.type_expr);
         break;
     }
     default: break;
@@ -3047,7 +3056,8 @@ TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast)
         break;
     }
     case AST_ACCESS: {
-        // TODO
+        Scope *accessed_scope = get_accessed_scope(a->compiler, scope, ast);
+        ast->as_type = ast_as_type(a, accessed_scope, ast->access.right);
         break;
     }
     default: break;
