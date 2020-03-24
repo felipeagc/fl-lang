@@ -1476,6 +1476,7 @@ typedef enum AstType {
     AST_STRUCT_FIELD,
     AST_PROC_PARAM,
     AST_CAST,
+    AST_IF,
 } AstType;
 
 typedef struct AstValue
@@ -1527,6 +1528,12 @@ typedef struct Ast
             /*array*/ struct Ast *stmts;
             AstValue value;
         } proc;
+        struct
+        {
+            struct Ast *cond_expr;
+            struct Ast *cond_stmt;
+            struct Ast *else_stmt;
+        } if_stmt;
         struct
         {
             struct Scope *scope;
@@ -2703,6 +2710,32 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         break;
     }
+    case TOKEN_IF: {
+        parser_next(p, 1);
+
+        ast->type = AST_IF;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        ast->if_stmt.cond_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->if_stmt.cond_expr)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true)) res = false;
+
+        if (parser_peek(p, 0)->type == TOKEN_ELSE)
+        {
+            parser_next(p, 1);
+
+            ast->if_stmt.else_stmt =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->if_stmt.else_stmt, true)) res = false;
+        }
+
+        break;
+    }
     default: {
         Ast expr = {0};
         if (!parse_expr(p, &expr)) res = false;
@@ -3194,6 +3227,15 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         }
         break;
     }
+    case AST_IF: {
+        symbol_check_ast(a, ast->if_stmt.cond_expr);
+        symbol_check_ast(a, ast->if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt)
+        {
+            symbol_check_ast(a, ast->if_stmt.else_stmt);
+        }
+        break;
+    }
     case AST_PROC_PARAM: {
         symbol_check_ast(a, ast->proc_param.type_expr);
         if (ast->proc_param.value_expr)
@@ -3489,6 +3531,29 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         type_check_ast(a, ast->proc.return_type, &ty_ty);
 
         ast->type_info = &ty_ty;
+        break;
+    }
+    case AST_IF: {
+        type_check_ast(a, ast->if_stmt.cond_expr, NULL);
+        type_check_ast(a, ast->if_stmt.cond_stmt, NULL);
+        if (ast->if_stmt.else_stmt)
+        {
+            type_check_ast(a, ast->if_stmt.else_stmt, NULL);
+        }
+
+        if (ast->if_stmt.cond_expr->type_info->kind != TYPE_INT &&
+            ast->if_stmt.cond_expr->type_info->kind != TYPE_FLOAT &&
+            ast->if_stmt.cond_expr->type_info->kind != TYPE_DOUBLE &&
+            ast->if_stmt.cond_expr->type_info->kind != TYPE_BOOL &&
+            ast->if_stmt.cond_expr->type_info->kind != TYPE_POINTER)
+        {
+            compile_error(
+                a->compiler,
+                ast->if_stmt.cond_expr->loc,
+                "conditional only works for numerical types");
+            break;
+        }
+
         break;
     }
     default: {
@@ -5716,6 +5781,91 @@ void llvm_codegen_ast(
         }
 
         if (out_value) *out_value = result_value;
+
+        break;
+    }
+    case AST_IF: {
+        AstValue cond_val = {0};
+        llvm_codegen_ast(l, mod, ast->if_stmt.cond_expr, false, &cond_val);
+
+        TypeInfo *cond_type = ast->if_stmt.cond_expr->type_info;
+        LLVMValueRef cond = load_val(mod, &cond_val);
+
+        switch (cond_type->kind)
+        {
+        case TYPE_INT:
+        case TYPE_BOOL:
+            cond = LLVMBuildICmp(
+                mod->builder,
+                LLVMIntNE,
+                cond,
+                LLVMConstInt(llvm_type(l, cond_type), 0, false),
+                "");
+            break;
+        case TYPE_POINTER:
+            cond = LLVMBuildICmp(
+                mod->builder,
+                LLVMIntNE,
+                cond,
+                LLVMConstPointerNull(llvm_type(l, cond_type)),
+                "");
+            break;
+        case TYPE_FLOAT:
+        case TYPE_DOUBLE:
+            cond = LLVMBuildFCmp(
+                mod->builder,
+                LLVMRealUNE,
+                cond,
+                LLVMConstReal(llvm_type(l, cond_type), (double)0.0f),
+                "");
+            break;
+        default: assert(0); break;
+        }
+
+        LLVMValueRef fun =
+            LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+        assert(fun);
+
+        LLVMBasicBlockRef then_bb = LLVMAppendBasicBlock(fun, "then");
+        LLVMBasicBlockRef else_bb = NULL;
+        if (ast->if_stmt.else_stmt)
+        {
+            else_bb = LLVMAppendBasicBlock(fun, "else");
+        }
+        LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "merge");
+        if (!else_bb) else_bb = merge_bb;
+
+        LLVMBuildCondBr(mod->builder, cond, then_bb, else_bb);
+
+        // Then
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, then_bb);
+
+            llvm_codegen_ast(l, mod, ast->if_stmt.cond_stmt, false, NULL);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+            {
+                LLVMBuildBr(mod->builder, merge_bb);
+            }
+            then_bb = LLVMGetInsertBlock(mod->builder);
+        }
+
+        // Else
+        if (ast->if_stmt.else_stmt)
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, else_bb);
+
+            llvm_codegen_ast(l, mod, ast->if_stmt.else_stmt, false, NULL);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+            {
+                LLVMBuildBr(mod->builder, merge_bb);
+            }
+            else_bb = LLVMGetInsertBlock(mod->builder);
+        }
+
+        // Merge
+        LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
 
         break;
     }

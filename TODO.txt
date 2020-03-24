@@ -11,5 +11,8 @@ Array literals
 Slices
 Dynamic arrays
 
+Implement sizeof and alignof myself instead of letting LLVM handle it
+
 Bugs:
+- I don't think types from imported namespaces work (probably need to test imports a bit more)
 - I think struct fields don't have location information

@@ -1,0 +1,13 @@
+proc "c" printf(fmt: *char, ...) i32;
+
+proc main() void {
+    var test: i32 = 321;
+
+    if (test) printf(c"Hello!\n");
+
+    if (test) printf(c"Hello!\n");
+    else printf(c"No!\n");
+
+    printf(c"Yo: %d!\n", test);
+
+}
