@@ -1044,7 +1044,6 @@ void lex_token(Lexer *l)
                 char n = lex_next(l, 1);
                 if (n == '\\')
                 {
-                    // TODO: wtf this is wrong
                     ++tok.loc.length;
                     n = lex_next(l, 1);
                     switch (n)
@@ -1650,6 +1649,24 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         case INTRINSIC_SIZEOF:
         case INTRINSIC_ALIGNOF: res = true; break;
         }
+        break;
+    }
+    case AST_UNARY_EXPR: {
+        switch (ast->unop.type)
+        {
+        case UNOP_DEREFERENCE:
+        case UNOP_ADDRESS: res = false; break;
+        case UNOP_NEG: {
+            res = is_expr_const(scope, ast->unop.sub);
+            break;
+        }
+        }
+        break;
+    }
+    case AST_BINARY_EXPR: {
+        res = true;
+        if (!is_expr_const(scope, ast->binop.left)) res = false;
+        if (!is_expr_const(scope, ast->binop.right)) res = false;
         break;
     }
     default: break;
@@ -4926,108 +4943,181 @@ void llvm_codegen_ast(
         LLVMValueRef lhs = load_val(mod, &left_val);
         LLVMValueRef rhs = load_val(mod, &right_val);
 
-        switch (ast->binop.type)
+        if (!is_const)
         {
-        case BINOP_ADD: {
-            switch (op_type->kind)
+            switch (ast->binop.type)
             {
-            case TYPE_INT: {
-                if (op_type->integer.is_signed)
+            case BINOP_ADD: {
+                switch (op_type->kind)
                 {
-                    result_value.value =
-                        LLVMBuildNSWAdd(mod->builder, lhs, rhs, "");
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildNSWAdd(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildAdd(mod->builder, lhs, rhs, "");
+                    break;
                 }
-                else
-                {
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
                     result_value.value =
-                        LLVMBuildAdd(mod->builder, lhs, rhs, "");
+                        LLVMBuildFAdd(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: break;
                 }
                 break;
             }
-            case TYPE_DOUBLE:
-            case TYPE_FLOAT: {
-                result_value.value = LLVMBuildFAdd(mod->builder, lhs, rhs, "");
+            case BINOP_SUB: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildNSWSub(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildSub(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value =
+                        LLVMBuildFSub(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: break;
+                }
                 break;
             }
-            default: break;
+            case BINOP_MUL: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildNSWMul(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildMul(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value =
+                        LLVMBuildFMul(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: break;
+                }
+                break;
             }
-            break;
+            case BINOP_DIV: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildSDiv(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildUDiv(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value =
+                        LLVMBuildFDiv(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: break;
+                }
+                break;
+            }
+            }
         }
-        case BINOP_SUB: {
-            switch (op_type->kind)
+        else
+        {
+            switch (ast->binop.type)
             {
-            case TYPE_INT: {
-                if (op_type->integer.is_signed)
+            case BINOP_ADD: {
+                switch (op_type->kind)
                 {
-                    result_value.value =
-                        LLVMBuildNSWSub(mod->builder, lhs, rhs, "");
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMConstNSWAdd(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstAdd(lhs, rhs);
+                    break;
                 }
-                else
-                {
-                    result_value.value =
-                        LLVMBuildSub(mod->builder, lhs, rhs, "");
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value = LLVMConstFAdd(lhs, rhs);
+                    break;
                 }
-                break;
-            }
-            case TYPE_DOUBLE:
-            case TYPE_FLOAT: {
-                result_value.value = LLVMBuildFSub(mod->builder, lhs, rhs, "");
-                break;
-            }
-            default: break;
-            }
-            break;
-        }
-        case BINOP_MUL: {
-            switch (op_type->kind)
-            {
-            case TYPE_INT: {
-                if (op_type->integer.is_signed)
-                {
-                    result_value.value =
-                        LLVMBuildNSWMul(mod->builder, lhs, rhs, "");
-                }
-                else
-                {
-                    result_value.value =
-                        LLVMBuildMul(mod->builder, lhs, rhs, "");
+                default: break;
                 }
                 break;
             }
-            case TYPE_DOUBLE:
-            case TYPE_FLOAT: {
-                result_value.value = LLVMBuildFMul(mod->builder, lhs, rhs, "");
-                break;
-            }
-            default: break;
-            }
-            break;
-        }
-        case BINOP_DIV: {
-            switch (op_type->kind)
-            {
-            case TYPE_INT: {
-                if (op_type->integer.is_signed)
+            case BINOP_SUB: {
+                switch (op_type->kind)
                 {
-                    result_value.value =
-                        LLVMBuildSDiv(mod->builder, lhs, rhs, "");
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMConstNSWSub(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstSub(lhs, rhs);
+                    break;
                 }
-                else
-                {
-                    result_value.value =
-                        LLVMBuildUDiv(mod->builder, lhs, rhs, "");
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value = LLVMConstFSub(lhs, rhs);
+                    break;
+                }
+                default: break;
                 }
                 break;
             }
-            case TYPE_DOUBLE:
-            case TYPE_FLOAT: {
-                result_value.value = LLVMBuildFDiv(mod->builder, lhs, rhs, "");
+            case BINOP_MUL: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMConstNSWMul(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstMul(lhs, rhs);
+                    break;
+                }
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value = LLVMConstFMul(lhs, rhs);
+                    break;
+                }
+                default: break;
+                }
                 break;
             }
-            default: break;
+            case BINOP_DIV: {
+                switch (op_type->kind)
+                {
+                case TYPE_INT: {
+                    if (op_type->integer.is_signed)
+                        result_value.value = LLVMConstSDiv(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstUDiv(lhs, rhs);
+                    break;
+                }
+                case TYPE_DOUBLE:
+                case TYPE_FLOAT: {
+                    result_value.value = LLVMConstFDiv(lhs, rhs);
+                    break;
+                }
+                default: break;
+                }
+                break;
             }
-            break;
-        }
+            }
         }
 
         if (out_value) *out_value = result_value;

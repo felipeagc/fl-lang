@@ -67,20 +67,5 @@ proc main() i32 {
     var my_float: float = cast(float) my_u32;
     printf(c"my_float = %f\n", my_float);
 
-    var mul1: float = 3.3 * 3;
-    printf(c"mul1 = %f\n", mul1);
-
-    var mul2: double = 3.3 * 3;
-    printf(c"mul2 = %lf\n", mul2);
-
-    var sub1: i32 = 5 - 10;
-    printf(c"sub1 = %d\n", sub1);
-
-    var sub2: u32 = 5 - 10;
-    printf(c"sub2 = %u\n", sub2);
-
-    printf(c"neg = %ld\n", -5);
-    printf(c"fneg = %f\n", -5.5 + 3);
-
     return 0;
 }
