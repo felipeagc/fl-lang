@@ -539,6 +539,7 @@ typedef enum TokenType {
 
     TOKEN_ASTERISK,
     TOKEN_AMPERSAND,
+    TOKEN_SLASH,
 
     TOKEN_DOT,
     TOKEN_ELLIPSIS,
@@ -607,6 +608,7 @@ static const char *token_strings[] = {
 
     [TOKEN_ASTERISK] = "*",
     [TOKEN_AMPERSAND] = "&",
+    [TOKEN_SLASH] = "/",
 
     [TOKEN_DOT] = ".",
     [TOKEN_ELLIPSIS] = "...",
@@ -698,6 +700,7 @@ void print_token(Token *tok)
 
         PRINT_TOKEN_TYPE(TOKEN_ASTERISK);
         PRINT_TOKEN_TYPE(TOKEN_AMPERSAND);
+        PRINT_TOKEN_TYPE(TOKEN_SLASH);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
         PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
@@ -874,6 +877,52 @@ void lex_token(Lexer *l)
         tok.type = TOKEN_AMPERSAND;
         break;
     }
+    case '/': {
+        if (lex_peek(l, 1) == '/')
+        {
+            // Comment
+            lex_next(l, 2);
+
+            while (lex_peek(l, 0) != '\n' && !lex_is_at_end(l))
+            {
+                lex_next(l, 1);
+            }
+
+            break;
+        }
+        if (lex_peek(l, 1) == '*')
+        {
+            // Multiline comment
+            lex_next(l, 2);
+
+            while ((lex_peek(l, 0) != '*' || lex_peek(l, 1) != '/') &&
+                   !lex_is_at_end(l))
+            {
+                if (lex_peek(l, 0) == '\n')
+                {
+                    ++l->line;
+                    l->col = 0;
+                }
+                lex_next(l, 1);
+            }
+
+            if (!lex_is_at_end(l))
+            {
+                lex_next(l, 2);
+            }
+            else
+            {
+                compile_error(l->compiler, tok.loc, "unclosed comment");
+            }
+
+            break;
+        }
+
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_SLASH;
+        break;
+    }
     case ':': {
         tok.loc.length = 1;
         lex_next(l, 1);
@@ -944,12 +993,7 @@ void lex_token(Lexer *l)
         ++tok.loc.length;
         if (lex_next(l, 1) != '\'' || lex_is_at_end(l))
         {
-            compile_error(
-                l->compiler,
-                tok.loc,
-                "unclosed char literal",
-                tok.loc.length,
-                tok.loc.buf);
+            compile_error(l->compiler, tok.loc, "unclosed char literal");
             tok.loc.length = 0;
         }
 
@@ -1016,12 +1060,7 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             if (lex_next(l, 1) != '\"' || lex_is_at_end(l))
             {
-                compile_error(
-                    l->compiler,
-                    tok.loc,
-                    "unclosed string",
-                    tok.loc.length,
-                    tok.loc.buf);
+                compile_error(l->compiler, tok.loc, "unclosed string");
                 tok.loc.length = 0;
             }
 
