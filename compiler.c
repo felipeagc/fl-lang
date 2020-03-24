@@ -1378,6 +1378,7 @@ TypeInfo *compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 typedef enum UnOpType {
     UNOP_DEREFERENCE,
     UNOP_ADDRESS,
+    UNOP_NEG,
 } UnOpType;
 
 typedef enum BinOpType {
@@ -2137,6 +2138,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
     switch (tok->type)
     {
+    case TOKEN_MINUS:
     case TOKEN_ASTERISK:
     case TOKEN_AMPERSAND: {
         parser_next(p, 1);
@@ -2144,9 +2146,16 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         ast->type = AST_UNARY_EXPR;
         if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
         if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
+        if (tok->type == TOKEN_MINUS) ast->unop.type = UNOP_NEG;
 
-        ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->unop.sub)) res = false;
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_unary_expr(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->unop.sub = right;
 
         break;
     }
@@ -3491,7 +3500,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     break;
                 }
                 case AST_TYPEDEF: {
-                    ast->type_info = sym->type_def.type_expr->type_info;
+                    static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+                    ast->type_info = &ty_ty;
                     break;
                 }
                 default: break;
@@ -3661,13 +3671,35 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
     case AST_UNARY_EXPR: {
+        TypeInfo *sub_expected_type = NULL;
+
+        switch (ast->unop.type)
+        {
+        case UNOP_DEREFERENCE: break;
+        case UNOP_ADDRESS: {
+            if (expected_type && expected_type->kind == TYPE_POINTER)
+            {
+                sub_expected_type = expected_type->ptr.sub;
+            }
+            break;
+        }
+        case UNOP_NEG: sub_expected_type = expected_type; break;
+        }
+
+        type_check_ast(a, ast->unop.sub, sub_expected_type);
+
+        if (!ast->unop.sub->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for unary operand");
+            break;
+        }
+
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            res = type_check_ast(a, ast->unop.sub, NULL);
-
-            if (!ast->unop.sub->type_info) break;
-
             if (ast->unop.sub->type_info->kind == TYPE_TYPE)
             {
                 TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
@@ -3687,21 +3719,9 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             ast->type_info = ast->unop.sub->type_info->ptr.sub;
-            assert(ast->type_info);
-
             break;
         }
         case UNOP_ADDRESS: {
-            TypeInfo *sub_expected_type = NULL;
-            if (expected_type && expected_type->kind == TYPE_POINTER)
-            {
-                sub_expected_type = expected_type->ptr.sub;
-            }
-
-            res = type_check_ast(a, ast->unop.sub, sub_expected_type);
-
-            if (!ast->unop.sub->type_info) break;
-
             TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
             memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_POINTER;
@@ -3709,7 +3729,24 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = ty;
             break;
         }
+        case UNOP_NEG: {
+            if (ast->unop.sub->type_info->kind != TYPE_INT &&
+                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
+                ast->unop.sub->type_info->kind != TYPE_DOUBLE)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "can only do arithmetic on numeric types");
+                break;
+            }
+
+            ast->type_info = ast->unop.sub->type_info;
+
+            break;
         }
+        }
+
         break;
     }
     case AST_BINARY_EXPR: {
@@ -3724,6 +3761,23 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         type_check_ast(a, ast->binop.left, operand_expected_type);
         type_check_ast(a, ast->binop.right, operand_expected_type);
+
+        if (operand_expected_type == NULL && ast->binop.left->type_info &&
+            ast->binop.right->type_info)
+        {
+            if ((ast->binop.right->type_info->kind == TYPE_FLOAT ||
+                 ast->binop.right->type_info->kind == TYPE_DOUBLE) &&
+                ast->binop.left->type_info->kind == TYPE_INT)
+            {
+                type_check_ast(a, ast->binop.left, ast->binop.right->type_info);
+            }
+            if ((ast->binop.left->type_info->kind == TYPE_FLOAT ||
+                 ast->binop.left->type_info->kind == TYPE_DOUBLE) &&
+                ast->binop.right->type_info->kind == TYPE_INT)
+            {
+                type_check_ast(a, ast->binop.right, ast->binop.left->type_info);
+            }
+        }
 
         if (!ast->binop.left->type_info || !ast->binop.right->type_info)
         {
@@ -3741,6 +3795,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 a->compiler,
                 ast->loc,
                 "binary operands are of different types");
+            assert(0);
             break;
         }
 
@@ -3878,7 +3933,11 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     if (!ast->type_info)
     {
         // TODO: remove this, only temporary for debugging
-        printf("undefined type: %u:%u\n", ast->loc.line, ast->loc.col);
+        printf(
+            "undefined type: %u:%u (%u)\n",
+            ast->loc.line,
+            ast->loc.col,
+            ast->loc.length);
     }
 
     if (res && ast->type_info && expected_type)
@@ -4705,40 +4764,63 @@ void llvm_codegen_ast(
         break;
     }
     case AST_UNARY_EXPR: {
+        AstValue sub_value = {0};
+        llvm_codegen_ast(l, mod, ast->unop.sub, is_const, &sub_value);
+
+        TypeInfo *op_type = ast->unop.sub->type_info;
+
+        AstValue result_value = {0};
+
         switch (ast->unop.type)
         {
         case UNOP_ADDRESS: {
-            AstValue value = {0};
-            llvm_codegen_ast(l, mod, ast->unop.sub, false, &value);
-
-            if (!value.is_lvalue)
+            if (!sub_value.is_lvalue)
             {
-                AstValue address_value = {0};
-                address_value.value = LLVMBuildAlloca(
+                result_value.value = LLVMBuildAlloca(
                     mod->builder, llvm_type(l, ast->unop.sub->type_info), "");
-                LLVMBuildStore(mod->builder, value.value, address_value.value);
-
-                if (out_value) *out_value = address_value;
-
-                break;
+                LLVMBuildStore(
+                    mod->builder, sub_value.value, result_value.value);
             }
-
-            value.is_lvalue = false;
-            if (out_value) *out_value = value;
+            else
+            {
+                result_value = sub_value;
+                result_value.is_lvalue = false;
+            }
             break;
         }
         case UNOP_DEREFERENCE: {
-            AstValue value = {0};
-            llvm_codegen_ast(l, mod, ast->unop.sub, false, &value);
+            result_value.is_lvalue = true;
+            result_value.value = load_val(mod, &sub_value);
+            break;
+        }
+        case UNOP_NEG: {
+            LLVMValueRef sub = load_val(mod, &sub_value);
+            switch (op_type->kind)
+            {
+            case TYPE_INT: {
+                if (op_type->integer.is_signed)
+                {
+                    result_value.value = LLVMBuildNSWNeg(mod->builder, sub, "");
+                }
+                else
+                {
+                    result_value.value = LLVMBuildNeg(mod->builder, sub, "");
+                }
+                break;
+            }
+            case TYPE_FLOAT:
+            case TYPE_DOUBLE: {
+                result_value.value = LLVMBuildFNeg(mod->builder, sub, "");
+                break;
+            }
+            default: break;
+            }
 
-            AstValue deref_value = {0};
-            deref_value.is_lvalue = true;
-            deref_value.value = load_val(mod, &value);
-
-            if (out_value) *out_value = deref_value;
             break;
         }
         }
+
+        if (out_value) *out_value = result_value;
         break;
     }
     case AST_SUBSCRIPT: {

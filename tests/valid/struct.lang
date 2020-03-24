@@ -79,5 +79,8 @@ proc main() i32 {
     var sub2: u32 = 5 - 10;
     printf(c"sub2 = %u\n", sub2);
 
+    printf(c"neg = %ld\n", -5);
+    printf(c"fneg = %f\n", -5.5 + 3);
+
     return 0;
 }
