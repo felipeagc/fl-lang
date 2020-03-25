@@ -1,4 +1,4 @@
-proc "c" printf(str: *char, ...) void;
+import c "core:c";
 
 const some_const: i32 = 512;
 var some_var: i32 = 123;
@@ -8,5 +8,5 @@ typedef SomeType struct {
 };
 
 proc say_hello() void {
-    printf(c"Hello!\n");
+    c.printf(c"Hello!\n");
 }

@@ -20,6 +20,10 @@
 #include <unistd.h>
 #endif
 
+// Defines {{{
+#define LANG_FILE_EXTENSION ".lang"
+// }}}
+
 // Forward declarations {{{
 typedef struct SourceFile SourceFile;
 //}}}
@@ -29,6 +33,8 @@ char *get_absolute_path(char *relative_path)
 {
 #ifdef __unix__
     return realpath(relative_path, NULL);
+#else
+#error OS not supported
 #endif
 }
 
@@ -44,6 +50,24 @@ char *get_file_dir(char *path)
         }
     }
     return abs;
+}
+
+char *get_exe_path(void)
+{
+#ifdef __linux__
+    char buf[PATH_MAX];
+    memset(buf, 0, sizeof(buf));
+    if (readlink("/proc/self/exe", buf, sizeof(buf)))
+    {
+        size_t string_length = strlen(buf) + 1;
+        char *s = malloc(string_length);
+        memcpy(s, buf, string_length);
+        return s;
+    }
+    return NULL;
+#else
+#error OS not supported
+#endif
 }
 // }}}
 
@@ -377,6 +401,16 @@ String bump_strdup(BumpAlloc *alloc, String str)
     return s;
 }
 
+String bump_str_join(BumpAlloc *alloc, String a, String b)
+{
+    String s;
+    s.length = a.length + b.length;
+    s.buf = bump_alloc(alloc, s.length);
+    memcpy(s.buf, a.buf, a.length);
+    memcpy(s.buf + a.length, b.buf, b.length);
+    return s;
+}
+
 char *bump_c_str(BumpAlloc *alloc, String str)
 {
     char *s;
@@ -435,6 +469,9 @@ typedef struct Compiler
     /*array*/ Error *errors;
     HashMap files;
     struct LLContext *backend;
+    String compiler_path;
+    String compiler_dir;
+    String corelib_dir;
 } Compiler;
 
 void compiler_init(Compiler *compiler)
@@ -442,6 +479,13 @@ void compiler_init(Compiler *compiler)
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
     hash_init(&compiler->files, 521);
+
+    char *c_compiler_path = get_exe_path();
+    char *c_compiler_dir = get_file_dir(c_compiler_path);
+    compiler->compiler_path = CSTR(c_compiler_path);
+    compiler->compiler_dir = CSTR(c_compiler_dir);
+    compiler->corelib_dir =
+        bump_str_join(&compiler->bump, compiler->compiler_dir, STR("core/"));
 }
 
 void compiler_destroy(Compiler *compiler)
@@ -6716,18 +6760,41 @@ void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
     switch (ast->type)
     {
     case AST_IMPORT: {
-        char *c_dir = get_file_dir(bump_c_str(&compiler->bump, file->path));
         char *c_imported = bump_c_str(&compiler->bump, ast->import.path);
+        static char *core_prefix = "core:";
 
-        size_t new_path_size = strlen(c_dir) + 1 + strlen(c_imported) + 1;
-        char *c_new_path = bump_alloc(&compiler->bump, new_path_size);
-        snprintf(c_new_path, new_path_size, "%s/%s", c_dir, c_imported);
+        String abs_path = {0};
 
-        // Normalize the path
-        char *c_abs_path = get_absolute_path(c_new_path);
-        String abs_path = CSTR(c_abs_path);
+        if (strncmp(c_imported, core_prefix, strlen(core_prefix)) == 0)
+        {
+            // Core import
+
+            char *file_name_without_extension =
+                c_imported + strlen(core_prefix);
+
+            String import_file_name = bump_str_join(
+                &compiler->bump,
+                CSTR(file_name_without_extension),
+                CSTR(LANG_FILE_EXTENSION));
+
+            abs_path = bump_str_join(
+                &compiler->bump, compiler->corelib_dir, import_file_name);
+        }
+        else
+        {
+            // Relative import
+            char *c_dir = get_file_dir(bump_c_str(&compiler->bump, file->path));
+
+            size_t new_path_size = strlen(c_dir) + 1 + strlen(c_imported) + 1;
+            char *c_new_path = bump_alloc(&compiler->bump, new_path_size);
+            snprintf(c_new_path, new_path_size, "%s/%s", c_dir, c_imported);
+
+            // Normalize the path
+            char *c_abs_path = get_absolute_path(c_new_path);
+            abs_path = CSTR(c_abs_path);
+        }
+
         ast->import.abs_path = abs_path;
-
         process_file(compiler, abs_path);
         break;
     }

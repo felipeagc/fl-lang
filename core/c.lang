@@ -1,0 +1,15 @@
+typedef c_int i32;
+typedef c_char char;
+typedef c_size_t u64;
+
+proc "c" printf(fmt: *c_char, ...) c_int;
+proc "c" puts(str: *c_char) c_int;
+
+proc "c" exit(code: c_int) void;
+proc "c" abort() void;
+
+proc "c" malloc(size: c_size_t) *void;
+proc "c" free(ptr: *void) void;
+
+proc "c" strlen(string: *c_char) c_size;
+proc "c" strdup(string: *c_char) *c_char;

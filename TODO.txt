@@ -1,18 +1,22 @@
-If
-For
 Default struct member initialization
 Ternary
 String type
 Defer statement
 Using statement
 
+Offsetof
 Struct literals
 Array literals
 Slices
 Dynamic arrays
 
+Conditional compilation
+
 Implement sizeof and alignof myself instead of letting LLVM handle it
 
 Bugs:
-- I don't think types from imported namespaces work (probably need to test imports a bit more)
 - I think struct fields don't have location information
+- Duplicate extern function declarations
+- Segfault when import path is not found
+- Circular imports
+- Circular structs

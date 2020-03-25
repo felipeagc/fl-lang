@@ -1,4 +1,5 @@
 import hello "imported.lang";
+import c "core:c";
 
 proc main() void {
     hello.say_hello();
@@ -7,4 +8,6 @@ proc main() void {
 
     var some_var: hello.SomeType;
     some_var.field = 32;
+
+    c.printf(c"Hello\n");
 }
