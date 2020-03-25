@@ -1325,8 +1325,8 @@ typedef enum TypeKind {
 typedef struct TypeInfo
 {
     TypeKind kind;
-
     LLVMTypeRef ref;
+    bool can_change;
 
     union
     {
@@ -1509,6 +1509,7 @@ typedef enum AstType {
     AST_PROC_PARAM,
     AST_CAST,
     AST_IF,
+    AST_WHILE,
 } AstType;
 
 typedef struct AstValue
@@ -2843,7 +2844,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
     case TOKEN_WHILE: {
         parser_next(p, 1);
 
-        ast->type = AST_IF;
+        ast->type = AST_WHILE;
 
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -3236,6 +3237,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         }
         break;
     }
+    case AST_WHILE: {
+        create_scopes_ast(a, ast->while_stmt.cond);
+        create_scopes_ast(a, ast->while_stmt.stmt);
+        break;
+    }
     case AST_PAREN_EXPR: {
         create_scopes_ast(a, ast->expr);
         break;
@@ -3399,6 +3405,11 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         {
             symbol_check_ast(a, ast->if_stmt.else_stmt);
         }
+        break;
+    }
+    case AST_WHILE: {
+        symbol_check_ast(a, ast->while_stmt.cond);
+        symbol_check_ast(a, ast->while_stmt.stmt);
         break;
     }
     case AST_BLOCK: {
@@ -3743,6 +3754,31 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         break;
     }
+    case AST_WHILE: {
+        type_check_ast(a, ast->while_stmt.cond, NULL);
+        type_check_ast(a, ast->while_stmt.stmt, NULL);
+
+        if (!ast->while_stmt.cond->type_info)
+        {
+            compile_error(a->compiler, ast->while_stmt.cond->loc, "asdasd");
+            break;
+        }
+
+        if (ast->while_stmt.cond->type_info->kind != TYPE_INT &&
+            ast->while_stmt.cond->type_info->kind != TYPE_FLOAT &&
+            ast->while_stmt.cond->type_info->kind != TYPE_DOUBLE &&
+            ast->while_stmt.cond->type_info->kind != TYPE_BOOL &&
+            ast->while_stmt.cond->type_info->kind != TYPE_POINTER)
+        {
+            compile_error(
+                a->compiler,
+                ast->while_stmt.cond->loc,
+                "while only works for numerical types");
+            break;
+        }
+
+        break;
+    }
     default: {
         is_statement = false;
         break;
@@ -3806,6 +3842,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TOKEN_INT_LIT: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
+                .can_change = true,
                 .integer = {.is_signed = true, .num_bits = 64}};
             ast->type_info = &ty;
 
@@ -3826,7 +3863,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         case TOKEN_FLOAT_LIT: {
-            static TypeInfo ty = {.kind = TYPE_DOUBLE};
+            static TypeInfo ty = {
+                .kind = TYPE_DOUBLE,
+                .can_change = true,
+            };
             ast->type_info = &ty;
 
             if (expected_type)
@@ -4185,19 +4225,15 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (expected_type == NULL)
             {
-                if ((ast->binop.right->type_info->kind == TYPE_FLOAT ||
-                     ast->binop.right->type_info->kind == TYPE_DOUBLE) &&
-                    ast->binop.left->type_info->kind == TYPE_INT)
-                {
-                    type_check_ast(
-                        a, ast->binop.left, ast->binop.right->type_info);
-                }
-                if ((ast->binop.left->type_info->kind == TYPE_FLOAT ||
-                     ast->binop.left->type_info->kind == TYPE_DOUBLE) &&
-                    ast->binop.right->type_info->kind == TYPE_INT)
+                if (ast->binop.right->type_info->can_change)
                 {
                     type_check_ast(
                         a, ast->binop.right, ast->binop.left->type_info);
+                }
+                else if (ast->binop.left->type_info->can_change)
+                {
+                    type_check_ast(
+                        a, ast->binop.left, ast->binop.right->type_info);
                 }
             }
 
@@ -4244,17 +4280,13 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if ((ast->binop.right->type_info->kind == TYPE_FLOAT ||
-                 ast->binop.right->type_info->kind == TYPE_DOUBLE) &&
-                ast->binop.left->type_info->kind == TYPE_INT)
-            {
-                type_check_ast(a, ast->binop.left, ast->binop.right->type_info);
-            }
-            if ((ast->binop.left->type_info->kind == TYPE_FLOAT ||
-                 ast->binop.left->type_info->kind == TYPE_DOUBLE) &&
-                ast->binop.right->type_info->kind == TYPE_INT)
+            if (ast->binop.right->type_info->can_change)
             {
                 type_check_ast(a, ast->binop.right, ast->binop.left->type_info);
+            }
+            else if (ast->binop.left->type_info->can_change)
+            {
+                type_check_ast(a, ast->binop.left, ast->binop.right->type_info);
             }
 
             if (!exact_types(
@@ -4529,6 +4561,11 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
             }
             break;
         }
+        case AST_WHILE: {
+            register_symbol_asts(a, ast->while_stmt.cond, 1);
+            register_symbol_asts(a, ast->while_stmt.stmt, 1);
+            break;
+        }
         default: break;
         }
     }
@@ -4642,6 +4679,11 @@ void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
             {
                 type_check_asts(a, ast->if_stmt.else_stmt, 1);
             }
+            break;
+        }
+        case AST_WHILE: {
+            type_check_asts(a, ast->while_stmt.cond, 1);
+            type_check_asts(a, ast->while_stmt.stmt, 1);
             break;
         }
         case AST_PROC_DECL: {
@@ -4877,6 +4919,11 @@ void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
         {
             llvm_codegen_alloca(l, mod, ast->if_stmt.else_stmt);
         }
+        break;
+    }
+    case AST_WHILE: {
+        llvm_codegen_alloca(l, mod, ast->while_stmt.cond);
+        llvm_codegen_alloca(l, mod, ast->while_stmt.stmt);
         break;
     }
     default: break;
@@ -6191,10 +6238,54 @@ void llvm_codegen_ast(
             llvm_codegen_ast(l, mod, ast->if_stmt.else_stmt, false, NULL);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
-            {
                 LLVMBuildBr(mod->builder, merge_bb);
-            }
+
             else_bb = LLVMGetInsertBlock(mod->builder);
+        }
+
+        // Merge
+        LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
+
+        break;
+    }
+    case AST_WHILE: {
+        LLVMValueRef fun =
+            LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+        assert(fun);
+
+        LLVMBasicBlockRef cond_bb = LLVMAppendBasicBlock(fun, "");
+        LLVMBasicBlockRef stmts_bb = LLVMAppendBasicBlock(fun, "");
+        LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "");
+
+        LLVMBuildBr(mod->builder, cond_bb);
+
+        // Cond
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, cond_bb);
+
+            AstValue cond_val = {0};
+            llvm_codegen_ast(l, mod, ast->while_stmt.cond, false, &cond_val);
+
+            TypeInfo *cond_type = ast->while_stmt.cond->type_info;
+
+            LLVMValueRef bool_val = bool_value(
+                l, mod, load_val(mod, &cond_val), cond_type, is_const);
+
+            LLVMBuildCondBr(mod->builder, bool_val, stmts_bb, merge_bb);
+
+            cond_bb = LLVMGetInsertBlock(mod->builder);
+        }
+
+        // Stmts
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
+
+            llvm_codegen_ast(l, mod, ast->while_stmt.stmt, false, NULL);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+                LLVMBuildBr(mod->builder, cond_bb);
+
+            stmts_bb = LLVMGetInsertBlock(mod->builder);
         }
 
         // Merge

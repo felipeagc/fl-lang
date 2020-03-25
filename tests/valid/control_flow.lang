@@ -26,6 +26,13 @@ proc main() void {
     if (false && false) abort();
     if (false && true) abort();
     if (!(true && true)) abort();
+
+    var n: i32 = 0;
+    while (n < 5) {
+        printf(c"%d\n", n);
+        n = n + 1;
+    }
+    printf(c"n = %d\n", n);
 }
 
 proc "c" printf(fmt: *char, ...) i32;
