@@ -18,4 +18,6 @@ proc main() void {
 
     printf(c"Ptr: %p\n", ptr);
     some_func(ptr);
+
+    var tmp_ptr: *i32 = &123;
 }

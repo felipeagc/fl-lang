@@ -1561,6 +1561,7 @@ typedef enum AstType {
     AST_CAST,
     AST_IF,
     AST_WHILE,
+    AST_FOR,
     AST_BREAK,
     AST_CONTINUE,
 } AstType;
@@ -1625,6 +1626,16 @@ typedef struct Ast
             struct Ast *cond;
             struct Ast *stmt;
         } while_stmt;
+        struct
+        {
+            struct Scope *scope;
+
+            struct Ast *init;
+            struct Ast *cond;
+            struct Ast *inc;
+
+            struct Ast *stmt;
+        } for_stmt;
         struct
         {
             struct Scope *scope;
@@ -2667,7 +2678,7 @@ bool parse_expr(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
+bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 {
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
@@ -2678,13 +2689,14 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
     {
     case TOKEN_LCURLY: {
         parser_next(p, 1);
+        need_semi = false;
 
         ast->type = AST_BLOCK;
 
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
             Ast stmt = {0};
-            if (!parse_stmt(p, &stmt, true)) res = false;
+            if (!parse_stmt(p, &stmt, true, true)) res = false;
             array_push(ast->block.stmts, stmt);
         }
 
@@ -2696,6 +2708,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
+        need_semi = false;
 
         if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
         {
@@ -2760,7 +2773,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             while (parser_peek(p, 0)->type != TOKEN_RCURLY)
             {
                 Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true)) res = false;
+                if (!parse_stmt(p, &stmt, true, true)) res = false;
                 array_push(ast->proc.stmts, stmt);
             }
 
@@ -2769,7 +2782,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         else
         {
             ast->proc.flags = ast->proc.flags & ~PROC_FLAG_HAS_BODY;
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+            need_semi = true;
         }
 
         break;
@@ -2795,8 +2808,6 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
             ast->proc.convention = convention_tok->str;
         }
-
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
         break;
     }
@@ -2835,8 +2846,6 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
                 "constant declaration must have initializer");
         }
 
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
         break;
     }
     case TOKEN_TYPEDEF: {
@@ -2853,14 +2862,13 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         ast->type_def.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->type_def.type_expr)) res = false;
 
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
         break;
     }
     case TOKEN_RETURN: {
         parser_next(p, 1);
 
         ast->type = AST_RETURN;
+        need_semi = true;
 
         if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
         {
@@ -2868,13 +2876,13 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             if (!parse_expr(p, ast->expr)) res = false;
         }
 
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         break;
     }
     case TOKEN_IF: {
         parser_next(p, 1);
 
         ast->type = AST_IF;
+        need_semi = false;
 
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -2884,7 +2892,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true)) res = false;
+        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true, true)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_ELSE)
         {
@@ -2892,7 +2900,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
             ast->if_stmt.else_stmt =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->if_stmt.else_stmt, true)) res = false;
+            if (!parse_stmt(p, ast->if_stmt.else_stmt, true, true)) res = false;
         }
 
         break;
@@ -2901,6 +2909,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         parser_next(p, 1);
 
         ast->type = AST_WHILE;
+        need_semi = false;
 
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -2910,20 +2919,57 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         ast->while_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->while_stmt.stmt, true)) res = false;
+        if (!parse_stmt(p, ast->while_stmt.stmt, true, true)) res = false;
+
+        break;
+    }
+    case TOKEN_FOR: {
+        parser_next(p, 1);
+
+        ast->type = AST_FOR;
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+        {
+            ast->for_stmt.init = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->for_stmt.init, true, false)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+        if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+        {
+            ast->for_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->for_stmt.cond)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+        if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        {
+            ast->for_stmt.inc = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->for_stmt.inc, true, false)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->for_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->for_stmt.stmt, true, true)) res = false;
 
         break;
     }
     case TOKEN_BREAK: {
         parser_next(p, 1);
         ast->type = AST_BREAK;
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+        need_semi = true;
         break;
     }
     case TOKEN_CONTINUE: {
         parser_next(p, 1);
         ast->type = AST_CONTINUE;
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+        need_semi = true;
         break;
     }
     default: {
@@ -2943,8 +2989,6 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
             ast->assign.value_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, ast->assign.value_expr)) res = false;
-
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
             if (!inside_procedure)
             {
@@ -2966,12 +3010,15 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
             ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             *ast->expr = expr;
-
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
         break;
     }
+    }
+
+    if (need_semi)
+    {
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
     }
 
     Location last_loc = parser_peek(p, -1)->loc;
@@ -2993,7 +3040,7 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     while (!parser_is_at_end(p))
     {
         Ast stmt = {0};
-        if (parse_stmt(p, &stmt, false))
+        if (parse_stmt(p, &stmt, false, true))
         {
             array_push(p->ast->block.stmts, stmt);
         }
@@ -3312,6 +3359,29 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         create_scopes_ast(a, ast->while_stmt.stmt);
         break;
     }
+    case AST_FOR: {
+        assert(!ast->for_stmt.scope);
+        ast->for_stmt.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->for_stmt.scope, 0, sizeof(*ast->for_stmt.scope));
+        scope_init(
+            ast->for_stmt.scope,
+            a->compiler,
+            SCOPE_DEFAULT,
+            5, // Small number, because there's only gonna be 2 declarations max
+            NULL);
+        if (array_size(a->scope_stack) > 0)
+        {
+            ast->for_stmt.scope->parent = *array_last(a->scope_stack);
+        }
+
+        array_push(a->scope_stack, ast->for_stmt.scope);
+        if (ast->for_stmt.init) create_scopes_ast(a, ast->for_stmt.init);
+        if (ast->for_stmt.cond) create_scopes_ast(a, ast->for_stmt.cond);
+        if (ast->for_stmt.inc) create_scopes_ast(a, ast->for_stmt.inc);
+        create_scopes_ast(a, ast->for_stmt.stmt);
+        array_pop(a->scope_stack);
+        break;
+    }
     case AST_PAREN_EXPR: {
         create_scopes_ast(a, ast->expr);
         break;
@@ -3490,6 +3560,22 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->while_stmt.stmt);
         array_pop(a->continue_stack);
         array_pop(a->break_stack);
+        break;
+    }
+    case AST_FOR: {
+        array_push(a->scope_stack, ast->for_stmt.scope);
+
+        if (ast->for_stmt.init) symbol_check_ast(a, ast->for_stmt.init);
+        if (ast->for_stmt.cond) symbol_check_ast(a, ast->for_stmt.cond);
+        if (ast->for_stmt.inc) symbol_check_ast(a, ast->for_stmt.inc);
+
+        array_push(a->break_stack, ast);
+        array_push(a->continue_stack, ast);
+        symbol_check_ast(a, ast->for_stmt.stmt);
+        array_pop(a->continue_stack);
+        array_pop(a->break_stack);
+
+        array_pop(a->scope_stack);
         break;
     }
     case AST_BREAK: {
@@ -3872,7 +3958,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->while_stmt.cond->type_info)
         {
-            compile_error(a->compiler, ast->while_stmt.cond->loc, "asdasd");
+            compile_error(
+                a->compiler,
+                ast->while_stmt.cond->loc,
+                "could not evaluate type for 'while' condition");
             break;
         }
 
@@ -3883,9 +3972,45 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             compile_error(
                 a->compiler,
-                ast->while_stmt.cond->loc,
-                "while only works for numerical types");
+                ast->for_stmt.cond->loc,
+                "'while' statement only takes numerical types as conditions");
             break;
+        }
+
+        break;
+    }
+    case AST_FOR: {
+        array_push(a->scope_stack, ast->for_stmt.scope);
+
+        if (ast->for_stmt.init) type_check_ast(a, ast->for_stmt.init, NULL);
+        if (ast->for_stmt.cond) type_check_ast(a, ast->for_stmt.cond, NULL);
+        if (ast->for_stmt.inc) type_check_ast(a, ast->for_stmt.inc, NULL);
+        type_check_ast(a, ast->for_stmt.stmt, NULL);
+
+        array_pop(a->scope_stack);
+
+        if (ast->for_stmt.cond)
+        {
+            if (!ast->for_stmt.cond->type_info)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->for_stmt.cond->loc,
+                    "could not evaluate type for 'for' condition");
+                break;
+            }
+
+            if (ast->for_stmt.cond->type_info->kind != TYPE_INT &&
+                ast->for_stmt.cond->type_info->kind != TYPE_FLOAT &&
+                ast->for_stmt.cond->type_info->kind != TYPE_BOOL &&
+                ast->for_stmt.cond->type_info->kind != TYPE_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->for_stmt.cond->loc,
+                    "'for' statement only takes numerical types as conditions");
+                break;
+            }
         }
 
         break;
@@ -4656,6 +4781,18 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
             register_symbol_asts(a, ast->while_stmt.stmt, 1);
             break;
         }
+        case AST_FOR: {
+            array_push(a->scope_stack, ast->for_stmt.scope);
+            if (ast->for_stmt.init)
+                register_symbol_asts(a, ast->for_stmt.init, 1);
+            if (ast->for_stmt.cond)
+                register_symbol_asts(a, ast->for_stmt.cond, 1);
+            if (ast->for_stmt.inc)
+                register_symbol_asts(a, ast->for_stmt.inc, 1);
+            register_symbol_asts(a, ast->for_stmt.stmt, 1);
+            array_pop(a->scope_stack);
+            break;
+        }
         default: break;
         }
     }
@@ -5021,6 +5158,13 @@ void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
     case AST_WHILE: {
         llvm_codegen_alloca(l, mod, ast->while_stmt.cond);
         llvm_codegen_alloca(l, mod, ast->while_stmt.stmt);
+        break;
+    }
+    case AST_FOR: {
+        if (ast->for_stmt.init) llvm_codegen_alloca(l, mod, ast->for_stmt.init);
+        if (ast->for_stmt.cond) llvm_codegen_alloca(l, mod, ast->for_stmt.cond);
+        if (ast->for_stmt.inc) llvm_codegen_alloca(l, mod, ast->for_stmt.inc);
+        llvm_codegen_alloca(l, mod, ast->for_stmt.stmt);
         break;
     }
     default: break;
@@ -5394,7 +5538,8 @@ void llvm_codegen_ast(
         }
 
         // Local variable
-        assert(ast->decl.value.value);
+        assert(ast->decl.value
+                   .value); // Assert because the alloca already happened
 
         if (ast->decl.value_expr)
         {
@@ -6020,8 +6165,6 @@ void llvm_codegen_ast(
 
                 LLVMBuildBr(mod->builder, merge_bb);
 
-                then_bb = LLVMGetInsertBlock(mod->builder);
-
                 // Merge
                 LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
                 LLVMValueRef phi =
@@ -6302,7 +6445,6 @@ void llvm_codegen_ast(
             {
                 LLVMBuildBr(mod->builder, merge_bb);
             }
-            then_bb = LLVMGetInsertBlock(mod->builder);
         }
 
         // Else
@@ -6314,8 +6456,6 @@ void llvm_codegen_ast(
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, merge_bb);
-
-            else_bb = LLVMGetInsertBlock(mod->builder);
         }
 
         // Merge
@@ -6347,8 +6487,6 @@ void llvm_codegen_ast(
                 l, mod, load_val(mod, &cond_val), cond_type, is_const);
 
             LLVMBuildCondBr(mod->builder, bool_val, stmts_bb, merge_bb);
-
-            cond_bb = LLVMGetInsertBlock(mod->builder);
         }
 
         // Stmts
@@ -6363,13 +6501,84 @@ void llvm_codegen_ast(
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, cond_bb);
-
-            stmts_bb = LLVMGetInsertBlock(mod->builder);
         }
 
         // Merge
         LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
 
+        break;
+    }
+    case AST_FOR: {
+        array_push(l->scope_stack, ast->for_stmt.scope);
+
+        LLVMValueRef fun =
+            LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+        assert(fun);
+
+        if (ast->for_stmt.init)
+            llvm_codegen_ast(l, mod, ast->for_stmt.init, false, NULL);
+
+        LLVMBasicBlockRef cond_bb = NULL;
+        if (ast->for_stmt.cond) cond_bb = LLVMAppendBasicBlock(fun, "");
+
+        LLVMBasicBlockRef stmts_bb = LLVMAppendBasicBlock(fun, "");
+
+        LLVMBasicBlockRef inc_bb = NULL;
+        if (ast->for_stmt.inc) inc_bb = LLVMAppendBasicBlock(fun, "");
+
+        LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "");
+
+        if (!cond_bb) cond_bb = stmts_bb;
+        if (!inc_bb) inc_bb = stmts_bb;
+
+        LLVMBuildBr(mod->builder, cond_bb);
+
+        // Cond
+        if (ast->for_stmt.cond)
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, cond_bb);
+
+            AstValue cond_val = {0};
+            llvm_codegen_ast(l, mod, ast->for_stmt.cond, false, &cond_val);
+
+            TypeInfo *cond_type = ast->for_stmt.cond->type_info;
+
+            LLVMValueRef bool_val = bool_value(
+                l, mod, load_val(mod, &cond_val), cond_type, is_const);
+
+            LLVMBuildCondBr(mod->builder, bool_val, stmts_bb, merge_bb);
+        }
+
+        // Stmts
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
+
+            array_push(l->break_block_stack, merge_bb);
+            array_push(l->continue_block_stack, inc_bb);
+            llvm_codegen_ast(l, mod, ast->for_stmt.stmt, false, NULL);
+            array_pop(l->continue_block_stack);
+            array_pop(l->break_block_stack);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+                LLVMBuildBr(mod->builder, inc_bb);
+        }
+
+        // Inc
+        if (ast->for_stmt.inc)
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, inc_bb);
+
+            if (ast->for_stmt.inc)
+                llvm_codegen_ast(l, mod, ast->for_stmt.inc, false, NULL);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+                LLVMBuildBr(mod->builder, cond_bb);
+        }
+
+        // Merge
+        LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
+
+        array_pop(l->scope_stack);
         break;
     }
     case AST_BREAK: {

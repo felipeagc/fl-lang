@@ -27,8 +27,6 @@ proc main() void {
     if (false && true) abort();
     if (!(true && true)) abort();
 
-    return;
-
     var n: i32 = 0;
     while (n < 5) {
         printf(c"%d\n", n);
@@ -36,6 +34,20 @@ proc main() void {
         break;
     }
     printf(c"n = %d\n", n);
+    
+    for (var i: i32 = 0; i < 10; i = i + 1) {
+        printf(c"i = %d\n", i);
+    }
+
+    n = 0;
+    for (;;) {
+        printf(c"Yo\n");
+        n = n + 1;
+        if (n < 5) {
+            continue;
+        }
+        break;
+    }
 }
 
 proc "c" printf(fmt: *char, ...) i32;
