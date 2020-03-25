@@ -3,7 +3,7 @@ proc main() void {
 
     if (test) printf(c"Hello!\n");
 
-    if (test) {
+    if (test || false) {
         printf(c"Hello!\n");
     } else {
         printf(c"No: %d!\n", constant);
@@ -20,6 +20,13 @@ proc main() void {
         printf(c"Yo: %d!\n", constant);
         const constant: i32 = 534;
     }
+
+    if (false || false) abort();
+    if (true && false) abort();
+    if (false && false) abort();
+    if (false && true) abort();
+    if (!(true && true)) abort();
 }
 
 proc "c" printf(fmt: *char, ...) i32;
+proc "c" abort() void;
