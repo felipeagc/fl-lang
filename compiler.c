@@ -1568,6 +1568,11 @@ typedef struct Ast
         } if_stmt;
         struct
         {
+            struct Ast *cond;
+            struct Ast *stmt;
+        } while_stmt;
+        struct
+        {
             struct Scope *scope;
             /*array*/ struct Ast *fields;
         } structure;
@@ -1763,8 +1768,12 @@ static bool is_expr_const(Scope *scope, Ast *ast)
     }
     case AST_BINARY_EXPR: {
         res = true;
+
         if (!is_expr_const(scope, ast->binop.left)) res = false;
         if (!is_expr_const(scope, ast->binop.right)) res = false;
+
+        if (ast->binop.type == BINOP_AND) res = false;
+        if (ast->binop.type == BINOP_OR) res = false;
         break;
     }
     default: break;
@@ -2828,6 +2837,23 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_stmt(p, ast->if_stmt.else_stmt, true)) res = false;
         }
+
+        break;
+    }
+    case TOKEN_WHILE: {
+        parser_next(p, 1);
+
+        ast->type = AST_IF;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        ast->while_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->while_stmt.cond)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->while_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->while_stmt.stmt, true)) res = false;
 
         break;
     }
@@ -6107,6 +6133,11 @@ void llvm_codegen_ast(
 
                 result_value.value =
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
+                break;
+            }
+            case BINOP_AND:
+            case BINOP_OR: {
+                assert(0);
                 break;
             }
             }
