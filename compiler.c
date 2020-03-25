@@ -575,6 +575,9 @@ typedef enum TokenType {
     TOKEN_ENUM,
     TOKEN_FOR,
     TOKEN_WHILE,
+    TOKEN_SWITCH,
+    TOKEN_BREAK,
+    TOKEN_CONTINUE,
     TOKEN_IF,
     TOKEN_ELSE,
     TOKEN_RETURN,
@@ -655,6 +658,9 @@ static const char *token_strings[] = {
     [TOKEN_ENUM] = "enum",
     [TOKEN_FOR] = "for",
     [TOKEN_WHILE] = "while",
+    [TOKEN_SWITCH] = "switch",
+    [TOKEN_BREAK] = "break",
+    [TOKEN_CONTINUE] = "continue",
     [TOKEN_IF] = "if",
     [TOKEN_ELSE] = "else",
     [TOKEN_RETURN] = "return",
@@ -758,6 +764,9 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_ENUM);
         PRINT_TOKEN_TYPE(TOKEN_FOR);
         PRINT_TOKEN_TYPE(TOKEN_WHILE);
+        PRINT_TOKEN_TYPE(TOKEN_SWITCH);
+        PRINT_TOKEN_TYPE(TOKEN_BREAK);
+        PRINT_TOKEN_TYPE(TOKEN_CONTINUE);
         PRINT_TOKEN_TYPE(TOKEN_IF);
         PRINT_TOKEN_TYPE(TOKEN_ELSE);
         PRINT_TOKEN_TYPE(TOKEN_RETURN);
@@ -1218,6 +1227,9 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("if", TOKEN_IF);
             LEX_MATCH_STR("else", TOKEN_ELSE);
             LEX_MATCH_STR("while", TOKEN_WHILE);
+            LEX_MATCH_STR("switch", TOKEN_SWITCH);
+            LEX_MATCH_STR("break", TOKEN_BREAK);
+            LEX_MATCH_STR("continue", TOKEN_CONTINUE);
             LEX_MATCH_STR("for", TOKEN_FOR);
             LEX_MATCH_STR("return", TOKEN_RETURN);
 
@@ -1316,7 +1328,6 @@ typedef enum TypeKind {
     TYPE_ARRAY,
     TYPE_INT,
     TYPE_FLOAT,
-    TYPE_DOUBLE,
     TYPE_BOOL,
     TYPE_VOID,
     TYPE_NAMESPACE,
@@ -1335,6 +1346,10 @@ typedef struct TypeInfo
             bool is_signed;
             uint32_t num_bits;
         } integer;
+        struct
+        {
+            uint32_t num_bits;
+        } floating;
         struct
         {
             struct TypeInfo *sub;
@@ -1367,6 +1382,11 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         if (received->integer.is_signed != expected->integer.is_signed)
             return NULL;
         if (received->integer.num_bits != expected->integer.num_bits)
+            return NULL;
+        break;
+    }
+    case TYPE_FLOAT: {
+        if (received->floating.num_bits != expected->floating.num_bits)
             return NULL;
         break;
     }
@@ -1415,8 +1435,6 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
     case TYPE_NAMESPACE: break;
-    case TYPE_FLOAT: break;
-    case TYPE_DOUBLE: break;
     case TYPE_BOOL: break;
     case TYPE_VOID: break;
     case TYPE_TYPE: break;
@@ -1448,6 +1466,39 @@ TypeInfo *compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
     {
         return compatible_pointer_types_aux(
             received->ptr.sub, expected->ptr.sub);
+    }
+
+    return NULL;
+}
+
+TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
+{
+    TypeInfo *float_type = NULL;
+    TypeInfo *other_type = NULL;
+    if (a->kind == TYPE_FLOAT)
+    {
+        float_type = a;
+        other_type = b;
+    }
+    else if (b->kind == TYPE_FLOAT)
+    {
+        float_type = b;
+        other_type = a;
+    }
+
+    if (float_type && other_type->can_change)
+    {
+        return float_type;
+    }
+
+    if (a->can_change)
+    {
+        return b;
+    }
+
+    if (b->can_change)
+    {
+        return a;
     }
 
     return NULL;
@@ -1510,6 +1561,8 @@ typedef enum AstType {
     AST_CAST,
     AST_IF,
     AST_WHILE,
+    AST_BREAK,
+    AST_CONTINUE,
 } AstType;
 
 typedef struct AstValue
@@ -2809,8 +2862,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
 
         ast->type = AST_RETURN;
 
-        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->expr)) res = false;
+        if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+        {
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->expr)) res = false;
+        }
 
         if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         break;
@@ -2856,6 +2912,18 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure)
         ast->while_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_stmt(p, ast->while_stmt.stmt, true)) res = false;
 
+        break;
+    }
+    case TOKEN_BREAK: {
+        parser_next(p, 1);
+        ast->type = AST_BREAK;
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+        break;
+    }
+    case TOKEN_CONTINUE: {
+        parser_next(p, 1);
+        ast->type = AST_CONTINUE;
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         break;
     }
     default: {
@@ -2938,6 +3006,8 @@ typedef struct Analyzer
 {
     Compiler *compiler;
     /*array*/ Scope **scope_stack;
+    /*array*/ Ast **break_stack;
+    /*array*/ Ast **continue_stack;
 } Analyzer;
 
 TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast)
@@ -3007,12 +3077,12 @@ TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast)
             break;
         }
         case TOKEN_FLOAT: {
-            static TypeInfo ty = {.kind = TYPE_FLOAT};
+            static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
             ast->as_type = &ty;
             break;
         }
         case TOKEN_DOUBLE: {
-            static TypeInfo ty = {.kind = TYPE_DOUBLE};
+            static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
             ast->as_type = &ty;
             break;
         }
@@ -3291,6 +3361,8 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
     case AST_UNINITIALIZED:
+    case AST_BREAK:
+    case AST_CONTINUE:
     case AST_RETURN:
     case AST_PRIMARY:
     case AST_SUBSCRIPT:
@@ -3375,7 +3447,10 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     {
     case AST_RETURN:
     case AST_PAREN_EXPR: {
-        symbol_check_ast(a, ast->expr);
+        if (ast->expr)
+        {
+            symbol_check_ast(a, ast->expr);
+        }
         break;
     }
     case AST_CONST_DECL: {
@@ -3409,7 +3484,30 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     }
     case AST_WHILE: {
         symbol_check_ast(a, ast->while_stmt.cond);
+
+        array_push(a->break_stack, ast);
+        array_push(a->continue_stack, ast);
         symbol_check_ast(a, ast->while_stmt.stmt);
+        array_pop(a->continue_stack);
+        array_pop(a->break_stack);
+        break;
+    }
+    case AST_BREAK: {
+        if (array_size(a->break_stack) == 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "'break' outside control structure");
+            break;
+        }
+        break;
+    }
+    case AST_CONTINUE: {
+        if (array_size(a->continue_stack) == 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "'continue' outside control structure");
+            break;
+        }
         break;
     }
     case AST_BLOCK: {
@@ -3613,7 +3711,22 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         assert(proc->proc.return_type->as_type);
-        type_check_ast(a, ast->expr, proc->proc.return_type->as_type);
+        if (ast->expr)
+        {
+            type_check_ast(a, ast->expr, proc->proc.return_type->as_type);
+        }
+        else
+        {
+            if (proc->proc.return_type->as_type->kind != TYPE_VOID)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "procedure does not return void, 'return' must contain a "
+                    "value");
+                break;
+            }
+        }
         break;
     }
     case AST_BLOCK: {
@@ -3741,7 +3854,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (ast->if_stmt.cond_expr->type_info->kind != TYPE_INT &&
             ast->if_stmt.cond_expr->type_info->kind != TYPE_FLOAT &&
-            ast->if_stmt.cond_expr->type_info->kind != TYPE_DOUBLE &&
             ast->if_stmt.cond_expr->type_info->kind != TYPE_BOOL &&
             ast->if_stmt.cond_expr->type_info->kind != TYPE_POINTER)
         {
@@ -3766,7 +3878,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (ast->while_stmt.cond->type_info->kind != TYPE_INT &&
             ast->while_stmt.cond->type_info->kind != TYPE_FLOAT &&
-            ast->while_stmt.cond->type_info->kind != TYPE_DOUBLE &&
             ast->while_stmt.cond->type_info->kind != TYPE_BOOL &&
             ast->while_stmt.cond->type_info->kind != TYPE_POINTER)
         {
@@ -3851,7 +3962,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 switch (expected_type->kind)
                 {
                 case TYPE_FLOAT:
-                case TYPE_DOUBLE:
                 case TYPE_INT: {
                     ast->type_info = expected_type;
                     break;
@@ -3864,7 +3974,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         case TOKEN_FLOAT_LIT: {
             static TypeInfo ty = {
-                .kind = TYPE_DOUBLE,
+                .kind = TYPE_FLOAT,
+                .floating.num_bits = 64,
                 .can_change = true,
             };
             ast->type_info = &ty;
@@ -3873,8 +3984,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 switch (expected_type->kind)
                 {
-                case TYPE_FLOAT:
-                case TYPE_DOUBLE: {
+                case TYPE_FLOAT: {
                     ast->type_info = expected_type;
                     break;
                 }
@@ -4083,13 +4193,9 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                   (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_INT) ||
                   (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_POINTER) ||
                   (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_INT) ||
+                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_FLOAT) ||
                   (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_FLOAT) ||
-                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT) ||
-                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_DOUBLE) ||
-                  (dest_ty->kind == TYPE_DOUBLE && src_ty->kind == TYPE_INT) ||
-                  (dest_ty->kind == TYPE_FLOAT &&
-                   src_ty->kind == TYPE_DOUBLE) ||
-                  (dest_ty->kind == TYPE_DOUBLE && src_ty->kind == TYPE_FLOAT)))
+                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT)))
             {
                 compile_error(a->compiler, ast->loc, "invalid cast");
                 break;
@@ -4168,8 +4274,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         case UNOP_NEG: {
             if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
-                ast->unop.sub->type_info->kind != TYPE_DOUBLE)
+                ast->unop.sub->type_info->kind != TYPE_FLOAT)
             {
                 compile_error(
                     a->compiler,
@@ -4185,7 +4290,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case UNOP_NOT: {
             if (ast->unop.sub->type_info->kind != TYPE_INT &&
                 ast->unop.sub->type_info->kind != TYPE_FLOAT &&
-                ast->unop.sub->type_info->kind != TYPE_DOUBLE &&
                 ast->unop.sub->type_info->kind != TYPE_BOOL &&
                 ast->unop.sub->type_info->kind != TYPE_POINTER)
             {
@@ -4225,16 +4329,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (expected_type == NULL)
             {
-                if (ast->binop.right->type_info->can_change)
-                {
-                    type_check_ast(
-                        a, ast->binop.right, ast->binop.left->type_info);
-                }
-                else if (ast->binop.left->type_info->can_change)
-                {
-                    type_check_ast(
-                        a, ast->binop.left, ast->binop.right->type_info);
-                }
+                TypeInfo *common_type = common_numeric_type(
+                    ast->binop.left->type_info, ast->binop.right->type_info);
+                type_check_ast(a, ast->binop.left, common_type);
+                type_check_ast(a, ast->binop.right, common_type);
             }
 
             if (!exact_types(
@@ -4243,13 +4341,12 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "binary operands are of different types");
+                    "arithmetic binary operands are of different types");
                 break;
             }
 
             if (ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_FLOAT &&
-                ast->binop.left->type_info->kind != TYPE_DOUBLE)
+                ast->binop.left->type_info->kind != TYPE_FLOAT)
             {
                 compile_error(
                     a->compiler,
@@ -4280,14 +4377,10 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->binop.right->type_info->can_change)
-            {
-                type_check_ast(a, ast->binop.right, ast->binop.left->type_info);
-            }
-            else if (ast->binop.left->type_info->can_change)
-            {
-                type_check_ast(a, ast->binop.left, ast->binop.right->type_info);
-            }
+            TypeInfo *common_type = common_numeric_type(
+                ast->binop.left->type_info, ast->binop.right->type_info);
+            type_check_ast(a, ast->binop.left, common_type);
+            type_check_ast(a, ast->binop.right, common_type);
 
             if (!exact_types(
                     ast->binop.left->type_info, ast->binop.right->type_info))
@@ -4295,14 +4388,13 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "binary operands are of different types");
+                    "comparison binary operands are of different types");
                 break;
             }
 
             if (ast->binop.left->type_info->kind != TYPE_BOOL &&
                 ast->binop.left->type_info->kind != TYPE_INT &&
                 ast->binop.left->type_info->kind != TYPE_FLOAT &&
-                ast->binop.left->type_info->kind != TYPE_DOUBLE &&
                 ast->binop.left->type_info->kind != TYPE_POINTER)
             {
                 compile_error(
@@ -4334,7 +4426,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->binop.left->type_info->kind != TYPE_BOOL &&
                 ast->binop.left->type_info->kind != TYPE_INT &&
                 ast->binop.left->type_info->kind != TYPE_FLOAT &&
-                ast->binop.left->type_info->kind != TYPE_DOUBLE &&
                 ast->binop.left->type_info->kind != TYPE_POINTER)
             {
                 compile_error(
@@ -4347,7 +4438,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->binop.right->type_info->kind != TYPE_BOOL &&
                 ast->binop.right->type_info->kind != TYPE_INT &&
                 ast->binop.right->type_info->kind != TYPE_FLOAT &&
-                ast->binop.right->type_info->kind != TYPE_DOUBLE &&
                 ast->binop.right->type_info->kind != TYPE_POINTER)
             {
                 compile_error(
@@ -4733,6 +4823,8 @@ typedef struct LLContext
     Compiler *compiler;
     LLModule mod;
     /*array*/ Scope **scope_stack;
+    /*array*/ LLVMBasicBlockRef *break_block_stack;
+    /*array*/ LLVMBasicBlockRef *continue_block_stack;
 } LLContext;
 
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
@@ -4745,8 +4837,15 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         type->ref = LLVMIntType(type->integer.num_bits);
         break;
     }
-    case TYPE_FLOAT: type->ref = LLVMFloatType(); break;
-    case TYPE_DOUBLE: type->ref = LLVMDoubleType(); break;
+    case TYPE_FLOAT: {
+        switch (type->floating.num_bits)
+        {
+        case 32: type->ref = LLVMFloatType(); break;
+        case 64: type->ref = LLVMDoubleType(); break;
+        default: assert(0); break;
+        }
+        break;
+    }
     case TYPE_BOOL: type->ref = LLVMInt8Type(); break;
     case TYPE_VOID: type->ref = LLVMVoidType(); break;
 
@@ -4850,7 +4949,6 @@ static inline LLVMValueRef bool_value(
                 "");
             break;
         case TYPE_FLOAT:
-        case TYPE_DOUBLE:
             i1_val = LLVMBuildFCmp(
                 mod->builder,
                 LLVMRealUNE,
@@ -4875,7 +4973,6 @@ static inline LLVMValueRef bool_value(
                 LLVMIntNE, value, LLVMConstPointerNull(llvm_type(l, type)));
             break;
         case TYPE_FLOAT:
-        case TYPE_DOUBLE:
             i1_val = LLVMConstFCmp(
                 LLVMRealUNE,
                 value,
@@ -5050,8 +5147,7 @@ void llvm_codegen_ast(
                 if (out_value) *out_value = value;
                 break;
             }
-            case TYPE_FLOAT:
-            case TYPE_DOUBLE: {
+            case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
                     llvm_type(l, ast->type_info),
@@ -5067,8 +5163,7 @@ void llvm_codegen_ast(
         case TOKEN_FLOAT_LIT: {
             switch (ast->type_info->kind)
             {
-            case TYPE_FLOAT:
-            case TYPE_DOUBLE: {
+            case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
                     llvm_type(l, ast->type_info),
@@ -5193,7 +5288,8 @@ void llvm_codegen_ast(
             {
                 // Promote float to double when passed as variadic argument
                 // as per section 6.5.2.2 of the C standard
-                if (ast->proc_call.params[i].type_info->kind == TYPE_FLOAT)
+                if (ast->proc_call.params[i].type_info->kind == TYPE_FLOAT &&
+                    ast->proc_call.params[i].type_info->floating.num_bits == 32)
                 {
                     params[i] = LLVMBuildFPExt(
                         mod->builder, params[i], LLVMDoubleType(), "");
@@ -5340,14 +5436,25 @@ void llvm_codegen_ast(
         Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
         assert(proc);
 
-        AstValue return_value = {0};
-        llvm_codegen_ast(l, mod, ast->expr, false, &return_value);
+        if (ast->expr)
+        {
+            AstValue return_value = {0};
+            llvm_codegen_ast(l, mod, ast->expr, false, &return_value);
 
-        LLVMValueRef ref = load_val(mod, &return_value);
-        ref = autocast_value(
-            l, mod, ast->expr->type_info, proc->proc.return_type->as_type, ref);
+            LLVMValueRef ref = load_val(mod, &return_value);
+            ref = autocast_value(
+                l,
+                mod,
+                ast->expr->type_info,
+                proc->proc.return_type->as_type,
+                ref);
+            LLVMBuildRet(mod->builder, ref);
+        }
+        else
+        {
+            LLVMBuildRetVoid(mod->builder);
+        }
 
-        LLVMBuildRet(mod->builder, ref);
         break;
     }
     case AST_CAST: {
@@ -5387,9 +5494,7 @@ void llvm_codegen_ast(
                 dest_ty->integer.is_signed,
                 "");
         }
-        else if (
-            (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_INT) ||
-            (src_ty->kind == TYPE_DOUBLE && dest_ty->kind == TYPE_INT))
+        else if (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_INT)
         {
             if (dest_ty->integer.is_signed)
             {
@@ -5402,9 +5507,7 @@ void llvm_codegen_ast(
                     mod->builder, src_llvm_val, dest_llvm_ty, "");
             }
         }
-        else if (
-            (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_FLOAT) ||
-            (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_DOUBLE))
+        else if (src_ty->kind == TYPE_INT && dest_ty->kind == TYPE_FLOAT)
         {
             if (src_ty->integer.is_signed)
             {
@@ -5417,9 +5520,7 @@ void llvm_codegen_ast(
                     mod->builder, src_llvm_val, dest_llvm_ty, "");
             }
         }
-        else if (
-            (src_ty->kind == TYPE_DOUBLE && dest_ty->kind == TYPE_FLOAT) ||
-            (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_DOUBLE))
+        else if (src_ty->kind == TYPE_FLOAT && dest_ty->kind == TYPE_FLOAT)
         {
             cast_val.value =
                 LLVMBuildFPCast(mod->builder, src_llvm_val, dest_llvm_ty, "");
@@ -5478,7 +5579,6 @@ void llvm_codegen_ast(
                             LLVMBuildNeg(mod->builder, sub, "");
                     break;
                 case TYPE_FLOAT:
-                case TYPE_DOUBLE:
                     result_value.value = LLVMBuildFNeg(mod->builder, sub, "");
                     break;
                 default: assert(0); break;
@@ -5494,10 +5594,7 @@ void llvm_codegen_ast(
                     else
                         result_value.value = LLVMConstNeg(sub);
                     break;
-                case TYPE_FLOAT:
-                case TYPE_DOUBLE:
-                    result_value.value = LLVMConstFNeg(sub);
-                    break;
+                case TYPE_FLOAT: result_value.value = LLVMConstFNeg(sub); break;
                 default: assert(0); break;
                 }
             }
@@ -5663,7 +5760,6 @@ void llvm_codegen_ast(
                             LLVMBuildAdd(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFAdd(mod->builder, lhs, rhs, "");
@@ -5685,7 +5781,6 @@ void llvm_codegen_ast(
                             LLVMBuildSub(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFSub(mod->builder, lhs, rhs, "");
@@ -5707,7 +5802,6 @@ void llvm_codegen_ast(
                             LLVMBuildMul(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFMul(mod->builder, lhs, rhs, "");
@@ -5729,7 +5823,6 @@ void llvm_codegen_ast(
                             LLVMBuildUDiv(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFDiv(mod->builder, lhs, rhs, "");
@@ -5751,7 +5844,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntEQ, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOEQ, lhs, rhs, "");
@@ -5775,7 +5867,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntNE, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealUNE, lhs, rhs, "");
@@ -5803,7 +5894,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntUGT, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOGT, lhs, rhs, "");
@@ -5831,7 +5921,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntUGE, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOGE, lhs, rhs, "");
@@ -5859,7 +5948,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntULT, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOLT, lhs, rhs, "");
@@ -5887,7 +5975,6 @@ void llvm_codegen_ast(
                     result_value.value =
                         LLVMBuildICmp(mod->builder, LLVMIntULE, lhs, rhs, "");
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value =
                         LLVMBuildFCmp(mod->builder, LLVMRealOLE, lhs, rhs, "");
@@ -5982,7 +6069,6 @@ void llvm_codegen_ast(
                     else
                         result_value.value = LLVMConstAdd(lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFAdd(lhs, rhs);
                     break;
@@ -5999,7 +6085,6 @@ void llvm_codegen_ast(
                     else
                         result_value.value = LLVMConstSub(lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFSub(lhs, rhs);
                     break;
@@ -6017,7 +6102,6 @@ void llvm_codegen_ast(
                     else
                         result_value.value = LLVMConstMul(lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFMul(lhs, rhs);
                     break;
@@ -6034,7 +6118,6 @@ void llvm_codegen_ast(
                     else
                         result_value.value = LLVMConstUDiv(lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFDiv(lhs, rhs);
                     break;
@@ -6051,7 +6134,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntEQ, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOEQ, lhs, rhs);
                     break;
@@ -6071,7 +6153,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntNE, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealUNE, lhs, rhs);
                     break;
@@ -6096,7 +6177,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntUGT, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOGT, lhs, rhs);
                     break;
@@ -6121,7 +6201,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntUGE, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOGE, lhs, rhs);
                     break;
@@ -6146,7 +6225,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntULT, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFCmp(LLVMRealOLT, lhs, rhs);
                     break;
@@ -6171,9 +6249,6 @@ void llvm_codegen_ast(
                 case TYPE_BOOL:
                     result_value.value = LLVMConstICmp(LLVMIntULE, lhs, rhs);
                     break;
-                case TYPE_DOUBLE:
-                case TYPE_FLOAT:
-                    result_value.value = LLVMConstFCmp(LLVMRealOLE, lhs, rhs);
                     break;
                 default: assert(0); break;
                 }
@@ -6280,7 +6355,11 @@ void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
 
+            array_push(l->break_block_stack, merge_bb);
+            array_push(l->continue_block_stack, cond_bb);
             llvm_codegen_ast(l, mod, ast->while_stmt.stmt, false, NULL);
+            array_pop(l->continue_block_stack);
+            array_pop(l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, cond_bb);
@@ -6291,6 +6370,18 @@ void llvm_codegen_ast(
         // Merge
         LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
 
+        break;
+    }
+    case AST_BREAK: {
+        LLVMBasicBlockRef *break_block = array_last(l->break_block_stack);
+        assert(break_block);
+        LLVMBuildBr(mod->builder, *break_block);
+        break;
+    }
+    case AST_CONTINUE: {
+        LLVMBasicBlockRef *continue_block = array_last(l->continue_block_stack);
+        assert(continue_block);
+        LLVMBuildBr(mod->builder, *continue_block);
         break;
     }
     case AST_PROC_TYPE: break;
@@ -6347,6 +6438,12 @@ void llvm_codegen_ast_children(
             break;
         }
         default: llvm_codegen_ast(l, mod, ast, is_const, NULL); break;
+        }
+
+        if (ast->type == AST_RETURN || ast->type == AST_BREAK ||
+            ast->type == AST_CONTINUE)
+        {
+            break;
         }
     }
 }
