@@ -1,48 +1,50 @@
+import c "core:c";
+
 proc main() void {
     var test: i32 = 321;
 
-    if (test) printf(c"Hello!\n");
+    if (test) c.printf(c"Hello!\n");
 
     if (test || false) {
-        printf(c"Hello!\n");
+        c.printf(c"Hello!\n");
     } else {
-        printf(c"No: %d!\n", constant);
+        c.printf(c"No: %d!\n", constant);
         const constant: i32 = 9;
     }
 
-    printf(c"Yo: %d!\n", test);
+    c.printf(c"Yo: %d!\n", test);
 
     {
         var test2: i32 = 456;
-        printf(c"Yo: %d!\n", test);
-        printf(c"Yo: %d!\n", test);
-        printf(c"Yo: %d!\n", test2);
-        printf(c"Yo: %d!\n", constant);
+        c.printf(c"Yo: %d!\n", test);
+        c.printf(c"Yo: %d!\n", test);
+        c.printf(c"Yo: %d!\n", test2);
+        c.printf(c"Yo: %d!\n", constant);
         const constant: i32 = 534;
     }
 
-    if (false || false) abort();
-    if (true && false) abort();
-    if (false && false) abort();
-    if (false && true) abort();
-    if (!(true && true)) abort();
+    if (false || false) c.abort();
+    if (true && false) c.abort();
+    if (false && false) c.abort();
+    if (false && true) c.abort();
+    if (!(true && true)) c.abort();
 
     var n: i32 = 0;
     while (n < 5) {
-        printf(c"%d\n", n);
+        c.printf(c"%d\n", n);
         n = n + 1;
         break;
     }
-    printf(c"n = %d\n", n);
+    c.printf(c"n = %d\n", n);
     
     for (var i: i32 = 0; i < 10; i = i + 1) {
-        printf(c"i = %d\n", i);
-        if (!(i < 10)) abort();
+        c.printf(c"i = %d\n", i);
+        if (!(i < 10)) c.abort();
     }
 
     n = 0;
     for (;;) {
-        printf(c"Yo\n");
+        c.printf(c"Yo\n");
         n = n + 1;
         if (n < 5) {
             continue;
@@ -50,6 +52,3 @@ proc main() void {
         break;
     }
 }
-
-proc "c" printf(fmt: *char, ...) i32;
-proc "c" abort() void;
