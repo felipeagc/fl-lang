@@ -2,6 +2,6 @@ proc add(a: i32, b: i32) i32 {
     return 0;
 }
 
-proc main() void {
+proc "c" main() void {
     add(1, 2);
 }

@@ -1,6 +1,6 @@
 import c "core:c";
 
-proc main() void {
+proc "c" main() void {
     var test: i32 = 321;
 
     if (test) c.printf(c"Hello!\n");

@@ -27,7 +27,7 @@ proc print_nested(n: *NestedStruct) void {
     printf(c"n.sub.s[4].a = %d\n", n.sub.s[4].a);
 }
 
-proc main() i32 {
+proc "c" main() i32 {
     var a_struct: MyStruct;
     a_struct.a = 32;
     var b_struct: *MyStruct = &a_struct;

@@ -20,7 +20,7 @@ proc add(a: i32, b: i32) i32 {
     return 0;
 }
 
-proc main() i32 {
+proc "c" main() i32 {
     var hey: i32 = 2;
     var yo: *i32 = (&hey);
     var a_int: i32 = yo[0];

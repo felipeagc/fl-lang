@@ -8,7 +8,7 @@ var global_array4: [2][3]i32;
 
 proc "c" printf(fmt: *char, ...) void;
 
-proc main() i32 {
+proc "c" main() i32 {
     global_array1[1] = 321;
     printf(c"global_array1[1] = %d\n", global_array1[1]);
 

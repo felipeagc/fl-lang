@@ -4,7 +4,7 @@ const const1: float = -3 * 5.8 + 9.1;
 const const2: i32 = (123 + 321) * 2;
 const const3: bool = !(-(123 + 321) > 2.2);
 
-proc main() i32 {
+proc "c" main() i32 {
     c.printf(c"const1 = %f\n", const1);
     c.printf(c"const2 = %d\n", const2);
     c.printf(c"const3 = %hhu\n", const3);

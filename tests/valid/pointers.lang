@@ -4,7 +4,7 @@ proc some_func(a: *void) void {
     printf(c"Ptr: %p\n", a);
 }
 
-proc main() void {
+proc "c" main() void {
     var my_int: i32 = 123;
     var ptr: *i32 = &my_int;
     var ptr2: *i64 = &123;

@@ -20,8 +20,14 @@
 #include <unistd.h>
 #endif
 
+#ifdef __linux__
+#include <sys/types.h>
+#include <sys/wait.h>
+#endif
+
 // Defines {{{
 #define LANG_FILE_EXTENSION ".lang"
+#define TMP_OBJECT_NAME "tmp.o"
 // }}}
 
 // Forward declarations {{{
@@ -7900,6 +7906,69 @@ void compile_file(Compiler *compiler, String filepath)
     llvm_verify_module(llvm_context);
 }
 
+void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
+{
+    LLVMInitializeAllTargetInfos();
+    LLVMInitializeAllTargets();
+    LLVMInitializeAllTargetMCs();
+    LLVMInitializeAllAsmParsers();
+    LLVMInitializeAllAsmPrinters();
+
+    char *triple = LLVMGetDefaultTargetTriple();
+
+    LLVMTargetRef target;
+    char *error = NULL;
+    if (LLVMGetTargetFromTriple(triple, &target, &error))
+    {
+        fprintf(stderr, "Failed to get target from triple: %s", error);
+        exit(1);
+    }
+
+    char *cpu = "generic";
+    char *features = "";
+    LLVMTargetMachineRef target_machine = LLVMCreateTargetMachine(
+        target,
+        triple,
+        cpu,
+        features,
+        LLVMCodeGenLevelNone,
+        LLVMRelocDefault,
+        LLVMCodeModelDefault);
+
+    LLVMTargetDataRef data_layout = LLVMCreateTargetDataLayout(target_machine);
+    char *data_layout_str = LLVMCopyStringRepOfTargetData(data_layout);
+
+    LLVMSetDataLayout(mod->mod, data_layout_str);
+    LLVMSetTarget(mod->mod, triple);
+
+    if (LLVMTargetMachineEmitToFile(
+            target_machine, mod->mod, TMP_OBJECT_NAME, LLVMObjectFile, &error))
+    {
+        remove(TMP_OBJECT_NAME);
+        fprintf(stderr, "LLVM codegen error: %s", error);
+        exit(1);
+    }
+
+    char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
+
+    pid_t pid = fork();
+    if (pid == 0)
+    {
+        execlp("clang", "clang", TMP_OBJECT_NAME, "-o", c_out_file_path, NULL);
+    }
+
+    int status;
+    waitpid(pid, &status, 0);
+    if (status != 0)
+    {
+        remove(TMP_OBJECT_NAME);
+        fprintf(stderr, "Linking failed!\n");
+        exit(status);
+    }
+
+    remove(TMP_OBJECT_NAME);
+}
+
 static const char *COMPILER_USAGE[] = {
     "Usage:\n",
     "  %s <filename>        Compiles file.\n",
@@ -7933,6 +8002,7 @@ int main(int argc, char **argv)
         char *absolute_path = get_absolute_path(argv[1]);
         String filepath = CSTR(absolute_path);
         compile_file(compiler, filepath);
+        link_module(compiler, &compiler->backend->mod, STR("a.out"));
     }
     else if (argc == 3)
     {
