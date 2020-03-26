@@ -56,5 +56,7 @@ proc main() i32 {
     if (10 % 5 != 0) c.abort();
     if (10 % 1.5 != 1) c.abort();
 
+    if (1 & 2 != 0) c.abort();
+
     return 0;
 }

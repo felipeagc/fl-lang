@@ -588,6 +588,8 @@ typedef enum TokenType {
     TOKEN_PLUS,
     TOKEN_MINUS,
     TOKEN_PERCENT,
+    TOKEN_HAT,
+    TOKEN_TILDE,
 
     TOKEN_DOT,
     TOKEN_ELLIPSIS,
@@ -672,6 +674,8 @@ static const char *token_strings[] = {
     [TOKEN_PLUS] = "+",
     [TOKEN_MINUS] = "-",
     [TOKEN_PERCENT] = "%",
+    [TOKEN_HAT] = "^",
+    [TOKEN_TILDE] = "~",
 
     [TOKEN_DOT] = ".",
     [TOKEN_ELLIPSIS] = "...",
@@ -779,6 +783,8 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_PLUS);
         PRINT_TOKEN_TYPE(TOKEN_MINUS);
         PRINT_TOKEN_TYPE(TOKEN_PERCENT);
+        PRINT_TOKEN_TYPE(TOKEN_HAT);
+        PRINT_TOKEN_TYPE(TOKEN_TILDE);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
         PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
@@ -1046,6 +1052,18 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_PERCENT;
+        break;
+    }
+    case '^': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_HAT;
+        break;
+    }
+    case '~': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_TILDE;
         break;
     }
     case ':': {
@@ -1581,6 +1599,9 @@ typedef enum BinOpType {
     BINOP_GREATEREQ,
     BINOP_AND,
     BINOP_OR,
+    BINOP_BITOR,
+    BINOP_BITXOR,
+    BINOP_BITAND,
 } BinOpType;
 
 typedef enum IntrinsicType {
@@ -2441,6 +2462,32 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->type_info = ast->binop.left->type_info;
             break;
         }
+        case BINOP_BITOR:
+        case BINOP_BITAND:
+        case BINOP_BITXOR: {
+            get_ast_type(compiler, scope, ast->binop.left);
+            get_ast_type(compiler, scope, ast->binop.right);
+
+            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            {
+                break;
+            }
+
+            if (!exact_types(
+                    ast->binop.left->type_info, ast->binop.right->type_info))
+            {
+                break;
+            }
+
+            if (ast->binop.left->type_info->kind != TYPE_INT &&
+                ast->binop.left->type_info->kind != TYPE_BOOL)
+            {
+                break;
+            }
+
+            ast->type_info = ast->binop.left->type_info;
+            break;
+        }
         case BINOP_EQ:
         case BINOP_NOTEQ:
         case BINOP_LESS:
@@ -3149,7 +3196,8 @@ bool parse_multiplication(Parser *p, Ast *ast)
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
     while ((parser_peek(p, 0)->type == TOKEN_ASTERISK) ||
-           (parser_peek(p, 0)->type == TOKEN_SLASH))
+           (parser_peek(p, 0)->type == TOKEN_SLASH) ||
+           (parser_peek(p, 0)->type == TOKEN_PERCENT))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -3171,6 +3219,7 @@ bool parse_multiplication(Parser *p, Ast *ast)
         {
         case TOKEN_ASTERISK: ast->binop.type = BINOP_MUL; break;
         case TOKEN_SLASH: ast->binop.type = BINOP_DIV; break;
+        case TOKEN_PERCENT: ast->binop.type = BINOP_MOD; break;
         default: break;
         }
     }
@@ -3187,8 +3236,7 @@ bool parse_addition(Parser *p, Ast *ast)
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
     while ((parser_peek(p, 0)->type == TOKEN_PLUS) ||
-           (parser_peek(p, 0)->type == TOKEN_MINUS) ||
-           (parser_peek(p, 0)->type == TOKEN_PERCENT))
+           (parser_peek(p, 0)->type == TOKEN_MINUS))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -3209,8 +3257,47 @@ bool parse_addition(Parser *p, Ast *ast)
         switch (op_tok->type)
         {
         case TOKEN_PLUS: ast->binop.type = BINOP_ADD; break;
-        case TOKEN_MINUS: ast->binop.type = BINOP_ADD; break;
-        case TOKEN_PERCENT: ast->binop.type = BINOP_MOD; break;
+        case TOKEN_MINUS: ast->binop.type = BINOP_SUB; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+
+bool parse_bitwise(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_addition(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_PIPE) ||
+           (parser_peek(p, 0)->type == TOKEN_AMPERSAND) ||
+           (parser_peek(p, 0)->type == TOKEN_HAT))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_addition(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        switch (op_tok->type)
+        {
+        case TOKEN_PIPE: ast->binop.type = BINOP_BITOR; break;
+        case TOKEN_AMPERSAND: ast->binop.type = BINOP_BITAND; break;
+        case TOKEN_HAT: ast->binop.type = BINOP_BITXOR; break;
         default: break;
         }
     }
@@ -3222,7 +3309,7 @@ bool parse_comparison(Parser *p, Ast *ast)
 {
     bool res = true;
 
-    if (!parse_addition(p, ast)) res = false;
+    if (!parse_bitwise(p, ast)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -3241,7 +3328,7 @@ bool parse_comparison(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_addition(p, right)) res = false;
+        if (!parse_bitwise(p, right)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -4380,6 +4467,15 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             type_check_ast(a, ast->if_stmt.else_stmt, NULL);
         }
 
+        if (!ast->if_stmt.cond_expr->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->if_stmt.cond_expr->loc,
+                "could not resolve type for 'if' condition");
+            break;
+        }
+
         if (ast->if_stmt.cond_expr->type_info->kind != TYPE_INT &&
             ast->if_stmt.cond_expr->type_info->kind != TYPE_FLOAT &&
             ast->if_stmt.cond_expr->type_info->kind != TYPE_BOOL &&
@@ -4933,6 +5029,53 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     a->compiler,
                     ast->loc,
                     "can only do arithmetic on numeric types");
+                break;
+            }
+
+            ast->type_info = ast->binop.left->type_info;
+
+            break;
+        }
+        case BINOP_BITAND:
+        case BINOP_BITOR:
+        case BINOP_BITXOR: {
+            type_check_ast(a, ast->binop.left, expected_type);
+            type_check_ast(a, ast->binop.right, expected_type);
+
+            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "could not resolve type for binary operands");
+                break;
+            }
+
+            if (expected_type == NULL)
+            {
+                TypeInfo *common_type = common_numeric_type(
+                    ast->binop.left->type_info, ast->binop.right->type_info);
+                type_check_ast(a, ast->binop.left, common_type);
+                type_check_ast(a, ast->binop.right, common_type);
+            }
+
+            if (!exact_types(
+                    ast->binop.left->type_info, ast->binop.right->type_info))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "arithmetic binary operands are of different types");
+                break;
+            }
+
+            if (ast->binop.left->type_info->kind != TYPE_INT &&
+                ast->binop.left->type_info->kind != TYPE_BOOL)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "can only do bitwise operations on integer types");
                 break;
             }
 
@@ -6475,6 +6618,45 @@ void llvm_codegen_ast(
                 }
                 break;
             }
+            case BINOP_BITAND: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value =
+                        LLVMBuildAnd(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_BITOR: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value =
+                        LLVMBuildOr(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_BITXOR: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value =
+                        LLVMBuildXor(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
             case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
@@ -6778,6 +6960,42 @@ void llvm_codegen_ast(
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFRem(lhs, rhs);
                     break;
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_BITAND: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value = LLVMConstAnd(lhs, rhs);
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_BITOR: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value = LLVMConstOr(lhs, rhs);
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_BITXOR: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value = LLVMConstXor(lhs, rhs);
+                    break;
+                }
                 default: assert(0); break;
                 }
                 break;
