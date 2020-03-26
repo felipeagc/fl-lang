@@ -587,6 +587,7 @@ typedef enum TokenType {
     TOKEN_SLASH,
     TOKEN_PLUS,
     TOKEN_MINUS,
+    TOKEN_PERCENT,
 
     TOKEN_DOT,
     TOKEN_ELLIPSIS,
@@ -670,6 +671,7 @@ static const char *token_strings[] = {
     [TOKEN_SLASH] = "/",
     [TOKEN_PLUS] = "+",
     [TOKEN_MINUS] = "-",
+    [TOKEN_PERCENT] = "%",
 
     [TOKEN_DOT] = ".",
     [TOKEN_ELLIPSIS] = "...",
@@ -776,6 +778,7 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_SLASH);
         PRINT_TOKEN_TYPE(TOKEN_PLUS);
         PRINT_TOKEN_TYPE(TOKEN_MINUS);
+        PRINT_TOKEN_TYPE(TOKEN_PERCENT);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
         PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
@@ -1037,6 +1040,12 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_MINUS;
+        break;
+    }
+    case '%': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_PERCENT;
         break;
     }
     case ':': {
@@ -1563,6 +1572,7 @@ typedef enum BinOpType {
     BINOP_SUB,
     BINOP_MUL,
     BINOP_DIV,
+    BINOP_MOD,
     BINOP_EQ,
     BINOP_NOTEQ,
     BINOP_LESS,
@@ -2406,7 +2416,8 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
         case BINOP_ADD:
         case BINOP_SUB:
         case BINOP_MUL:
-        case BINOP_DIV: {
+        case BINOP_DIV:
+        case BINOP_MOD: {
             get_ast_type(compiler, scope, ast->binop.left);
             get_ast_type(compiler, scope, ast->binop.right);
 
@@ -3176,7 +3187,8 @@ bool parse_addition(Parser *p, Ast *ast)
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
     while ((parser_peek(p, 0)->type == TOKEN_PLUS) ||
-           (parser_peek(p, 0)->type == TOKEN_MINUS))
+           (parser_peek(p, 0)->type == TOKEN_MINUS) ||
+           (parser_peek(p, 0)->type == TOKEN_PERCENT))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -3197,7 +3209,8 @@ bool parse_addition(Parser *p, Ast *ast)
         switch (op_tok->type)
         {
         case TOKEN_PLUS: ast->binop.type = BINOP_ADD; break;
-        case TOKEN_MINUS: ast->binop.type = BINOP_SUB; break;
+        case TOKEN_MINUS: ast->binop.type = BINOP_ADD; break;
+        case TOKEN_PERCENT: ast->binop.type = BINOP_MOD; break;
         default: break;
         }
     }
@@ -4881,7 +4894,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_ADD:
         case BINOP_SUB:
         case BINOP_MUL:
-        case BINOP_DIV: {
+        case BINOP_DIV:
+        case BINOP_MOD: {
             type_check_ast(a, ast->binop.left, expected_type);
             type_check_ast(a, ast->binop.right, expected_type);
 
@@ -6440,6 +6454,27 @@ void llvm_codegen_ast(
                 }
                 break;
             }
+            case BINOP_MOD: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_INT: {
+                    if (lhs_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildSRem(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildURem(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                case TYPE_FLOAT: {
+                    result_value.value =
+                        LLVMBuildFRem(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
             case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
@@ -6726,6 +6761,22 @@ void llvm_codegen_ast(
                     break;
                 case TYPE_FLOAT:
                     result_value.value = LLVMConstFDiv(lhs, rhs);
+                    break;
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_MOD: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_INT:
+                    if (lhs_type->integer.is_signed)
+                        result_value.value = LLVMConstSRem(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstURem(lhs, rhs);
+                    break;
+                case TYPE_FLOAT:
+                    result_value.value = LLVMConstFRem(lhs, rhs);
                     break;
                 default: assert(0); break;
                 }
