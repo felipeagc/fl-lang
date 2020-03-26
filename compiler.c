@@ -614,6 +614,13 @@ typedef enum TokenType {
     TOKEN_DIVEQ,   // /=
     TOKEN_MODEQ,   // %=
 
+    TOKEN_ANDEQ, // &=
+    TOKEN_OREQ,  // |=
+    TOKEN_XOREQ, // ^=
+
+    TOKEN_LSHIFTEQ, // <<=
+    TOKEN_RSHIFTEQ, // >>=
+
     TOKEN_AND, // &&
     TOKEN_OR,  // ||
 
@@ -708,6 +715,13 @@ static const char *token_strings[] = {
     [TOKEN_MULEQ] = "*=",
     [TOKEN_DIVEQ] = "/=",
     [TOKEN_MODEQ] = "%=",
+
+    [TOKEN_ANDEQ] = "&=",
+    [TOKEN_OREQ] = "|=",
+    [TOKEN_XOREQ] = "^=",
+
+    [TOKEN_LSHIFTEQ] = "<<=",
+    [TOKEN_RSHIFTEQ] = ">>=",
 
     [TOKEN_AND] = "&&",
     [TOKEN_OR] = "||",
@@ -826,6 +840,13 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_MULEQ);
         PRINT_TOKEN_TYPE(TOKEN_DIVEQ);
         PRINT_TOKEN_TYPE(TOKEN_MODEQ);
+
+        PRINT_TOKEN_TYPE(TOKEN_ANDEQ);
+        PRINT_TOKEN_TYPE(TOKEN_OREQ);
+        PRINT_TOKEN_TYPE(TOKEN_XOREQ);
+
+        PRINT_TOKEN_TYPE(TOKEN_RSHIFTEQ);
+        PRINT_TOKEN_TYPE(TOKEN_LSHIFTEQ);
 
         PRINT_TOKEN_TYPE(TOKEN_AND);
         PRINT_TOKEN_TYPE(TOKEN_OR);
@@ -1009,6 +1030,12 @@ void lex_token(Lexer *l)
             lex_next(l, 1);
             tok.type = TOKEN_AND;
         }
+        else if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_ANDEQ;
+        }
         break;
     }
     case '|': {
@@ -1020,6 +1047,12 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             lex_next(l, 1);
             tok.type = TOKEN_OR;
+        }
+        else if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_XOREQ;
         }
         break;
     }
@@ -1116,6 +1149,12 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_HAT;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_XOREQ;
+        }
         break;
     }
     case '~': {
@@ -1193,6 +1232,12 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             lex_next(l, 1);
             tok.type = TOKEN_RSHIFT;
+            if (lex_peek(l, 0) == '=')
+            {
+                ++tok.loc.length;
+                lex_next(l, 1);
+                tok.type = TOKEN_RSHIFTEQ;
+            }
         }
         break;
     }
@@ -1211,6 +1256,13 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             lex_next(l, 1);
             tok.type = TOKEN_LSHIFT;
+
+            if (lex_peek(l, 0) == '=')
+            {
+                ++tok.loc.length;
+                lex_next(l, 1);
+                tok.type = TOKEN_LSHIFTEQ;
+            }
         }
         break;
     }
@@ -3543,7 +3595,12 @@ bool parse_op_assign(Parser *p, Ast *ast)
            (parser_peek(p, 0)->type == TOKEN_MINUSEQ) ||
            (parser_peek(p, 0)->type == TOKEN_MULEQ) ||
            (parser_peek(p, 0)->type == TOKEN_DIVEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_MODEQ))
+           (parser_peek(p, 0)->type == TOKEN_MODEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_ANDEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_OREQ) ||
+           (parser_peek(p, 0)->type == TOKEN_XOREQ) ||
+           (parser_peek(p, 0)->type == TOKEN_LSHIFTEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_RSHIFTEQ))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -3569,6 +3626,11 @@ bool parse_op_assign(Parser *p, Ast *ast)
         case TOKEN_MULEQ: ast->binop.type = BINOP_MUL; break;
         case TOKEN_DIVEQ: ast->binop.type = BINOP_DIV; break;
         case TOKEN_MODEQ: ast->binop.type = BINOP_MOD; break;
+        case TOKEN_ANDEQ: ast->binop.type = BINOP_BITAND; break;
+        case TOKEN_OREQ: ast->binop.type = BINOP_BITOR; break;
+        case TOKEN_XOREQ: ast->binop.type = BINOP_BITXOR; break;
+        case TOKEN_LSHIFTEQ: ast->binop.type = BINOP_LSHIFT; break;
+        case TOKEN_RSHIFTEQ: ast->binop.type = BINOP_RSHIFT; break;
         default: break;
         }
     }
@@ -6723,9 +6785,6 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
-
-                if (ast->binop.assign && left_val.is_lvalue)
-                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_SUB: {
@@ -6747,9 +6806,6 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
-
-                if (ast->binop.assign && left_val.is_lvalue)
-                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_MUL: {
@@ -6771,9 +6827,6 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
-
-                if (ast->binop.assign && left_val.is_lvalue)
-                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_DIV: {
@@ -6795,9 +6848,6 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
-
-                if (ast->binop.assign && left_val.is_lvalue)
-                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_MOD: {
@@ -6820,8 +6870,6 @@ void llvm_codegen_ast(
                 default: assert(0); break;
                 }
 
-                if (ast->binop.assign && left_val.is_lvalue)
-                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_BITAND: {
@@ -7116,6 +7164,12 @@ void llvm_codegen_ast(
 
                 break;
             }
+            }
+
+            // For the assignment operators
+            if (ast->binop.assign && left_val.is_lvalue)
+            {
+                LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
             }
         }
         else

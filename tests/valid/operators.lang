@@ -62,7 +62,15 @@ proc main() i32 {
     if((1 << 1) & 2 != 2) c.abort();
     if((2 >> 1) != 1) c.abort();
 
-    1 += 2;
+    {
+        var n: i32 = 2;
+        n += 2;
+        if (n != 4) c.abort();
+        n <<= 2;
+        if (n != 16) c.abort();
+        n >>= 2;
+        if (n != 4) c.abort();
+    }
 
     return 0;
 }
