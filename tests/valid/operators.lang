@@ -58,5 +58,9 @@ proc main() i32 {
 
     if (1 & 2 != 0) c.abort();
 
+    if((1 << 0) != 1) c.abort();
+    if((1 << 1) & 2 != 2) c.abort();
+    if((2 >> 1) != 1) c.abort();
+
     return 0;
 }

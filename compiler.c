@@ -591,6 +591,9 @@ typedef enum TokenType {
     TOKEN_HAT,
     TOKEN_TILDE,
 
+    TOKEN_LSHIFT,
+    TOKEN_RSHIFT,
+
     TOKEN_DOT,
     TOKEN_ELLIPSIS,
     TOKEN_COMMA,
@@ -676,6 +679,9 @@ static const char *token_strings[] = {
     [TOKEN_PERCENT] = "%",
     [TOKEN_HAT] = "^",
     [TOKEN_TILDE] = "~",
+
+    [TOKEN_LSHIFT] = "<<",
+    [TOKEN_RSHIFT] = ">>",
 
     [TOKEN_DOT] = ".",
     [TOKEN_ELLIPSIS] = "...",
@@ -785,6 +791,9 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_PERCENT);
         PRINT_TOKEN_TYPE(TOKEN_HAT);
         PRINT_TOKEN_TYPE(TOKEN_TILDE);
+
+        PRINT_TOKEN_TYPE(TOKEN_RSHIFT);
+        PRINT_TOKEN_TYPE(TOKEN_LSHIFT);
 
         PRINT_TOKEN_TYPE(TOKEN_DOT);
         PRINT_TOKEN_TYPE(TOKEN_ELLIPSIS);
@@ -1130,6 +1139,12 @@ void lex_token(Lexer *l)
             lex_next(l, 1);
             tok.type = TOKEN_GREATEREQ;
         }
+        else if (lex_peek(l, 0) == '>')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_RSHIFT;
+        }
         break;
     }
     case '<': {
@@ -1141,6 +1156,12 @@ void lex_token(Lexer *l)
             ++tok.loc.length;
             lex_next(l, 1);
             tok.type = TOKEN_LESSEQ;
+        }
+        else if (lex_peek(l, 0) == '<')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_LSHIFT;
         }
         break;
     }
@@ -1591,17 +1612,23 @@ typedef enum BinOpType {
     BINOP_MUL,
     BINOP_DIV,
     BINOP_MOD,
+
     BINOP_EQ,
     BINOP_NOTEQ,
     BINOP_LESS,
     BINOP_LESSEQ,
     BINOP_GREATER,
     BINOP_GREATEREQ,
+
     BINOP_AND,
     BINOP_OR,
+
     BINOP_BITOR,
     BINOP_BITXOR,
     BINOP_BITAND,
+
+    BINOP_LSHIFT,
+    BINOP_RSHIFT,
 } BinOpType;
 
 typedef enum IntrinsicType {
@@ -2462,6 +2489,8 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->type_info = ast->binop.left->type_info;
             break;
         }
+        case BINOP_LSHIFT:
+        case BINOP_RSHIFT:
         case BINOP_BITOR:
         case BINOP_BITAND:
         case BINOP_BITXOR: {
@@ -3265,11 +3294,49 @@ bool parse_addition(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_bitwise(Parser *p, Ast *ast)
+bool parse_bitshift(Parser *p, Ast *ast)
 {
     bool res = true;
 
     if (!parse_addition(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_RSHIFT) ||
+           (parser_peek(p, 0)->type == TOKEN_LSHIFT))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_addition(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        switch (op_tok->type)
+        {
+        case TOKEN_RSHIFT: ast->binop.type = BINOP_RSHIFT; break;
+        case TOKEN_LSHIFT: ast->binop.type = BINOP_LSHIFT; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+
+bool parse_bitwise(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_bitshift(p, ast)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -3285,7 +3352,7 @@ bool parse_bitwise(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_addition(p, right)) res = false;
+        if (!parse_bitshift(p, right)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -5036,6 +5103,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             break;
         }
+        case BINOP_LSHIFT:
+        case BINOP_RSHIFT:
         case BINOP_BITAND:
         case BINOP_BITOR:
         case BINOP_BITXOR: {
@@ -6657,6 +6726,39 @@ void llvm_codegen_ast(
                 }
                 break;
             }
+            case BINOP_LSHIFT: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value =
+                        LLVMBuildShl(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_RSHIFT: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_INT: {
+                    if (lhs_type->integer.is_signed)
+                        result_value.value =
+                            LLVMBuildAShr(mod->builder, lhs, rhs, "");
+                    else
+                        result_value.value =
+                            LLVMBuildLShr(mod->builder, lhs, rhs, "");
+                    break;
+                }
+                case TYPE_BOOL:
+                    result_value.value =
+                        LLVMBuildLShr(mod->builder, lhs, rhs, "");
+                    break;
+                default: assert(0); break;
+                }
+                break;
+            }
             case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
@@ -6996,6 +7098,35 @@ void llvm_codegen_ast(
                     result_value.value = LLVMConstXor(lhs, rhs);
                     break;
                 }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_LSHIFT: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_BOOL:
+                case TYPE_INT: {
+                    result_value.value = LLVMConstShl(lhs, rhs);
+                    break;
+                }
+                default: assert(0); break;
+                }
+                break;
+            }
+            case BINOP_RSHIFT: {
+                switch (lhs_type->kind)
+                {
+                case TYPE_INT: {
+                    if (lhs_type->integer.is_signed)
+                        result_value.value = LLVMConstAShr(lhs, rhs);
+                    else
+                        result_value.value = LLVMConstLShr(lhs, rhs);
+                    break;
+                }
+                case TYPE_BOOL:
+                    result_value.value = LLVMConstLShr(lhs, rhs);
+                    break;
                 default: assert(0); break;
                 }
                 break;
