@@ -608,6 +608,12 @@ typedef enum TokenType {
     TOKEN_GREATER,   // >
     TOKEN_GREATEREQ, // >=
 
+    TOKEN_PLUSEQ,  // +=
+    TOKEN_MINUSEQ, // -=
+    TOKEN_MULEQ,   // *=
+    TOKEN_DIVEQ,   // /=
+    TOKEN_MODEQ,   // %=
+
     TOKEN_AND, // &&
     TOKEN_OR,  // ||
 
@@ -696,6 +702,12 @@ static const char *token_strings[] = {
     [TOKEN_LESSEQ] = "<=",
     [TOKEN_GREATER] = ">",
     [TOKEN_GREATEREQ] = ">=",
+
+    [TOKEN_PLUSEQ] = "+=",
+    [TOKEN_MINUSEQ] = "-=",
+    [TOKEN_MULEQ] = "*=",
+    [TOKEN_DIVEQ] = "/=",
+    [TOKEN_MODEQ] = "%=",
 
     [TOKEN_AND] = "&&",
     [TOKEN_OR] = "||",
@@ -808,6 +820,12 @@ void print_token(Token *tok)
         PRINT_TOKEN_TYPE(TOKEN_LESSEQ);
         PRINT_TOKEN_TYPE(TOKEN_GREATER);
         PRINT_TOKEN_TYPE(TOKEN_GREATEREQ);
+
+        PRINT_TOKEN_TYPE(TOKEN_PLUSEQ);
+        PRINT_TOKEN_TYPE(TOKEN_MINUSEQ);
+        PRINT_TOKEN_TYPE(TOKEN_MULEQ);
+        PRINT_TOKEN_TYPE(TOKEN_DIVEQ);
+        PRINT_TOKEN_TYPE(TOKEN_MODEQ);
 
         PRINT_TOKEN_TYPE(TOKEN_AND);
         PRINT_TOKEN_TYPE(TOKEN_OR);
@@ -973,6 +991,12 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_ASTERISK;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_MULEQ;
+        }
         break;
     }
     case '&': {
@@ -1043,24 +1067,49 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_SLASH;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_DIVEQ;
+            break;
+        }
         break;
     }
     case '+': {
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_PLUS;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_PLUSEQ;
+        }
         break;
     }
     case '-': {
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_MINUS;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_MINUSEQ;
+        }
         break;
     }
     case '%': {
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_PERCENT;
+        if (lex_peek(l, 0) == '=')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_MODEQ;
+        }
         break;
     }
     case '^': {
@@ -1800,6 +1849,7 @@ typedef struct Ast
             BinOpType type;
             struct Ast *left;
             struct Ast *right;
+            bool assign;
         } binop;
         struct
         {
@@ -1940,8 +1990,33 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         if (!is_expr_const(scope, ast->binop.left)) res = false;
         if (!is_expr_const(scope, ast->binop.right)) res = false;
 
-        if (ast->binop.type == BINOP_AND) res = false;
-        if (ast->binop.type == BINOP_OR) res = false;
+        if (ast->binop.assign) res = false;
+
+        switch (ast->binop.type)
+        {
+        case BINOP_AND:
+        case BINOP_OR: res = false; break;
+
+        case BINOP_ADD:
+        case BINOP_SUB:
+        case BINOP_MUL:
+        case BINOP_DIV:
+        case BINOP_MOD:
+
+        case BINOP_EQ:
+        case BINOP_NOTEQ:
+        case BINOP_LESS:
+        case BINOP_LESSEQ:
+        case BINOP_GREATER:
+        case BINOP_GREATEREQ:
+
+        case BINOP_BITOR:
+        case BINOP_BITXOR:
+        case BINOP_BITAND:
+
+        case BINOP_LSHIFT:
+        case BINOP_RSHIFT: break;
+        }
         break;
     }
     default: break;
@@ -3456,12 +3531,57 @@ bool parse_logical(Parser *p, Ast *ast)
     return res;
 }
 
+bool parse_op_assign(Parser *p, Ast *ast)
+{
+    bool res = true;
+
+    if (!parse_logical(p, ast)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while ((parser_peek(p, 0)->type == TOKEN_PLUSEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_MINUSEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_MULEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_DIVEQ) ||
+           (parser_peek(p, 0)->type == TOKEN_MODEQ))
+    {
+        Token *op_tok = parser_next(p, 1);
+
+        Ast *left = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *left = *ast;
+
+        Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(right, 0, sizeof(Ast));
+        right->loc = parser_peek(p, 0)->loc;
+        if (!parse_logical(p, right)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
+
+        ast->type = AST_BINARY_EXPR;
+        ast->binop.left = left;
+        ast->binop.right = right;
+
+        ast->binop.assign = true;
+        switch (op_tok->type)
+        {
+        case TOKEN_PLUSEQ: ast->binop.type = BINOP_ADD; break;
+        case TOKEN_MINUSEQ: ast->binop.type = BINOP_SUB; break;
+        case TOKEN_MULEQ: ast->binop.type = BINOP_MUL; break;
+        case TOKEN_DIVEQ: ast->binop.type = BINOP_DIV; break;
+        case TOKEN_MODEQ: ast->binop.type = BINOP_MOD; break;
+        default: break;
+        }
+    }
+
+    return res;
+}
+
 bool parse_expr(Parser *p, Ast *ast)
 {
     assert(!parser_is_at_end(p));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
-    bool res = parse_logical(p, ast);
+    bool res = parse_op_assign(p, ast);
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
     return res;
@@ -6565,6 +6685,8 @@ void llvm_codegen_ast(
 
         AstValue result_value = {0};
 
+        LLVMValueRef lhs_ptr = left_val.value;
+
         LLVMValueRef lhs = NULL;
         LLVMValueRef rhs = NULL;
 
@@ -6601,6 +6723,9 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
+
+                if (ast->binop.assign && left_val.is_lvalue)
+                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_SUB: {
@@ -6622,6 +6747,9 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
+
+                if (ast->binop.assign && left_val.is_lvalue)
+                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_MUL: {
@@ -6643,6 +6771,9 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
+
+                if (ast->binop.assign && left_val.is_lvalue)
+                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_DIV: {
@@ -6664,6 +6795,9 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
+
+                if (ast->binop.assign && left_val.is_lvalue)
+                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_MOD: {
@@ -6685,6 +6819,9 @@ void llvm_codegen_ast(
                 }
                 default: assert(0); break;
                 }
+
+                if (ast->binop.assign && left_val.is_lvalue)
+                    LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
                 break;
             }
             case BINOP_BITAND: {
@@ -7264,10 +7401,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_AND:
-            case BINOP_OR: {
-                assert(0);
-                break;
-            }
+            case BINOP_OR: assert(0); break;
             }
         }
 
