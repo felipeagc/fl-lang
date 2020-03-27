@@ -1525,6 +1525,7 @@ typedef enum TypeKind {
     TYPE_STRUCT,
     TYPE_POINTER,
     TYPE_ARRAY,
+    TYPE_SLICE,
     TYPE_INT,
     TYPE_FLOAT,
     TYPE_BOOL,
@@ -1597,6 +1598,10 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     case TYPE_ARRAY: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         if (received->array.size != expected->array.size) return NULL;
+        break;
+    }
+    case TYPE_SLICE: {
+        if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         break;
     }
     case TYPE_STRUCT: {
@@ -1763,7 +1768,9 @@ typedef enum AstType {
     AST_PRIMARY,
     AST_PAREN_EXPR,
     AST_SUBSCRIPT,
+    AST_SUBSCRIPT_SLICE,
     AST_ARRAY_TYPE,
+    AST_SLICE_TYPE,
     AST_EXPR_STMT,
     AST_ACCESS,
     AST_STRUCT_FIELD,
@@ -1916,6 +1923,12 @@ typedef struct Ast
         } subscript;
         struct
         {
+            struct Ast *left;
+            struct Ast *lower;
+            struct Ast *upper;
+        } subscript_slice;
+        struct
+        {
             struct Ast *size;
             struct Ast *sub;
         } array_type;
@@ -1989,6 +2002,17 @@ struct Ast *get_scope_procedure(Scope *scope)
 // }}}
 
 // Expression utility functions {{{
+static inline Ast *get_inner_expr(Ast *ast)
+{
+    switch (ast->type)
+    {
+    case AST_PAREN_EXPR: return get_inner_expr(ast->expr);
+    default: break;
+    }
+
+    return ast;
+}
+
 static bool is_expr_const(Scope *scope, Ast *ast)
 {
     bool res = false;
@@ -2127,7 +2151,7 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
     return res;
 }
 
-static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast);
+static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
 static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
 {
@@ -2291,6 +2315,21 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+    case AST_SLICE_TYPE: {
+        bool res = true;
+
+        if (!ast_as_type(compiler, scope, ast->array_type.sub)) res = false;
+
+        if (res)
+        {
+            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_SLICE;
+            ty->array.sub = ast->array_type.sub->as_type;
+            ast->as_type = ty;
+        }
+        break;
+    }
     case AST_STRUCT: {
         TypeInfo **fields = NULL;
         bool res = true;
@@ -2346,8 +2385,13 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         break;
     }
     case AST_ACCESS: {
-        Scope *accessed_scope = get_accessed_scope(compiler, scope, ast);
-        ast->as_type = ast_as_type(compiler, accessed_scope, ast->access.right);
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
+        if (accessed_scope)
+        {
+            ast->as_type =
+                ast_as_type(compiler, accessed_scope, ast->access.right);
+        }
         break;
     }
     default: break;
@@ -2358,6 +2402,8 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
 
 static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
 {
+    if (ast->type_info && !ast->type_info->can_change) return;
+
     switch (ast->type)
     {
     case AST_PRIMARY: {
@@ -2679,19 +2725,51 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
 
         if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript.left->type_info->kind != TYPE_ARRAY)
+            ast->subscript.left->type_info->kind != TYPE_ARRAY &&
+            ast->subscript.left->type_info->kind != TYPE_SLICE)
         {
             break;
         }
 
         switch (ast->subscript.left->type_info->kind)
         {
+        case TYPE_SLICE:
         case TYPE_ARRAY: {
             ast->type_info = ast->subscript.left->type_info->array.sub;
             break;
         }
         case TYPE_POINTER: {
             ast->type_info = ast->subscript.left->type_info->ptr.sub;
+            break;
+        }
+        default: break;
+        }
+        break;
+    }
+    case AST_SUBSCRIPT_SLICE: {
+        get_ast_type(compiler, scope, ast->subscript_slice.left);
+
+        if (!ast->subscript_slice.left->type_info)
+        {
+            break;
+        }
+
+        if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
+            ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
+            ast->subscript_slice.left->type_info->kind != TYPE_SLICE)
+        {
+            break;
+        }
+
+        switch (ast->subscript_slice.left->type_info->kind)
+        {
+        case TYPE_SLICE:
+        case TYPE_ARRAY: {
+            ast->type_info = ast->subscript_slice.left->type_info->array.sub;
+            break;
+        }
+        case TYPE_POINTER: {
+            ast->type_info = ast->subscript_slice.left->type_info->ptr.sub;
             break;
         }
         default: break;
@@ -2716,7 +2794,39 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
             break;
         }
 
-        Scope *accessed_scope = get_accessed_scope(compiler, scope, ast);
+        if (ast->access.left->type_info->kind == TYPE_SLICE)
+        {
+            Ast *right = get_inner_expr(ast->access.right);
+            if (right->type == AST_PRIMARY &&
+                right->primary.tok->type == TOKEN_IDENT)
+            {
+                if (string_equals(right->primary.tok->str, STR("len")))
+                {
+                    static TypeInfo size_type = {.kind = TYPE_INT,
+                                                 .integer.num_bits = 64};
+                    ast->type_info = &size_type;
+                    break;
+                }
+                else if (string_equals(right->primary.tok->str, STR("ptr")))
+                {
+                    ast->type_info = ast->access.right->type_info;
+
+                    TypeInfo *ptr_ty =
+                        bump_alloc(&compiler->bump, sizeof(*ptr_ty));
+                    memset(ptr_ty, 0, sizeof(*ptr_ty));
+                    ptr_ty->kind = TYPE_POINTER;
+                    ptr_ty->ptr.sub = ast->access.left->type_info->array.sub;
+
+                    ast->type_info = ptr_ty;
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
 
         if (accessed_scope)
         {
@@ -2759,8 +2869,6 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
     }
 }
 
-static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast);
-
 static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
 {
     if (ast->alias_to) return ast->alias_to;
@@ -2791,7 +2899,8 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
         break;
     }
     case AST_ACCESS: {
-        Scope *accessed_scope = get_accessed_scope(compiler, scope, ast);
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
         if (accessed_scope)
         {
             ast->alias_to =
@@ -2805,13 +2914,11 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
     return ast->alias_to;
 }
 
-static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast)
+static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 {
-    assert(ast->type == AST_ACCESS);
-
     Scope *accessed_scope = NULL;
 
-    Ast *aliased = get_aliased_expr(compiler, scope, ast->access.left);
+    Ast *aliased = get_aliased_expr(compiler, scope, ast);
     if (aliased)
     {
         switch (aliased->type)
@@ -2829,19 +2936,18 @@ static Scope *get_accessed_scope(Compiler *compiler, Scope *scope, Ast *ast)
     else
     {
         // Type based lookup
-        get_ast_type(compiler, scope, ast->access.left);
-        TypeInfo *left_type = ast->access.left->type_info;
-        if (!left_type) return NULL;
+        get_ast_type(compiler, scope, ast);
+        if (!ast->type_info) return NULL;
 
-        if (left_type->kind == TYPE_STRUCT)
+        if (ast->type_info->kind == TYPE_STRUCT)
         {
-            accessed_scope = left_type->structure.scope;
+            accessed_scope = ast->type_info->structure.scope;
         }
         else if (
-            left_type->kind == TYPE_POINTER &&
-            left_type->ptr.sub->kind == TYPE_STRUCT)
+            ast->type_info->kind == TYPE_POINTER &&
+            ast->type_info->ptr.sub->kind == TYPE_STRUCT)
         {
-            accessed_scope = left_type->ptr.sub->structure.scope;
+            accessed_scope = ast->type_info->ptr.sub->structure.scope;
         }
     }
 
@@ -2962,21 +3068,26 @@ bool parse_array_type(Parser *p, Ast *ast)
     {
     case TOKEN_LBRACK: {
         parser_next(p, 1);
-        ast->type = AST_ARRAY_TYPE;
+        ast->type = AST_SLICE_TYPE;
 
-        Ast size = {.loc = parser_peek(p, 0)->loc};
-        if (parse_expr(p, &size))
+        if (parser_peek(p, 0)->type != TOKEN_RBRACK)
         {
-            Location last_loc = parser_peek(p, -1)->loc;
-            size.loc.length = last_loc.buf + last_loc.length - size.loc.buf;
+            ast->type = AST_ARRAY_TYPE;
 
-            ast->array_type.size =
-                bump_alloc(&p->compiler->bump, sizeof(*ast->array_type.size));
-            *ast->array_type.size = size;
-        }
-        else
-        {
-            res = false;
+            Ast size = {.loc = parser_peek(p, 0)->loc};
+            if (parse_expr(p, &size))
+            {
+                Location last_loc = parser_peek(p, -1)->loc;
+                size.loc.length = last_loc.buf + last_loc.length - size.loc.buf;
+
+                ast->array_type.size = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->array_type.size));
+                *ast->array_type.size = size;
+            }
+            else
+            {
+                res = false;
+            }
         }
 
         if (!parser_consume(p, TOKEN_RBRACK)) res = false;
@@ -3105,28 +3216,55 @@ bool parse_subscript(Parser *p, Ast *ast)
     while (parser_peek(p, 0)->type == TOKEN_LBRACK)
     {
         Ast expr = *ast;
-        memset(&ast->subscript, 0, sizeof(ast->subscript));
 
         parser_next(p, 1);
 
-        ast->type = AST_SUBSCRIPT;
-        ast->subscript.left =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.left));
-        *ast->subscript.left = expr;
+        Ast lower = {0};
+        if (!parse_expr(p, &lower)) res = false;
 
-        Ast right = {0};
-        if (parse_expr(p, &right))
+        if (parser_peek(p, 0)->type == TOKEN_COLON)
         {
-            ast->subscript.right =
-                bump_alloc(&p->compiler->bump, sizeof(*ast->subscript.right));
-            *ast->subscript.right = right;
+            parser_next(p, 1);
+
+            // Subscript slice
+            Ast upper = {0};
+            if (!parse_expr(p, &upper)) res = false;
+
+            if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+            if (res)
+            {
+                ast->type = AST_SUBSCRIPT_SLICE;
+
+                ast->subscript_slice.left = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript.left));
+                *ast->subscript_slice.left = expr;
+
+                ast->subscript_slice.lower = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript_slice.lower));
+                *ast->subscript_slice.lower = lower;
+
+                ast->subscript_slice.upper = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript_slice.upper));
+                *ast->subscript_slice.upper = upper;
+            }
         }
         else
         {
-            res = false;
-        }
+            // Regular subscript
+            if (!parser_consume(p, TOKEN_RBRACK)) res = false;
 
-        if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+            if (res)
+            {
+                ast->type = AST_SUBSCRIPT;
+                ast->subscript.left = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript.left));
+                *ast->subscript.left = expr;
+                ast->subscript.right = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript.right));
+                *ast->subscript.right = lower;
+            }
+        }
     }
 
     return res;
@@ -4199,7 +4337,9 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_RETURN:
     case AST_PRIMARY:
     case AST_SUBSCRIPT:
+    case AST_SUBSCRIPT_SLICE:
     case AST_ARRAY_TYPE:
+    case AST_SLICE_TYPE:
     case AST_EXPR_STMT:
     case AST_ACCESS:
     case AST_PROC_PARAM:
@@ -4480,6 +4620,12 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
         symbol_check_ast(a, ast->subscript.right);
         break;
     }
+    case AST_SUBSCRIPT_SLICE: {
+        symbol_check_ast(a, ast->subscript_slice.left);
+        symbol_check_ast(a, ast->subscript_slice.lower);
+        symbol_check_ast(a, ast->subscript_slice.upper);
+        break;
+    }
     case AST_STRUCT: {
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);
@@ -4501,6 +4647,10 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
                 "array type size must be a constant value");
         }
 
+        break;
+    }
+    case AST_SLICE_TYPE: {
+        symbol_check_ast(a, ast->array_type.sub);
         break;
     }
     case AST_PRIMARY: {
@@ -4542,19 +4692,22 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     case AST_ACCESS: {
         symbol_check_ast(a, ast->access.left);
 
-        Scope *accessed_scope =
-            get_accessed_scope(a->compiler, *array_last(a->scope_stack), ast);
-        if (!accessed_scope)
+        get_ast_type(a->compiler, *array_last(a->scope_stack), ast);
+
+        if (!ast->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "tried to access inaccessible expression");
+            compile_error(a->compiler, ast->loc, "invalid access");
             break;
         }
-        array_push(a->scope_stack, accessed_scope);
-        symbol_check_ast(a, ast->access.right);
-        array_pop(a->scope_stack);
+
+        Scope *accessed_scope = get_expr_scope(
+            a->compiler, *array_last(a->scope_stack), ast->access.left);
+        if (accessed_scope)
+        {
+            array_push(a->scope_stack, accessed_scope);
+            symbol_check_ast(a, ast->access.right);
+            array_pop(a->scope_stack);
+        }
         break;
     }
     default: break;
@@ -5460,16 +5613,19 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript.left->type_info->kind != TYPE_ARRAY)
+            ast->subscript.left->type_info->kind != TYPE_ARRAY &&
+            ast->subscript.left->type_info->kind != TYPE_SLICE)
         {
             compile_error(
                 a->compiler,
                 ast->loc,
                 "subscript only works on pointers or arrays");
+            break;
         }
 
         switch (ast->subscript.left->type_info->kind)
         {
+        case TYPE_SLICE:
         case TYPE_ARRAY: {
             ast->type_info = ast->subscript.left->type_info->array.sub;
             break;
@@ -5478,13 +5634,72 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = ast->subscript.left->type_info->ptr.sub;
             break;
         }
-        default: break;
+        default: assert(0); break;
         }
 
         if (ast->subscript.right->type_info->kind != TYPE_INT)
         {
             compile_error(
                 a->compiler, ast->loc, "subscript needs an integer index");
+            break;
+        }
+        break;
+    }
+    case AST_SUBSCRIPT_SLICE: {
+        type_check_ast(a, ast->subscript_slice.left, NULL);
+        type_check_ast(a, ast->subscript_slice.lower, NULL);
+        type_check_ast(a, ast->subscript_slice.upper, NULL);
+
+        if (!ast->subscript_slice.left->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for left expression of subscript");
+            break;
+        }
+
+        if (!ast->subscript_slice.lower->type_info ||
+            !ast->subscript_slice.upper->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for bounds of slice subscript");
+            break;
+        }
+
+        if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
+            ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
+            ast->subscript_slice.left->type_info->kind != TYPE_SLICE)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "subscript only works on pointers or arrays");
+            break;
+        }
+
+        switch (ast->subscript_slice.left->type_info->kind)
+        {
+        case TYPE_SLICE:
+        case TYPE_ARRAY: {
+            ast->type_info = ast->subscript_slice.left->type_info->array.sub;
+            break;
+        }
+        case TYPE_POINTER: {
+            ast->type_info = ast->subscript_slice.left->type_info->ptr.sub;
+            break;
+        }
+        default: assert(0); break;
+        }
+
+        if (ast->subscript_slice.lower->type_info->kind != TYPE_INT ||
+            ast->subscript_slice.upper->type_info->kind != TYPE_INT)
+        {
+            compile_error(
+                a->compiler, ast->loc, "subscript needs integer bounds");
+            break;
         }
         break;
     }
@@ -5500,6 +5715,14 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             compile_error(
                 a->compiler, ast->loc, "array type needs an integer size");
         }
+
+        break;
+    }
+    case AST_SLICE_TYPE: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        ast->type_info = &ty_ty;
+
+        type_check_ast(a, ast->array_type.sub, &ty_ty);
 
         break;
     }
@@ -5527,8 +5750,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        Scope *accessed_scope =
-            get_accessed_scope(a->compiler, *array_last(a->scope_stack), ast);
+        Scope *accessed_scope = get_expr_scope(
+            a->compiler, *array_last(a->scope_stack), ast->access.left);
 
         if (accessed_scope)
         {
@@ -5868,6 +6091,15 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_ARRAY: {
         type->ref =
             LLVMArrayType(llvm_type(l, type->array.sub), type->array.size);
+        break;
+    }
+    case TYPE_SLICE: {
+        LLVMTypeRef field_types[2] = {
+            LLVMInt64Type(),
+            LLVMPointerType(llvm_type(l, type->array.sub), 0),
+        };
+
+        type->ref = LLVMStructType(field_types, 2, false);
         break;
     }
     case TYPE_PROC: {
@@ -6252,7 +6484,7 @@ void llvm_codegen_ast(
                 break;
             }
             case AST_STRUCT_FIELD: {
-                llvm_codegen_ast(l, mod, sym, false, out_value);
+                llvm_codegen_ast(l, mod, sym, is_const, out_value);
                 break;
             }
             default: assert(0); break;
@@ -6688,8 +6920,66 @@ void llvm_codegen_ast(
             if (out_value) *out_value = subscript_value;
             break;
         }
+        case TYPE_SLICE: {
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 1; // Index for pointer field
+
+            if (left_value.is_lvalue)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, left_value.value, indices, 2, "");
+            }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, left_value.value, indices, 1, "");
+            }
+
+            LLVMValueRef indices[1] = {
+                load_val(mod, &right_value),
+            };
+
+            AstValue subscript_value = {0};
+            subscript_value.is_lvalue = true;
+            subscript_value.value = LLVMBuildGEP(
+                mod->builder,
+                LLVMBuildLoad(mod->builder, field_ptr, ""),
+                indices,
+                1,
+                "");
+
+            if (out_value) *out_value = subscript_value;
+            break;
+        }
         default: assert(0); break;
         }
+
+        break;
+    }
+    case AST_SUBSCRIPT_SLICE: {
+        AstValue left_value = {0};
+        llvm_codegen_ast(l, mod, ast->subscript_slice.left, false, &left_value);
+        AstValue lower_value = {0};
+        llvm_codegen_ast(
+            l, mod, ast->subscript_slice.lower, false, &lower_value);
+        AstValue upper_value = {0};
+        llvm_codegen_ast(
+            l, mod, ast->subscript_slice.upper, false, &upper_value);
+
+        assert(left_value.value);
+        assert(lower_value.value);
+        assert(upper_value.value);
+
+        assert(0 && "TODO");
 
         break;
     }
@@ -6711,31 +7001,89 @@ void llvm_codegen_ast(
     }
     case AST_ACCESS: {
         assert(array_size(l->scope_stack) > 0);
-        Scope accessed_scope =
-            *get_accessed_scope(l->compiler, *array_last(l->scope_stack), ast);
 
-        switch (accessed_scope.type)
+        switch (ast->access.left->type_info->kind)
         {
-        case SCOPE_DEFAULT: {
-            array_push(l->scope_stack, &accessed_scope);
-            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-            array_pop(l->scope_stack);
-            break;
-        }
-        case SCOPE_STRUCT: {
-            AstValue accessed_value = {0};
-            llvm_codegen_ast(l, mod, ast->access.left, false, &accessed_value);
+        case TYPE_SLICE: {
+            AstValue slice_value = {0};
+            llvm_codegen_ast(l, mod, ast->access.left, false, &slice_value);
 
-            if (ast->access.left->type_info->kind == TYPE_POINTER)
+            Ast *right = get_inner_expr(ast->access.right);
+            assert(right->type == AST_PRIMARY);
+            assert(right->primary.tok->type == TOKEN_IDENT);
+
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 0;
+            if (string_equals(right->primary.tok->str, STR("len")))
             {
-                accessed_value.value = load_val(mod, &accessed_value);
+                field_index = 0;
+            }
+            else if (string_equals(right->primary.tok->str, STR("ptr")))
+            {
+                field_index = 1;
             }
 
-            accessed_scope.value = accessed_value;
+            if (slice_value.is_lvalue)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
 
-            array_push(l->scope_stack, &accessed_scope);
-            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-            array_pop(l->scope_stack);
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 2, "");
+            }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 1, "");
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            result_value.value = field_ptr;
+
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+        default: {
+            Scope *accessed_scope = get_expr_scope(
+                l->compiler, *array_last(l->scope_stack), ast->access.left);
+
+            switch (accessed_scope->type)
+            {
+            case SCOPE_DEFAULT: {
+                array_push(l->scope_stack, accessed_scope);
+                llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+                array_pop(l->scope_stack);
+                break;
+            }
+            case SCOPE_STRUCT: {
+                // Create a copy of the scope for this instance of the struct
+                Scope instance_scope = *accessed_scope;
+
+                AstValue accessed_value = {0};
+                llvm_codegen_ast(
+                    l, mod, ast->access.left, false, &accessed_value);
+
+                if (ast->access.left->type_info->kind == TYPE_POINTER)
+                {
+                    accessed_value.value = load_val(mod, &accessed_value);
+                }
+
+                instance_scope.value = accessed_value;
+
+                array_push(l->scope_stack, &instance_scope);
+                llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+                array_pop(l->scope_stack);
+                break;
+            }
+            }
             break;
         }
         }

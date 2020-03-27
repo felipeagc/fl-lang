@@ -1,0 +1,18 @@
+import c "core:c";
+
+proc "c" main() i32 {
+    var my_array: [10]i32;
+
+    // my_array[0:3]; // TODO: doesn't work yet
+
+    var my_slice: []i32;
+    my_slice.len = 321;
+    my_slice.ptr = c.malloc(@sizeof(i32) * my_slice.len);
+
+    my_slice[0] = 123;
+    c.printf(c"%d\n", my_slice[0]);
+
+    c.free(my_slice.ptr);
+
+    return 0;
+}
