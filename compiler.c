@@ -1573,6 +1573,12 @@ typedef struct TypeInfo
     };
 } TypeInfo;
 
+static TypeInfo SIZE_INT_TYPE = {
+    .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 64}};
+
+static TypeInfo BOOL_INT_TYPE = {
+    .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
+
 TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind != expected->kind) return NULL;
@@ -2428,8 +2434,8 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         case TOKEN_NULL: {
             static TypeInfo void_ty = {.kind = TYPE_VOID};
-            static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
-                                           .ptr.sub = &void_ty};
+            static TypeInfo void_ptr_ty = {
+                .kind = TYPE_POINTER, .ptr.sub = &void_ty, .can_change = true};
             ast->type_info = &void_ptr_ty;
             break;
         }
@@ -2546,21 +2552,11 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_SIZEOF: {
-            static TypeInfo u64_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = false,
-                .integer.num_bits = 64,
-            };
-            ast->type_info = &u64_ty;
+            ast->type_info = &SIZE_INT_TYPE;
             break;
         }
         case INTRINSIC_ALIGNOF: {
-            static TypeInfo u64_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = false,
-                .integer.num_bits = 64,
-            };
-            ast->type_info = &u64_ty;
+            ast->type_info = &SIZE_INT_TYPE;
             break;
         }
         }
@@ -2761,19 +2757,27 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
             break;
         }
 
+        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_SLICE;
+        ast->type_info = ty;
+
         switch (ast->subscript_slice.left->type_info->kind)
         {
         case TYPE_SLICE:
         case TYPE_ARRAY: {
-            ast->type_info = ast->subscript_slice.left->type_info->array.sub;
+            ast->type_info->array.sub =
+                ast->subscript_slice.left->type_info->array.sub;
             break;
         }
         case TYPE_POINTER: {
-            ast->type_info = ast->subscript_slice.left->type_info->ptr.sub;
+            ast->type_info->array.sub =
+                ast->subscript_slice.left->type_info->ptr.sub;
             break;
         }
         default: break;
         }
+
         break;
     }
     case AST_ARRAY_TYPE: {
@@ -2802,9 +2806,7 @@ static void get_ast_type(Compiler *compiler, Scope *scope, Ast *ast)
             {
                 if (string_equals(right->primary.tok->str, STR("len")))
                 {
-                    static TypeInfo size_type = {.kind = TYPE_INT,
-                                                 .integer.num_bits = 64};
-                    ast->type_info = &size_type;
+                    ast->type_info = &SIZE_INT_TYPE;
                     break;
                 }
                 else if (string_equals(right->primary.tok->str, STR("ptr")))
@@ -4714,9 +4716,8 @@ void symbol_check_ast(Analyzer *a, Ast *ast)
     }
 }
 
-bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
+void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
-    bool res = true;
     bool is_statement = true;
 
     // Statements
@@ -4828,19 +4829,17 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
         {
-            if (!type_check_ast(a, param, NULL)) res = false;
-            if (res)
+            type_check_ast(a, param, NULL);
+            if (param->decl.type_expr->as_type)
             {
-                assert(param->decl.type_expr->as_type);
                 array_push(ty->proc.params, *param->decl.type_expr->as_type);
             }
         }
 
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        if (!type_check_ast(a, ast->proc.return_type, &ty_ty)) res = false;
-        if (res)
+        type_check_ast(a, ast->proc.return_type, &ty_ty);
+        if (ast->proc.return_type->as_type)
         {
-            assert(ast->proc.return_type->as_type);
             ty->proc.return_type = ast->proc.return_type->as_type;
         }
 
@@ -4971,40 +4970,21 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     if (is_statement)
     {
-        return res;
+        return;
     }
 
     ast_as_type(a->compiler, *array_last(a->scope_stack), ast);
+    get_ast_type(a->compiler, *array_last(a->scope_stack), ast);
 
     switch (ast->type)
     {
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
-        case TOKEN_U8:
-        case TOKEN_U16:
-        case TOKEN_U32:
-        case TOKEN_U64:
-        case TOKEN_I8:
-        case TOKEN_I16:
-        case TOKEN_I32:
-        case TOKEN_I64:
-        case TOKEN_CHAR:
-        case TOKEN_FLOAT:
-        case TOKEN_DOUBLE:
-        case TOKEN_BOOL:
-        case TOKEN_VOID: {
-            static TypeInfo ty = {.kind = TYPE_TYPE};
-            ast->type_info = &ty;
-            break;
-        }
         case TOKEN_NULL: {
-            static TypeInfo void_ty = {.kind = TYPE_VOID};
-            static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
-                                           .ptr.sub = &void_ty};
-            ast->type_info = &void_ptr_ty;
+            assert(ast->type_info);
 
-            if (expected_type)
+            if (ast->type_info->can_change && expected_type)
             {
                 switch (expected_type->kind)
                 {
@@ -5067,87 +5047,31 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             break;
         }
-        case TOKEN_CSTRING_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
-            static TypeInfo ty = {
-                .kind = TYPE_POINTER,
-                .ptr.sub = &i8_ty,
-            };
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_CHAR_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
-            ast->type_info = &i8_ty;
-            break;
-        }
-        case TOKEN_IDENT: {
-            Ast *sym =
-                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
-            if (sym)
-            {
-                switch (sym->type)
-                {
-                case AST_VAR_DECL:
-                case AST_CONST_DECL: {
-                    ast->type_info = sym->decl.type_expr->as_type;
-                    break;
-                }
-                case AST_PROC_PARAM: {
-                    ast->type_info = sym->proc_param.type_expr->as_type;
-                    break;
-                }
-                case AST_STRUCT_FIELD: {
-                    ast->type_info = sym->field.type_expr->as_type;
-                    break;
-                }
-                case AST_PROC_DECL: {
-                    ast->type_info = sym->type_info;
-                    break;
-                }
-                case AST_IMPORT: {
-                    static TypeInfo namespace_ty = {.kind = TYPE_NAMESPACE};
-                    ast->type_info = &namespace_ty;
-                    break;
-                }
-                case AST_TYPEDEF: {
-                    static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-                    ast->type_info = &ty_ty;
-                    break;
-                }
-                default: break;
-                }
-            }
-
-            break;
-        }
-        default: assert(0); break;
+        default: break;
         }
         break;
     }
     case AST_PAREN_EXPR: {
-        res = type_check_ast(a, ast->expr, expected_type);
+        type_check_ast(a, ast->expr, expected_type);
         ast->type_info = ast->expr->type_info;
         break;
     }
     case AST_PROC_CALL: {
-        if (!type_check_ast(a, ast->proc_call.expr, NULL)) res = false;
-        if (!res) break;
+        type_check_ast(a, ast->proc_call.expr, NULL);
+        if (!ast->proc_call.expr->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for procedure call expression");
+            break;
+        }
 
         TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
 
         if (ast->proc_call.expr->type_info->kind != TYPE_POINTER ||
             ast->proc_call.expr->type_info->ptr.sub->kind != TYPE_PROC)
         {
-            res = false;
             compile_error(
                 a->compiler, ast->loc, "tried to call a non procedure type");
             break;
@@ -5163,7 +5087,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (array_size(ast->proc_call.params) !=
                 array_size(proc_ty->proc.params))
             {
-                res = false;
                 compile_error(
                     a->compiler,
                     ast->loc,
@@ -5176,7 +5099,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (array_size(ast->proc_call.params) <
                 array_size(proc_ty->proc.params))
             {
-                res = false;
                 compile_error(
                     a->compiler,
                     ast->loc,
@@ -5224,12 +5146,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            static TypeInfo u64_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = false,
-                .integer.num_bits = 64,
-            };
-            ast->type_info = &u64_ty;
+            ast->type_info = &SIZE_INT_TYPE;
 
             break;
         }
@@ -5247,12 +5164,7 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            static TypeInfo u64_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = false,
-                .integer.num_bits = 64,
-            };
-            ast->type_info = &u64_ty;
+            ast->type_info = &SIZE_INT_TYPE;
 
             break;
         }
@@ -5647,8 +5559,8 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
     case AST_SUBSCRIPT_SLICE: {
         type_check_ast(a, ast->subscript_slice.left, NULL);
-        type_check_ast(a, ast->subscript_slice.lower, NULL);
-        type_check_ast(a, ast->subscript_slice.upper, NULL);
+        type_check_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
+        type_check_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
 
         if (!ast->subscript_slice.left->type_info)
         {
@@ -5669,6 +5581,18 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        if (!exact_types(
+                ast->subscript_slice.lower->type_info,
+                ast->subscript_slice.upper->type_info))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "slice subscript lower and upper bounds need to be of same "
+                "type");
+            break;
+        }
+
         if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
             ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
             ast->subscript_slice.left->type_info->kind != TYPE_SLICE)
@@ -5680,27 +5604,27 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_SLICE;
+        ast->type_info = ty;
+
         switch (ast->subscript_slice.left->type_info->kind)
         {
         case TYPE_SLICE:
         case TYPE_ARRAY: {
-            ast->type_info = ast->subscript_slice.left->type_info->array.sub;
+            ast->type_info->array.sub =
+                ast->subscript_slice.left->type_info->array.sub;
             break;
         }
         case TYPE_POINTER: {
-            ast->type_info = ast->subscript_slice.left->type_info->ptr.sub;
+            ast->type_info->array.sub =
+                ast->subscript_slice.left->type_info->ptr.sub;
             break;
         }
-        default: assert(0); break;
+        default: break;
         }
 
-        if (ast->subscript_slice.lower->type_info->kind != TYPE_INT ||
-            ast->subscript_slice.upper->type_info->kind != TYPE_INT)
-        {
-            compile_error(
-                a->compiler, ast->loc, "subscript needs integer bounds");
-            break;
-        }
         break;
     }
     case AST_ARRAY_TYPE: {
@@ -5758,8 +5682,6 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             array_push(a->scope_stack, accessed_scope);
             type_check_ast(a, ast->access.right, NULL);
             array_pop(a->scope_stack);
-
-            ast->type_info = ast->access.right->type_info;
         }
 
         break;
@@ -5777,17 +5699,14 @@ bool type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->loc.length);
     }
 
-    if (res && ast->type_info && expected_type)
+    if (ast->type_info && expected_type)
     {
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {
             compile_error(a->compiler, ast->loc, "wrong type");
-            res = false;
         }
     }
-
-    return res;
 }
 
 void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
@@ -6081,7 +6000,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         }
         break;
     }
-    case TYPE_BOOL: type->ref = LLVMInt8Type(); break;
+    case TYPE_BOOL: type->ref = llvm_type(l, &BOOL_INT_TYPE); break;
     case TYPE_VOID: type->ref = LLVMVoidType(); break;
 
     case TYPE_POINTER: {
@@ -6620,16 +6539,20 @@ void llvm_codegen_ast(
         if (ast->decl.value_expr)
         {
             AstValue init_value = {0};
+            init_value.value = ast->decl.value.value;
             llvm_codegen_ast(l, mod, ast->decl.value_expr, false, &init_value);
 
-            LLVMValueRef to_store = load_val(mod, &init_value);
-            to_store = autocast_value(
-                l,
-                mod,
-                ast->decl.value_expr->type_info,
-                ast->decl.type_expr->as_type,
-                to_store);
-            LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
+            if (init_value.value != ast->decl.value.value)
+            {
+                LLVMValueRef to_store = load_val(mod, &init_value);
+                to_store = autocast_value(
+                    l,
+                    mod,
+                    ast->decl.value_expr->type_info,
+                    ast->decl.type_expr->as_type,
+                    to_store);
+                LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
+            }
         }
 
         if (out_value) *out_value = ast->decl.value;
@@ -6948,7 +6871,89 @@ void llvm_codegen_ast(
         assert(lower_value.value);
         assert(upper_value.value);
 
-        assert(0 && "TODO");
+        LLVMValueRef left = NULL;
+        switch (ast->subscript_slice.left->type_info->kind)
+        {
+        case TYPE_ARRAY: {
+            assert(left_value.is_lvalue);
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+            };
+
+            left = LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
+
+            break;
+        }
+        case TYPE_SLICE: {
+            assert(left_value.is_lvalue);
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 1, false),
+            };
+
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
+            left = LLVMBuildLoad(mod->builder, ptr_ptr, "");
+
+            break;
+        }
+        case TYPE_POINTER: {
+            left = load_val(mod, &left_value);
+            break;
+        }
+        default: assert(0); break;
+        }
+
+        LLVMValueRef lower = load_val(mod, &lower_value);
+        LLVMValueRef upper = load_val(mod, &upper_value);
+
+        AstValue result_value = {0};
+        result_value.is_lvalue = true;
+        if (out_value && out_value->value)
+        {
+            result_value.value = out_value->value;
+        }
+        else
+        {
+            result_value.value =
+                build_alloca(mod, llvm_type(l, ast->type_info));
+        }
+
+        {
+            LLVMValueRef len = LLVMBuildSub(mod->builder, upper, lower, "");
+            len = LLVMBuildIntCast2(
+                mod->builder, len, llvm_type(l, &SIZE_INT_TYPE), false, "");
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+            };
+
+            LLVMValueRef len_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, len, len_ptr);
+        }
+
+        {
+            LLVMValueRef ptr = LLVMBuildGEP(mod->builder, left, &lower, 1, "");
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 1, false),
+            };
+
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, ptr, ptr_ptr);
+        }
+
+        if (out_value)
+        {
+            *out_value = result_value;
+        }
 
         break;
     }

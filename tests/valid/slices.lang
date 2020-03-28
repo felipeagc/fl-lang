@@ -1,18 +1,77 @@
 import c "core:c";
 
 proc "c" main() i32 {
-    var my_array: [10]i32;
+    {
+        // Slicing arrays
 
-    // my_array[0:3]; // TODO: doesn't work yet
+        var my_array: [10]i32;
+        my_array[1] = 3;
+        my_array[2] = 4;
 
-    var my_slice: []i32;
-    my_slice.len = 321;
-    my_slice.ptr = c.malloc(@sizeof(i32) * my_slice.len);
+        var lower: u64 = 1;
+        var upper: u64 = 3;
 
-    my_slice[0] = 123;
-    c.printf(c"%d\n", my_slice[0]);
+        var my_slice: []i32 = my_array[lower:upper];
 
-    c.free(my_slice.ptr);
+        if (my_slice.len != upper - lower) c.abort();
+        if (my_slice[0] != 3) c.abort();
+        if (my_slice[1] != 4) c.abort();
+        if (&my_slice[0] != &my_array[1]) c.abort();
+        if (&my_slice[0] != my_slice.ptr) c.abort();
+
+        c.printf(c"%d\n", my_slice[0]);
+        c.printf(c"my_slice.len = %u\n", my_slice.len);
+    }
+
+    {
+        // Slicing pointers
+
+        var my_array: *i32 = c.malloc(@sizeof(i32) * 10);
+        my_array[1] = 3;
+        my_array[2] = 4;
+
+        var lower: u64 = 1;
+        var upper: u64 = 3;
+
+        var my_slice: []i32 = my_array[lower:upper];
+
+        if (my_slice.len != upper - lower) c.abort();
+        if (my_slice[0] != 3) c.abort();
+        if (my_slice[1] != 4) c.abort();
+        if (&my_slice[0] != &my_array[1]) c.abort();
+        if (&my_slice[0] != my_slice.ptr) c.abort();
+
+        c.printf(c"%d\n", my_slice[0]);
+        c.printf(c"my_slice.len = %u\n", my_slice.len);
+
+        c.free(my_array);
+    }
+
+    {
+        // Slicing slices
+
+        var my_array: *i32 = c.malloc(@sizeof(i32) * 10);
+        my_array[2] = 3;
+        my_array[3] = 4;
+        var old_slice: []i32 = my_array[1:4];
+
+        var lower: u64 = 1;
+        var upper: u64 = 3;
+
+        var my_slice: []i32 = old_slice[lower:upper];
+
+        if (my_slice.len != upper - lower) c.abort();
+        if (my_slice[0] != 3) c.abort();
+        if (my_slice[1] != 4) c.abort();
+        if (&my_slice[0] != &old_slice[1]) c.abort();
+        if (&my_slice[0] != &my_array[2]) c.abort();
+        if (&my_slice[0] != my_slice.ptr) c.abort();
+
+        c.printf(c"%d\n", my_slice[0]);
+        c.printf(c"my_slice.len = %u\n", my_slice.len);
+
+        c.free(my_array);
+    }
 
     return 0;
 }
