@@ -6228,54 +6228,21 @@ static inline LLVMValueRef bool_value(
     return i1_val;
 }
 
-void llvm_codegen_alloca(LLContext *l, LLModule *mod, Ast *ast)
+static inline LLVMValueRef build_alloca(LLModule *mod, LLVMTypeRef type)
 {
-    switch (ast->type)
-    {
-    case AST_VAR_DECL: {
-        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+    LLVMBasicBlockRef current_block = LLVMGetInsertBlock(mod->builder);
 
-        if (proc)
-        {
-            // Local variable
-            ast->decl.value.is_lvalue = true;
-            ast->decl.value.value = LLVMBuildAlloca(
-                mod->builder, llvm_type(l, ast->decl.type_expr->as_type), "");
-        }
+    LLVMValueRef fun = LLVMGetBasicBlockParent(current_block);
 
-        break;
-    }
-    case AST_BLOCK: {
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
-             ++stmt)
-        {
-            llvm_codegen_alloca(l, mod, stmt);
-        }
-        break;
-    }
-    case AST_IF: {
-        llvm_codegen_alloca(l, mod, ast->if_stmt.cond_stmt);
-        if (ast->if_stmt.else_stmt)
-        {
-            llvm_codegen_alloca(l, mod, ast->if_stmt.else_stmt);
-        }
-        break;
-    }
-    case AST_WHILE: {
-        llvm_codegen_alloca(l, mod, ast->while_stmt.cond);
-        llvm_codegen_alloca(l, mod, ast->while_stmt.stmt);
-        break;
-    }
-    case AST_FOR: {
-        if (ast->for_stmt.init) llvm_codegen_alloca(l, mod, ast->for_stmt.init);
-        if (ast->for_stmt.cond) llvm_codegen_alloca(l, mod, ast->for_stmt.cond);
-        if (ast->for_stmt.inc) llvm_codegen_alloca(l, mod, ast->for_stmt.inc);
-        llvm_codegen_alloca(l, mod, ast->for_stmt.stmt);
-        break;
-    }
-    default: break;
-    }
+    LLVMBasicBlockRef entry_block = LLVMGetEntryBasicBlock(fun);
+    LLVMPositionBuilder(
+        mod->builder, entry_block, LLVMGetBasicBlockTerminator(entry_block));
+
+    LLVMValueRef alloca = LLVMBuildAlloca(mod->builder, type, "");
+
+    LLVMPositionBuilderAtEnd(mod->builder, current_block);
+
+    return alloca;
 }
 
 void llvm_codegen_ast_children(
@@ -6333,19 +6300,18 @@ void llvm_codegen_ast(
                 LLVMSetValueName(param->proc_param.value.value, param_name);
             }
 
+            LLVMBasicBlockRef alloca_block =
+                LLVMAppendBasicBlock(fun, "allocas");
             LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
             LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
+
+            LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
+            LLVMBuildBr(mod->builder, entry);
 
             LLVMPositionBuilderAtEnd(mod->builder, entry);
 
             array_push(l->scope_stack, ast->proc.scope);
             array_push(l->operand_scope_stack, ast->proc.scope);
-            for (Ast *stmt = ast->proc.stmts;
-                 stmt != ast->proc.stmts + array_size(ast->proc.stmts);
-                 ++stmt)
-            {
-                llvm_codegen_alloca(l, mod, stmt);
-            }
             llvm_codegen_ast_children(
                 l, mod, ast->proc.stmts, array_size(ast->proc.stmts), is_const);
             array_pop(l->operand_scope_stack);
@@ -6647,8 +6613,9 @@ void llvm_codegen_ast(
         }
 
         // Local variable
-        assert(ast->decl.value
-                   .value); // Assert because the alloca already happened
+        ast->decl.value.is_lvalue = true;
+        ast->decl.value.value =
+            build_alloca(mod, llvm_type(l, ast->decl.type_expr->as_type));
 
         if (ast->decl.value_expr)
         {
@@ -6801,8 +6768,10 @@ void llvm_codegen_ast(
         case UNOP_ADDRESS: {
             if (!sub_value.is_lvalue)
             {
-                result_value.value = LLVMBuildAlloca(
-                    mod->builder, llvm_type(l, ast->unop.sub->type_info), "");
+                result_value.value =
+                    build_alloca(mod, llvm_type(l, ast->unop.sub->type_info));
+                result_value.is_lvalue = false;
+
                 LLVMBuildStore(
                     mod->builder, sub_value.value, result_value.value);
             }
