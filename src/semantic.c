@@ -1907,6 +1907,24 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case TYPE_STRUCT: {
+            if (array_size(ast->compound.values) !=
+                array_size(compound_type->structure.fields))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "compound literal has wrong number of values");
+            }
+
+            for (size_t i = 0; i < array_size(ast->compound.values); ++i)
+            {
+                analyze_ast(a, &ast->compound.values[i], compound_type->structure.fields[i]);
+            }
+
+            break;
+        }
+
         default: {
             compile_error(
                 a->compiler,

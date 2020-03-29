@@ -1,10 +1,11 @@
 import c "core:c";
 
 typedef Struct struct {
-    a: i32
+    a: i32,
+    b: *char,
 };
 
-// const const_struct: Struct;
+const const_struct: Struct = Struct {321, c"Yo"};
 const const_array: [2]i32 = [2]i32{3, 4};
 
 proc "c" main() i32 {
@@ -29,6 +30,17 @@ proc "c" main() i32 {
         for (var i: u64 = 0; i < my_slice.len; i += 1) {
             c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
+    }
+
+    {
+        var my_struct: Struct = Struct {1, c"Hello"};
+        c.printf(c"my_struct.a = %d\n", my_struct.a);
+        c.printf(c"my_struct.b = \"%s\"\n", my_struct.b);
+    }
+
+    {
+        c.printf(c"const_struct.a = %d\n", const_struct.a);
+        c.printf(c"const_struct.b = \"%s\"\n", const_struct.b);
     }
 
     return 0;

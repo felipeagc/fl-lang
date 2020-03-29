@@ -1088,20 +1088,43 @@ void llvm_codegen_ast(
 
         if (!is_const)
         {
+            result_value.is_lvalue = true;
+            if (out_value && out_value->value)
+            {
+                result_value.value = out_value->value;
+            }
+            else
+            {
+                result_value.value =
+                    build_alloca(mod, llvm_type(l, ast->type_info));
+            }
+
             switch (ast->type_info->kind)
             {
             case TYPE_ARRAY: {
-                result_value.is_lvalue = true;
-                if (out_value && out_value->value)
+                for (Ast *value = ast->compound.values;
+                     value !=
+                     ast->compound.values + array_size(ast->compound.values);
+                     ++value)
                 {
-                    result_value.value = out_value->value;
-                }
-                else
-                {
-                    result_value.value =
-                        build_alloca(mod, llvm_type(l, ast->type_info));
+                    size_t index = (size_t)(value - ast->compound.values);
+                    AstValue val = {0};
+                    llvm_codegen_ast(l, mod, value, is_const, &val);
+
+                    LLVMValueRef indices[2] = {
+                        LLVMConstInt(LLVMInt32Type(), 0, false),
+                        LLVMConstInt(LLVMInt32Type(), index, false),
+                    };
+
+                    LLVMValueRef ptr = LLVMBuildGEP(
+                        mod->builder, result_value.value, indices, 2, "");
+                    LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
                 }
 
+                break;
+            }
+
+            case TYPE_STRUCT: {
                 for (Ast *value = ast->compound.values;
                      value !=
                      ast->compound.values + array_size(ast->compound.values);
@@ -1151,6 +1174,28 @@ void llvm_codegen_ast(
                     llvm_type(l, ast->type_info->array.sub),
                     values,
                     array_size(ast->compound.values));
+
+                break;
+            }
+
+            case TYPE_STRUCT: {
+                LLVMValueRef *values = bump_alloc(
+                    &l->compiler->bump,
+                    sizeof(LLVMValueRef) * array_size(ast->compound.values));
+
+                for (Ast *value = ast->compound.values;
+                     value !=
+                     ast->compound.values + array_size(ast->compound.values);
+                     ++value)
+                {
+                    size_t index = (size_t)(value - ast->compound.values);
+                    AstValue val = {0};
+                    llvm_codegen_ast(l, mod, value, true, &val);
+                    values[index] = val.value;
+                }
+
+                result_value.value = LLVMConstStruct(
+                    values, array_size(ast->compound.values), false);
 
                 break;
             }
