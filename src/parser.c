@@ -265,6 +265,27 @@ bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
 
         parser_next(p, 1);
 
+        if (parser_peek(p, 0)->type == TOKEN_DOTDOT)
+        {
+            parser_next(p, 1);
+
+            if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+            if (res)
+            {
+                ast->type = AST_SUBSCRIPT_SLICE;
+
+                ast->subscript_slice.left = bump_alloc(
+                    &p->compiler->bump, sizeof(*ast->subscript.left));
+                *ast->subscript_slice.left = expr;
+
+                ast->subscript_slice.lower = NULL;
+                ast->subscript_slice.upper = NULL;
+            }
+
+            continue;
+        }
+
         Ast lower = {0};
         if (!parse_expr(p, &lower, parsing_type)) res = false;
 

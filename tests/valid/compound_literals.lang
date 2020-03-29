@@ -8,7 +8,7 @@ proc "c" main() i32 {
         c.printf(c"my_array[%lu] = %d\n", i, my_array[i]);
     }
 
-    var my_slice: [_]i32 = my_array[0..my_array.len];
+    var my_slice: [_]i32 = my_array[..];
     for (var i: u64 = 0; i < my_slice.len; i += 1) {
         c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
     }

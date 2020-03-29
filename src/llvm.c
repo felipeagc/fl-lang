@@ -913,16 +913,18 @@ void llvm_codegen_ast(
     case AST_SUBSCRIPT_SLICE: {
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript_slice.left, false, &left_value);
+
         AstValue lower_value = {0};
-        llvm_codegen_ast(
-            l, mod, ast->subscript_slice.lower, false, &lower_value);
         AstValue upper_value = {0};
-        llvm_codegen_ast(
-            l, mod, ast->subscript_slice.upper, false, &upper_value);
+        if (ast->subscript_slice.lower && ast->subscript_slice.upper)
+        {
+            llvm_codegen_ast(
+                l, mod, ast->subscript_slice.lower, false, &lower_value);
+            llvm_codegen_ast(
+                l, mod, ast->subscript_slice.upper, false, &upper_value);
+        }
 
         assert(left_value.value);
-        assert(lower_value.value);
-        assert(upper_value.value);
 
         LLVMValueRef left = NULL;
         switch (ast->subscript_slice.left->type_info->kind)
@@ -936,6 +938,16 @@ void llvm_codegen_ast(
             };
 
             left = LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
+
+            if (!lower_value.value && !upper_value.value)
+            {
+                lower_value.value =
+                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                upper_value.value = LLVMConstInt(
+                    llvm_type(l, &SIZE_INT_TYPE),
+                    ast->subscript_slice.left->type_info->array.size,
+                    false);
+            }
 
             break;
         }
@@ -952,11 +964,34 @@ void llvm_codegen_ast(
                 LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
             left = LLVMBuildLoad(mod->builder, ptr_ptr, "");
 
+            if (!lower_value.value && !upper_value.value)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                };
+
+                LLVMValueRef len_ptr = LLVMBuildGEP(
+                    mod->builder, left_value.value, indices, 2, "");
+
+                lower_value.value =
+                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                upper_value.value = LLVMBuildLoad(mod->builder, len_ptr, "");
+            }
+
             break;
         }
 
         case TYPE_POINTER: {
             left = load_val(mod, &left_value);
+
+            if (!lower_value.value && !upper_value.value)
+            {
+                lower_value.value =
+                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                upper_value.value =
+                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+            }
             break;
         }
 

@@ -1965,8 +1965,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_SUBSCRIPT_SLICE: {
         analyze_ast(a, ast->subscript_slice.left, NULL);
-        analyze_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
-        analyze_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
+        if (ast->subscript_slice.lower)
+        {
+            analyze_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
+        }
+        if (ast->subscript_slice.upper)
+        {
+            analyze_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
+        }
 
         if (!ast->subscript_slice.left->type_info)
         {
@@ -1974,23 +1980,26 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (!ast->subscript_slice.lower->type_info ||
-            !ast->subscript_slice.upper->type_info)
+        if (ast->subscript_slice.lower && ast->subscript_slice.upper)
         {
-            assert(array_size(a->compiler->errors) > 0);
-            break;
-        }
+            if (!ast->subscript_slice.lower->type_info ||
+                !ast->subscript_slice.upper->type_info)
+            {
+                assert(array_size(a->compiler->errors) > 0);
+                break;
+            }
 
-        if (!exact_types(
-                ast->subscript_slice.lower->type_info,
-                ast->subscript_slice.upper->type_info))
-        {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "slice subscript lower and upper bounds need to be of same "
-                "type");
-            break;
+            if (!exact_types(
+                    ast->subscript_slice.lower->type_info,
+                    ast->subscript_slice.upper->type_info))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "slice subscript lower and upper bounds need to be of same "
+                    "type");
+                break;
+            }
         }
 
         if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
