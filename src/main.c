@@ -154,10 +154,7 @@ SourceFile *process_file(Compiler *compiler, String absolute_path)
     register_symbol_asts(analyzer, parser->ast, 1);
     print_errors(compiler);
 
-    symbol_check_asts(analyzer, parser->ast, 1);
-    print_errors(compiler);
-
-    type_check_asts(analyzer, parser->ast, 1);
+    analyze_asts(analyzer, parser->ast, 1);
     print_errors(compiler);
 
     llvm_codegen_ast(

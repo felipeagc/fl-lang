@@ -1198,306 +1198,9 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     scope_set(scope, sym_name, ast);
 }
 
-void symbol_check_ast(Analyzer *a, Ast *ast)
-{
-    switch (ast->type)
-    {
-    case AST_RETURN:
-    case AST_PAREN_EXPR: {
-        if (ast->expr)
-        {
-            symbol_check_ast(a, ast->expr);
-        }
-        break;
-    }
-    case AST_CONST_DECL: {
-        symbol_check_ast(a, ast->decl.type_expr);
-        symbol_check_ast(a, ast->decl.value_expr);
-        if (!is_expr_const(*array_last(a->scope_stack), ast->decl.value_expr))
-        {
-            compile_error(
-                a->compiler,
-                ast->decl.value_expr->loc,
-                "expression is not constant");
-            break;
-        }
-        break;
-    }
-    case AST_VAR_DECL: {
-        symbol_check_ast(a, ast->decl.type_expr);
-        if (ast->decl.value_expr)
-        {
-            symbol_check_ast(a, ast->decl.value_expr);
-        }
-        break;
-    }
-    case AST_IF: {
-        symbol_check_ast(a, ast->if_stmt.cond_expr);
-        symbol_check_ast(a, ast->if_stmt.cond_stmt);
-        if (ast->if_stmt.else_stmt)
-        {
-            symbol_check_ast(a, ast->if_stmt.else_stmt);
-        }
-        break;
-    }
-    case AST_WHILE: {
-        symbol_check_ast(a, ast->while_stmt.cond);
+static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count);
 
-        array_push(a->break_stack, ast);
-        array_push(a->continue_stack, ast);
-        symbol_check_ast(a, ast->while_stmt.stmt);
-        array_pop(a->continue_stack);
-        array_pop(a->break_stack);
-        break;
-    }
-    case AST_FOR: {
-        array_push(a->scope_stack, ast->for_stmt.scope);
-        array_push(a->operand_scope_stack, ast->for_stmt.scope);
-
-        if (ast->for_stmt.init) symbol_check_ast(a, ast->for_stmt.init);
-        if (ast->for_stmt.cond) symbol_check_ast(a, ast->for_stmt.cond);
-        if (ast->for_stmt.inc) symbol_check_ast(a, ast->for_stmt.inc);
-
-        array_push(a->break_stack, ast);
-        array_push(a->continue_stack, ast);
-        symbol_check_ast(a, ast->for_stmt.stmt);
-        array_pop(a->continue_stack);
-        array_pop(a->break_stack);
-
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
-        break;
-    }
-    case AST_BREAK: {
-        if (array_size(a->break_stack) == 0)
-        {
-            compile_error(
-                a->compiler, ast->loc, "'break' outside control structure");
-            break;
-        }
-        break;
-    }
-    case AST_CONTINUE: {
-        if (array_size(a->continue_stack) == 0)
-        {
-            compile_error(
-                a->compiler, ast->loc, "'continue' outside control structure");
-            break;
-        }
-        break;
-    }
-    case AST_BLOCK: {
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
-             ++stmt)
-        {
-            symbol_check_ast(a, stmt);
-        }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
-        break;
-    }
-    case AST_PROC_DECL: {
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
-             ++param)
-        {
-            symbol_check_ast(a, param);
-        }
-
-        symbol_check_ast(a, ast->proc.return_type);
-        break;
-    }
-    case AST_PROC_PARAM: {
-        symbol_check_ast(a, ast->proc_param.type_expr);
-        if (ast->proc_param.value_expr)
-        {
-            symbol_check_ast(a, ast->proc_param.value_expr);
-        }
-        break;
-    }
-    case AST_STRUCT_FIELD: {
-        symbol_check_ast(a, ast->field.type_expr);
-        if (ast->field.value_expr)
-        {
-            symbol_check_ast(a, ast->field.value_expr);
-        }
-        break;
-    }
-    case AST_VAR_ASSIGN: {
-        symbol_check_ast(a, ast->assign.assigned_expr);
-        symbol_check_ast(a, ast->assign.value_expr);
-        break;
-    }
-    case AST_EXPR_STMT: {
-        symbol_check_ast(a, ast->expr);
-        break;
-    }
-    case AST_PROC_CALL: {
-        symbol_check_ast(a, ast->proc_call.expr);
-
-        assert(array_size(a->operand_scope_stack) > 0);
-
-        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
-        for (Ast *param = ast->proc_call.params;
-             param != ast->proc_call.params + array_size(ast->proc_call.params);
-             ++param)
-        {
-            symbol_check_ast(a, param);
-        }
-        array_pop(a->scope_stack);
-
-        break;
-    }
-    case AST_INTRINSIC_CALL: {
-        switch (ast->intrinsic_call.type)
-        {
-        case INTRINSIC_SIZEOF: {
-            if (array_size(ast->intrinsic_call.params) > 1)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "@sizeof takes one parameter");
-                break;
-            }
-
-            Ast *param = &ast->intrinsic_call.params[0];
-            symbol_check_ast(a, param);
-
-            break;
-        }
-        case INTRINSIC_ALIGNOF: {
-            if (array_size(ast->intrinsic_call.params) > 1)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "@alignof takes one parameter");
-                break;
-            }
-
-            Ast *param = &ast->intrinsic_call.params[0];
-            symbol_check_ast(a, param);
-
-            break;
-        }
-        }
-
-        break;
-    }
-    case AST_CAST: {
-        symbol_check_ast(a, ast->cast.type_expr);
-        symbol_check_ast(a, ast->cast.value_expr);
-        break;
-    }
-    case AST_UNARY_EXPR: {
-        symbol_check_ast(a, ast->unop.sub);
-        break;
-    }
-    case AST_BINARY_EXPR: {
-        symbol_check_ast(a, ast->binop.left);
-        symbol_check_ast(a, ast->binop.right);
-        break;
-    }
-    case AST_SUBSCRIPT: {
-        symbol_check_ast(a, ast->subscript.left);
-        symbol_check_ast(a, ast->subscript.right);
-        break;
-    }
-    case AST_SUBSCRIPT_SLICE: {
-        symbol_check_ast(a, ast->subscript_slice.left);
-        symbol_check_ast(a, ast->subscript_slice.lower);
-        symbol_check_ast(a, ast->subscript_slice.upper);
-        break;
-    }
-    case AST_STRUCT: {
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
-             ++field)
-        {
-            symbol_check_ast(a, field);
-        }
-        break;
-    }
-    case AST_ARRAY_TYPE: {
-        symbol_check_ast(a, ast->array_type.size);
-        symbol_check_ast(a, ast->array_type.sub);
-
-        if (!is_expr_const(*array_last(a->scope_stack), ast->array_type.size))
-        {
-            compile_error(
-                a->compiler,
-                ast->array_type.size->loc,
-                "array type size must be a constant value");
-        }
-
-        break;
-    }
-    case AST_SLICE_TYPE: {
-        symbol_check_ast(a, ast->array_type.sub);
-        break;
-    }
-    case AST_PRIMARY: {
-        switch (ast->primary.tok->type)
-        {
-        case TOKEN_IDENT: {
-            Ast *sym =
-                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
-
-            if (!sym)
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "invalid identifier: '%.*s'",
-                    (int)ast->primary.tok->str.length,
-                    ast->primary.tok->str.buf);
-            }
-
-            break;
-        }
-        default: break;
-        }
-
-        break;
-    }
-    case AST_PROC_TYPE: {
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
-             ++param)
-        {
-            symbol_check_ast(a, param);
-        }
-
-        symbol_check_ast(a, ast->proc.return_type);
-
-        break;
-    }
-    case AST_ACCESS: {
-        symbol_check_ast(a, ast->access.left);
-
-        get_expr_type(a->compiler, *array_last(a->scope_stack), ast);
-
-        if (!ast->type_info)
-        {
-            compile_error(a->compiler, ast->loc, "invalid access");
-            break;
-        }
-
-        Scope *accessed_scope = get_expr_scope(
-            a->compiler, *array_last(a->scope_stack), ast->access.left);
-        if (accessed_scope)
-        {
-            array_push(a->scope_stack, accessed_scope);
-            symbol_check_ast(a, ast->access.right);
-            array_pop(a->scope_stack);
-        }
-        break;
-    }
-    default: break;
-    }
-}
-
-void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
+static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
     bool is_statement = true;
 
@@ -1516,7 +1219,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         assert(proc->proc.return_type->as_type);
         if (ast->expr)
         {
-            type_check_ast(a, ast->expr, proc->proc.return_type->as_type);
+            analyze_ast(a, ast->expr, proc->proc.return_type->as_type);
         }
         else
         {
@@ -1536,47 +1239,50 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_BLOCK: {
         array_push(a->scope_stack, ast->block.scope);
         array_push(a->operand_scope_stack, ast->block.scope);
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
-             ++stmt)
-        {
-            type_check_ast(a, stmt, NULL);
-        }
+        analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
         break;
     }
-        
+
     case AST_TYPEDEF: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->type_def.type_expr, &ty_ty);
+        analyze_ast(a, ast->type_def.type_expr, &ty_ty);
         break;
     }
 
     case AST_CONST_DECL: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->decl.type_expr, &ty_ty);
-        type_check_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+        analyze_ast(a, ast->decl.type_expr, &ty_ty);
+        analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+
+        if (!is_expr_const(*array_last(a->scope_stack), ast->decl.value_expr))
+        {
+            compile_error(
+                a->compiler,
+                ast->decl.value_expr->loc,
+                "expression is not constant");
+            break;
+        }
         break;
     }
 
     case AST_VAR_DECL: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->decl.type_expr, &ty_ty);
+        analyze_ast(a, ast->decl.type_expr, &ty_ty);
         if (ast->decl.value_expr)
         {
-            type_check_ast(
-                a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+            analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
         }
         break;
     }
 
     case AST_PROC_PARAM: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->proc_param.type_expr, &ty_ty);
+        analyze_ast(a, ast->proc_param.type_expr, &ty_ty);
         if (ast->proc_param.value_expr)
         {
-            type_check_ast(
+            analyze_ast(
                 a,
                 ast->proc_param.value_expr,
                 ast->proc_param.type_expr->as_type);
@@ -1586,24 +1292,24 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_STRUCT_FIELD: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->field.type_expr, &ty_ty);
+        analyze_ast(a, ast->field.type_expr, &ty_ty);
         if (ast->field.value_expr)
         {
-            type_check_ast(
+            analyze_ast(
                 a, ast->field.value_expr, ast->field.type_expr->as_type);
         }
         break;
     }
 
     case AST_VAR_ASSIGN: {
-        type_check_ast(a, ast->assign.assigned_expr, NULL);
-        type_check_ast(
+        analyze_ast(a, ast->assign.assigned_expr, NULL);
+        analyze_ast(
             a, ast->assign.value_expr, ast->assign.assigned_expr->type_info);
         break;
     }
 
     case AST_EXPR_STMT: {
-        type_check_ast(a, ast->expr, NULL);
+        analyze_ast(a, ast->expr, NULL);
         break;
     }
 
@@ -1615,19 +1321,23 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         ty->proc.is_c_vararg =
             (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
 
+        bool valid_type = true;
+
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
         {
-            type_check_ast(a, param, NULL);
-            if (param->decl.type_expr->as_type)
+            analyze_ast(a, param, NULL);
+            if (!param->decl.type_expr->as_type)
             {
-                array_push(ty->proc.params, *param->decl.type_expr->as_type);
+                valid_type = false;
+                break;
             }
+            array_push(ty->proc.params, *param->decl.type_expr->as_type);
         }
 
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->proc.return_type, &ty_ty);
+        analyze_ast(a, ast->proc.return_type, &ty_ty);
         if (ast->proc.return_type->as_type)
         {
             ty->proc.return_type = ast->proc.return_type->as_type;
@@ -1638,7 +1348,10 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         ptr_ty->kind = TYPE_POINTER;
         ptr_ty->ptr.sub = ty;
 
-        ast->type_info = ptr_ty;
+        if (valid_type)
+        {
+            ast->type_info = ptr_ty;
+        }
         break;
     }
 
@@ -1649,21 +1362,21 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
         {
-            type_check_ast(a, param, NULL);
+            analyze_ast(a, param, NULL);
         }
 
-        type_check_ast(a, ast->proc.return_type, &ty_ty);
+        analyze_ast(a, ast->proc.return_type, &ty_ty);
 
         ast->type_info = &ty_ty;
         break;
     }
 
     case AST_IF: {
-        type_check_ast(a, ast->if_stmt.cond_expr, NULL);
-        type_check_ast(a, ast->if_stmt.cond_stmt, NULL);
+        analyze_ast(a, ast->if_stmt.cond_expr, NULL);
+        analyze_ast(a, ast->if_stmt.cond_stmt, NULL);
         if (ast->if_stmt.else_stmt)
         {
-            type_check_ast(a, ast->if_stmt.else_stmt, NULL);
+            analyze_ast(a, ast->if_stmt.else_stmt, NULL);
         }
 
         if (!ast->if_stmt.cond_expr->type_info)
@@ -1691,8 +1404,13 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_WHILE: {
-        type_check_ast(a, ast->while_stmt.cond, NULL);
-        type_check_ast(a, ast->while_stmt.stmt, NULL);
+        analyze_ast(a, ast->while_stmt.cond, NULL);
+
+        array_push(a->break_stack, ast);
+        array_push(a->continue_stack, ast);
+        analyze_ast(a, ast->while_stmt.stmt, NULL);
+        array_pop(a->continue_stack);
+        array_pop(a->break_stack);
 
         if (!ast->while_stmt.cond->type_info)
         {
@@ -1722,10 +1440,15 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         array_push(a->scope_stack, ast->for_stmt.scope);
         array_push(a->operand_scope_stack, ast->for_stmt.scope);
 
-        if (ast->for_stmt.init) type_check_ast(a, ast->for_stmt.init, NULL);
-        if (ast->for_stmt.cond) type_check_ast(a, ast->for_stmt.cond, NULL);
-        if (ast->for_stmt.inc) type_check_ast(a, ast->for_stmt.inc, NULL);
-        type_check_ast(a, ast->for_stmt.stmt, NULL);
+        if (ast->for_stmt.init) analyze_ast(a, ast->for_stmt.init, NULL);
+        if (ast->for_stmt.cond) analyze_ast(a, ast->for_stmt.cond, NULL);
+        if (ast->for_stmt.inc) analyze_ast(a, ast->for_stmt.inc, NULL);
+
+        array_push(a->break_stack, ast);
+        array_push(a->continue_stack, ast);
+        analyze_ast(a, ast->for_stmt.stmt, NULL);
+        array_pop(a->continue_stack);
+        array_pop(a->break_stack);
 
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
@@ -1754,6 +1477,26 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
         }
 
+        break;
+    }
+
+    case AST_BREAK: {
+        if (array_size(a->break_stack) == 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "'break' outside control structure");
+            break;
+        }
+        break;
+    }
+
+    case AST_CONTINUE: {
+        if (array_size(a->continue_stack) == 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "'continue' outside control structure");
+            break;
+        }
         break;
     }
 
@@ -1846,19 +1589,36 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case TOKEN_IDENT: {
+            Ast *sym =
+                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
+
+            if (!sym)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "invalid identifier: '%.*s'",
+                    (int)ast->primary.tok->str.length,
+                    ast->primary.tok->str.buf);
+            }
+
+            break;
+        }
+
         default: break;
         }
         break;
     }
 
     case AST_PAREN_EXPR: {
-        type_check_ast(a, ast->expr, expected_type);
+        analyze_ast(a, ast->expr, expected_type);
         ast->type_info = ast->expr->type_info;
         break;
     }
 
     case AST_PROC_CALL: {
-        type_check_ast(a, ast->proc_call.expr, NULL);
+        analyze_ast(a, ast->proc_call.expr, NULL);
         if (!ast->proc_call.expr->type_info)
         {
             compile_error(
@@ -1908,6 +1668,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
         }
 
+        assert(array_size(a->operand_scope_stack) > 0);
+
         array_push(a->scope_stack, *array_last(a->operand_scope_stack));
         for (size_t i = 0; i < array_size(ast->proc_call.params); ++i)
         {
@@ -1916,7 +1678,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 param_expected_type = &proc_ty->proc.params[i];
             }
-            type_check_ast(a, &ast->proc_call.params[i], param_expected_type);
+            analyze_ast(a, &ast->proc_call.params[i], param_expected_type);
         }
         array_pop(a->scope_stack);
         break;
@@ -1926,8 +1688,15 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_SIZEOF: {
+            if (array_size(ast->intrinsic_call.params) != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "@sizeof takes one parameter");
+                break;
+            }
+
             Ast *param = &ast->intrinsic_call.params[0];
-            type_check_ast(a, param, NULL);
+            analyze_ast(a, param, NULL);
 
             if (!param->type_info)
             {
@@ -1954,8 +1723,15 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case INTRINSIC_ALIGNOF: {
+            if (array_size(ast->intrinsic_call.params) != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "@alignof takes one parameter");
+                break;
+            }
+
             Ast *param = &ast->intrinsic_call.params[0];
-            type_check_ast(a, param, NULL);
+            analyze_ast(a, param, NULL);
 
             if (param->type_info->kind == TYPE_VOID ||
                 param->type_info->kind == TYPE_NAMESPACE)
@@ -1978,8 +1754,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_CAST: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        type_check_ast(a, ast->cast.type_expr, &ty_ty);
-        type_check_ast(a, ast->cast.value_expr, NULL);
+        analyze_ast(a, ast->cast.type_expr, &ty_ty);
+        analyze_ast(a, ast->cast.value_expr, NULL);
 
         TypeInfo *dest_ty = ast->cast.type_expr->as_type;
         TypeInfo *src_ty = ast->cast.value_expr->type_info;
@@ -2030,7 +1806,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case UNOP_NOT: break;
         }
 
-        type_check_ast(a, ast->unop.sub, sub_expected_type);
+        analyze_ast(a, ast->unop.sub, sub_expected_type);
 
         if (!ast->unop.sub->type_info)
         {
@@ -2121,8 +1897,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_MUL:
         case BINOP_DIV:
         case BINOP_MOD: {
-            type_check_ast(a, ast->binop.left, expected_type);
-            type_check_ast(a, ast->binop.right, expected_type);
+            analyze_ast(a, ast->binop.left, expected_type);
+            analyze_ast(a, ast->binop.right, expected_type);
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
@@ -2137,8 +1913,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 TypeInfo *common_type = common_numeric_type(
                     ast->binop.left->type_info, ast->binop.right->type_info);
-                type_check_ast(a, ast->binop.left, common_type);
-                type_check_ast(a, ast->binop.right, common_type);
+                analyze_ast(a, ast->binop.left, common_type);
+                analyze_ast(a, ast->binop.right, common_type);
             }
 
             if (!exact_types(
@@ -2171,8 +1947,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_BITAND:
         case BINOP_BITOR:
         case BINOP_BITXOR: {
-            type_check_ast(a, ast->binop.left, expected_type);
-            type_check_ast(a, ast->binop.right, expected_type);
+            analyze_ast(a, ast->binop.left, expected_type);
+            analyze_ast(a, ast->binop.right, expected_type);
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
@@ -2187,8 +1963,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 TypeInfo *common_type = common_numeric_type(
                     ast->binop.left->type_info, ast->binop.right->type_info);
-                type_check_ast(a, ast->binop.left, common_type);
-                type_check_ast(a, ast->binop.right, common_type);
+                analyze_ast(a, ast->binop.left, common_type);
+                analyze_ast(a, ast->binop.right, common_type);
             }
 
             if (!exact_types(
@@ -2222,8 +1998,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_LESSEQ:
         case BINOP_GREATER:
         case BINOP_GREATEREQ: {
-            type_check_ast(a, ast->binop.left, NULL);
-            type_check_ast(a, ast->binop.right, NULL);
+            analyze_ast(a, ast->binop.left, NULL);
+            analyze_ast(a, ast->binop.right, NULL);
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
@@ -2236,8 +2012,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             TypeInfo *common_type = common_numeric_type(
                 ast->binop.left->type_info, ast->binop.right->type_info);
-            type_check_ast(a, ast->binop.left, common_type);
-            type_check_ast(a, ast->binop.right, common_type);
+            analyze_ast(a, ast->binop.left, common_type);
+            analyze_ast(a, ast->binop.right, common_type);
 
             if (!exact_types(
                     ast->binop.left->type_info, ast->binop.right->type_info))
@@ -2269,8 +2045,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case BINOP_AND:
         case BINOP_OR: {
-            type_check_ast(a, ast->binop.left, NULL);
-            type_check_ast(a, ast->binop.right, NULL);
+            analyze_ast(a, ast->binop.left, NULL);
+            analyze_ast(a, ast->binop.right, NULL);
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
@@ -2316,8 +2092,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_SUBSCRIPT: {
-        type_check_ast(a, ast->subscript.left, NULL);
-        type_check_ast(a, ast->subscript.right, NULL);
+        analyze_ast(a, ast->subscript.left, NULL);
+        analyze_ast(a, ast->subscript.right, NULL);
 
         if (!ast->subscript.left->type_info)
         {
@@ -2373,9 +2149,9 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_SUBSCRIPT_SLICE: {
-        type_check_ast(a, ast->subscript_slice.left, NULL);
-        type_check_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
-        type_check_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
+        analyze_ast(a, ast->subscript_slice.left, NULL);
+        analyze_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
+        analyze_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
 
         if (!ast->subscript_slice.left->type_info)
         {
@@ -2448,8 +2224,8 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         ast->type_info = &ty_ty;
 
-        type_check_ast(a, ast->array_type.size, NULL);
-        type_check_ast(a, ast->array_type.sub, &ty_ty);
+        analyze_ast(a, ast->array_type.size, NULL);
+        analyze_ast(a, ast->array_type.sub, &ty_ty);
 
         if (ast->array_type.size->type_info->kind != TYPE_INT)
         {
@@ -2464,7 +2240,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         ast->type_info = &ty_ty;
 
-        type_check_ast(a, ast->array_type.sub, &ty_ty);
+        analyze_ast(a, ast->array_type.sub, &ty_ty);
 
         break;
     }
@@ -2477,20 +2253,17 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            type_check_ast(a, field, NULL);
+            analyze_ast(a, field, NULL);
         }
         break;
     }
 
     case AST_ACCESS: {
-        type_check_ast(a, ast->access.left, NULL);
+        analyze_ast(a, ast->access.left, NULL);
 
-        if (!ast->access.left->type_info)
+        if (!ast->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type of left expression in access");
+            compile_error(a->compiler, ast->loc, "invalid access");
             break;
         }
 
@@ -2500,7 +2273,7 @@ void type_check_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (accessed_scope)
         {
             array_push(a->scope_stack, accessed_scope);
-            type_check_ast(a, ast->access.right, NULL);
+            analyze_ast(a, ast->access.right, NULL);
             array_pop(a->scope_stack);
         }
 
@@ -2631,7 +2404,7 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
     }
 }
 
-void symbol_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
+static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
@@ -2639,7 +2412,7 @@ void symbol_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
         {
         case AST_CONST_DECL:
         case AST_PROC_DECL: {
-            symbol_check_ast(a, ast);
+            analyze_ast(a, ast, NULL);
             break;
         }
 
@@ -2658,7 +2431,7 @@ void symbol_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
         }
 
         default: {
-            symbol_check_ast(a, ast);
+            analyze_ast(a, ast, NULL);
             break;
         }
         }
@@ -2672,69 +2445,7 @@ void symbol_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
         case AST_ROOT: {
             array_push(a->scope_stack, ast->block.scope);
             array_push(a->operand_scope_stack, ast->block.scope);
-            symbol_check_asts(
-                a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
-        case AST_PROC_DECL: {
-            array_push(a->scope_stack, ast->proc.scope);
-            array_push(a->operand_scope_stack, ast->proc.scope);
-            symbol_check_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
-        default: break;
-        }
-    }
-}
-
-void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
-{
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        switch (ast->type)
-        {
-        case AST_CONST_DECL:
-        case AST_PROC_DECL: {
-            type_check_ast(a, ast, NULL);
-            break;
-        }
-
-        default: break;
-        }
-    }
-
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        switch (ast->type)
-        {
-        case AST_ROOT:
-        case AST_CONST_DECL:
-        case AST_PROC_DECL: {
-            break;
-        }
-
-        default: {
-            type_check_ast(a, ast, NULL);
-            break;
-        }
-        }
-    }
-
-    // Analyze children ASTs
-    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
-    {
-        switch (ast->type)
-        {
-        case AST_ROOT: {
-            array_push(a->scope_stack, ast->block.scope);
-            array_push(a->operand_scope_stack, ast->block.scope);
-            type_check_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
             array_pop(a->operand_scope_stack);
             array_pop(a->scope_stack);
             break;
@@ -2743,31 +2454,16 @@ void type_check_asts(Analyzer *a, Ast *asts, size_t ast_count)
         case AST_BLOCK: {
             array_push(a->scope_stack, ast->block.scope);
             array_push(a->operand_scope_stack, ast->block.scope);
-            type_check_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
             array_pop(a->operand_scope_stack);
             array_pop(a->scope_stack);
-            break;
-        }
-
-        case AST_IF: {
-            type_check_asts(a, ast->if_stmt.cond_stmt, 1);
-            if (ast->if_stmt.else_stmt)
-            {
-                type_check_asts(a, ast->if_stmt.else_stmt, 1);
-            }
-            break;
-        }
-
-        case AST_WHILE: {
-            type_check_asts(a, ast->while_stmt.cond, 1);
-            type_check_asts(a, ast->while_stmt.stmt, 1);
             break;
         }
 
         case AST_PROC_DECL: {
             array_push(a->scope_stack, ast->proc.scope);
             array_push(a->operand_scope_stack, ast->proc.scope);
-            type_check_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
 
             // If the procedure has a void return type or doesn't have a
             // body, say it has returned already
