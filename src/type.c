@@ -146,7 +146,8 @@ TypeInfo *compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
     }
     else if (received->kind != TYPE_POINTER && expected->kind != TYPE_POINTER)
     {
-        return received;
+        if (received->kind == TYPE_VOID) return expected;
+        if (expected->kind == TYPE_VOID) return received;
     }
 
     return NULL;

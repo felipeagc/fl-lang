@@ -1,0 +1,14 @@
+proc "c" main() i32 {
+    puts_fn(c"Hello");
+
+    c.printf(c"other_int: %d\n", other_int);
+
+    const other_int: i32 = some_int;
+
+    return 0;
+}
+
+import c "core:c";
+
+const some_int: i32 = 123;
+const puts_fn: proc* "c" (str: *char) i32 = c.puts;

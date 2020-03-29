@@ -7,6 +7,8 @@ typedef struct Analyzer
     /*array*/ Ast **continue_stack;
 } Analyzer;
 
+static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
+
 static inline Ast *get_inner_expr(Ast *ast)
 {
     switch (ast->type)
@@ -18,7 +20,7 @@ static inline Ast *get_inner_expr(Ast *ast)
     return ast;
 }
 
-static bool is_expr_const(Scope *scope, Ast *ast)
+static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
 {
     bool res = false;
     switch (ast->type)
@@ -46,10 +48,12 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_PAREN_EXPR: {
-        res = is_expr_const(scope, ast->expr);
+        res = is_expr_const(compiler, scope, ast->expr);
         break;
     }
+
     case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
@@ -58,6 +62,7 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
         {
@@ -65,17 +70,18 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         case UNOP_ADDRESS: res = false; break;
         case UNOP_NOT:
         case UNOP_NEG: {
-            res = is_expr_const(scope, ast->unop.sub);
+            res = is_expr_const(compiler, scope, ast->unop.sub);
             break;
         }
         }
         break;
     }
+
     case AST_BINARY_EXPR: {
         res = true;
 
-        if (!is_expr_const(scope, ast->binop.left)) res = false;
-        if (!is_expr_const(scope, ast->binop.right)) res = false;
+        if (!is_expr_const(compiler, scope, ast->binop.left)) res = false;
+        if (!is_expr_const(compiler, scope, ast->binop.right)) res = false;
 
         if (ast->binop.assign) res = false;
 
@@ -106,6 +112,18 @@ static bool is_expr_const(Scope *scope, Ast *ast)
         }
         break;
     }
+
+    case AST_ACCESS: {
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
+
+        if (accessed_scope)
+        {
+            res = is_expr_const(compiler, accessed_scope, ast->access.right);
+        }
+        break;
+    }
+
     default: break;
     }
 
@@ -155,8 +173,6 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
 
     return res;
 }
-
-static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
 static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
 {
@@ -369,24 +385,40 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         ty->proc.is_c_vararg =
             (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
 
+        bool valid = true;
+
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
         {
-            array_push(
-                ty->proc.params,
-                *ast_as_type(compiler, scope, param->decl.type_expr));
+            TypeInfo *param_as_type =
+                ast_as_type(compiler, scope, param->decl.type_expr);
+            if (!param_as_type)
+            {
+                valid = false;
+                break;
+            }
+
+            array_push(ty->proc.params, *param_as_type);
         }
 
         ty->proc.return_type =
             ast_as_type(compiler, scope, ast->proc.return_type);
 
-        TypeInfo *ptr_ty = bump_alloc(&compiler->bump, sizeof(*ptr_ty));
-        memset(ptr_ty, 0, sizeof(*ptr_ty));
-        ptr_ty->kind = TYPE_POINTER;
-        ptr_ty->ptr.sub = ty;
+        if (!ty->proc.return_type)
+        {
+            valid = false;
+        }
 
-        ast->as_type = ptr_ty;
+        if (valid)
+        {
+            TypeInfo *ptr_ty = bump_alloc(&compiler->bump, sizeof(*ptr_ty));
+            memset(ptr_ty, 0, sizeof(*ptr_ty));
+            ptr_ty->kind = TYPE_POINTER;
+            ptr_ty->ptr.sub = ty;
+
+            ast->as_type = ptr_ty;
+        }
         break;
     }
     case AST_ACCESS: {
@@ -671,7 +703,9 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 }
 
-void register_symbol_ast(Analyzer *a, Ast *ast)
+static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count);
+
+static void register_symbol_ast(Analyzer *a, Ast *ast)
 {
     Scope *scope = *array_last(a->scope_stack);
     assert(scope);
@@ -679,27 +713,78 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
 
     switch (ast->type)
     {
+
+    case AST_ROOT: {
+        array_push(a->scope_stack, ast->block.scope);
+        array_push(a->operand_scope_stack, ast->block.scope);
+        register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+        array_pop(a->operand_scope_stack);
+        array_pop(a->scope_stack);
+        break;
+    }
+
+    case AST_BLOCK: {
+        array_push(a->scope_stack, ast->block.scope);
+        array_push(a->operand_scope_stack, ast->block.scope);
+        register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+        array_pop(a->operand_scope_stack);
+        array_pop(a->scope_stack);
+        break;
+    }
+
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         sym_name = ast->decl.name;
         break;
     }
+
     case AST_PROC_PARAM: {
         sym_name = ast->proc_param.name;
         break;
     }
+
     case AST_STRUCT_FIELD: {
         sym_name = ast->field.name;
         break;
     }
+
     case AST_TYPEDEF: {
         sym_name = ast->type_def.name;
         break;
     }
+
     case AST_IMPORT: {
         sym_name = ast->import.name;
         break;
     }
+
+    case AST_IF: {
+        register_symbol_ast(a, ast->if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt)
+        {
+            register_symbol_ast(a, ast->if_stmt.else_stmt);
+        }
+        break;
+    }
+
+    case AST_WHILE: {
+        register_symbol_ast(a, ast->while_stmt.cond);
+        register_symbol_ast(a, ast->while_stmt.stmt);
+        break;
+    }
+
+    case AST_FOR: {
+        array_push(a->scope_stack, ast->for_stmt.scope);
+        array_push(a->operand_scope_stack, ast->for_stmt.scope);
+        if (ast->for_stmt.init) register_symbol_ast(a, ast->for_stmt.init);
+        if (ast->for_stmt.cond) register_symbol_ast(a, ast->for_stmt.cond);
+        if (ast->for_stmt.inc) register_symbol_ast(a, ast->for_stmt.inc);
+        register_symbol_ast(a, ast->for_stmt.stmt);
+        array_pop(a->operand_scope_stack);
+        array_pop(a->scope_stack);
+        break;
+    }
+
     case AST_PROC_DECL: {
         sym_name = ast->proc.name;
 
@@ -718,20 +803,21 @@ void register_symbol_ast(Analyzer *a, Ast *ast)
     default: return;
     }
 
-    assert(sym_name.length > 0);
-
-    if (get_symbol(*array_last(a->scope_stack), sym_name))
+    if (sym_name.length > 0)
     {
-        compile_error(
-            a->compiler,
-            ast->loc,
-            "duplicate declaration: '%.*s'",
-            (int)sym_name.length,
-            sym_name.buf);
-        return;
-    }
+        if (get_symbol(*array_last(a->scope_stack), sym_name))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "duplicate declaration: '%.*s'",
+                (int)sym_name.length,
+                sym_name.buf);
+            return;
+        }
 
-    scope_set(scope, sym_name, ast);
+        scope_set(scope, sym_name, ast);
+    }
 }
 
 static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count);
@@ -772,6 +858,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_ROOT: {
+        array_push(a->scope_stack, ast->block.scope);
+        array_push(a->operand_scope_stack, ast->block.scope);
+        analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
+        array_pop(a->operand_scope_stack);
+        array_pop(a->scope_stack);
+        break;
+    }
+
     case AST_BLOCK: {
         array_push(a->scope_stack, ast->block.scope);
         array_push(a->operand_scope_stack, ast->block.scope);
@@ -792,7 +887,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->decl.type_expr, &ty_ty);
         analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
 
-        if (!is_expr_const(*array_last(a->scope_stack), ast->decl.value_expr))
+        if (!is_expr_const(
+                a->compiler, *array_last(a->scope_stack), ast->decl.value_expr))
         {
             compile_error(
                 a->compiler,
@@ -891,22 +987,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
-    case AST_PROC_TYPE: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
-             ++param)
-        {
-            analyze_ast(a, param, NULL);
-        }
-
-        analyze_ast(a, ast->proc.return_type, &ty_ty);
-
-        ast->type_info = &ty_ty;
-        break;
-    }
-
     case AST_IF: {
         analyze_ast(a, ast->if_stmt.cond_expr, NULL);
         analyze_ast(a, ast->if_stmt.cond_stmt, NULL);
@@ -917,10 +997,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->if_stmt.cond_expr->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->if_stmt.cond_expr->loc,
-                "could not resolve type for 'if' condition");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -950,10 +1027,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->while_stmt.cond->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->while_stmt.cond->loc,
-                "could not evaluate type for 'while' condition");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -993,10 +1067,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             if (!ast->for_stmt.cond->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->for_stmt.cond->loc,
-                    "could not evaluate type for 'for' condition");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1246,10 +1317,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->proc_call.expr, NULL);
         if (!ast->proc_call.expr->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for procedure call expression");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -1325,10 +1393,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!param->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    param->loc,
-                    "could not resolve type for expression");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1377,6 +1442,32 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_PROC_TYPE: {
+        if (!ast->as_type)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "invalid procedure pointer type expression");
+            break;
+        }
+
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            analyze_ast(a, param, NULL);
+        }
+
+        analyze_ast(a, ast->proc.return_type, &ty_ty);
+
+        ast->type_info = &ty_ty;
+
+        break;
+    }
+
     case AST_CAST: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         analyze_ast(a, ast->cast.type_expr, &ty_ty);
@@ -1404,8 +1495,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         else
         {
-            compile_error(
-                a->compiler, ast->loc, "could not resolve types for cast");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -1435,10 +1525,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->unop.sub->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for unary operand");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -1527,10 +1614,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "could not resolve type for binary operands");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1577,10 +1661,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "could not resolve type for binary operands");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1628,10 +1709,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "could not resolve type for binary operands");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1675,10 +1753,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "could not resolve type for binary operands");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1722,19 +1797,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->subscript.left->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for left expression of subscript");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
         if (!ast->subscript.right->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for right expression of subscript");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -1780,20 +1849,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->subscript_slice.left->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for left expression of subscript");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
         if (!ast->subscript_slice.lower->type_info ||
             !ast->subscript_slice.upper->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "could not resolve type for bounds of slice subscript");
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -1938,6 +2001,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     default: break;
     }
 
+#if 0
     if (!ast->type_info)
     {
         // TODO: remove this, only temporary for debugging
@@ -1947,6 +2011,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->loc.col,
             ast->loc.length);
     }
+#endif
 
     if (ast->type_info && expected_type)
     {
@@ -1958,13 +2023,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 }
 
-void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
+static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         switch (ast->type)
         {
         case AST_CONST_DECL:
+        case AST_TYPEDEF:
         case AST_PROC_DECL: {
             register_symbol_ast(a, ast);
             break;
@@ -1978,8 +2044,8 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
     {
         switch (ast->type)
         {
-        case AST_ROOT:
         case AST_CONST_DECL:
+        case AST_TYPEDEF:
         case AST_PROC_DECL: {
             break;
         }
@@ -1996,16 +2062,6 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
     {
         switch (ast->type)
         {
-        case AST_ROOT: {
-            array_push(a->scope_stack, ast->block.scope);
-            array_push(a->operand_scope_stack, ast->block.scope);
-            register_symbol_asts(
-                a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
         case AST_PROC_DECL: {
             array_push(a->scope_stack, ast->proc.scope);
             array_push(a->operand_scope_stack, ast->proc.scope);
@@ -2016,45 +2072,6 @@ void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
             break;
         }
 
-        case AST_BLOCK: {
-            array_push(a->scope_stack, ast->block.scope);
-            array_push(a->operand_scope_stack, ast->block.scope);
-            register_symbol_asts(
-                a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
-        case AST_IF: {
-            register_symbol_asts(a, ast->if_stmt.cond_stmt, 1);
-            if (ast->if_stmt.else_stmt)
-            {
-                register_symbol_asts(a, ast->if_stmt.else_stmt, 1);
-            }
-            break;
-        }
-
-        case AST_WHILE: {
-            register_symbol_asts(a, ast->while_stmt.cond, 1);
-            register_symbol_asts(a, ast->while_stmt.stmt, 1);
-            break;
-        }
-
-        case AST_FOR: {
-            array_push(a->scope_stack, ast->for_stmt.scope);
-            array_push(a->operand_scope_stack, ast->for_stmt.scope);
-            if (ast->for_stmt.init)
-                register_symbol_asts(a, ast->for_stmt.init, 1);
-            if (ast->for_stmt.cond)
-                register_symbol_asts(a, ast->for_stmt.cond, 1);
-            if (ast->for_stmt.inc)
-                register_symbol_asts(a, ast->for_stmt.inc, 1);
-            register_symbol_asts(a, ast->for_stmt.stmt, 1);
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
         default: break;
         }
     }
@@ -2067,6 +2084,7 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_CONST_DECL:
+        case AST_TYPEDEF:
         case AST_PROC_DECL: {
             analyze_ast(a, ast, NULL);
             break;
@@ -2080,8 +2098,8 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
     {
         switch (ast->type)
         {
-        case AST_ROOT:
         case AST_CONST_DECL:
+        case AST_TYPEDEF:
         case AST_PROC_DECL: {
             break;
         }
@@ -2098,24 +2116,6 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
     {
         switch (ast->type)
         {
-        case AST_ROOT: {
-            array_push(a->scope_stack, ast->block.scope);
-            array_push(a->operand_scope_stack, ast->block.scope);
-            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
-        case AST_BLOCK: {
-            array_push(a->scope_stack, ast->block.scope);
-            array_push(a->operand_scope_stack, ast->block.scope);
-            analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
-            break;
-        }
-
         case AST_PROC_DECL: {
             array_push(a->scope_stack, ast->proc.scope);
             array_push(a->operand_scope_stack, ast->proc.scope);

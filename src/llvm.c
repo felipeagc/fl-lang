@@ -233,6 +233,7 @@ void llvm_codegen_ast(
         array_pop(l->scope_stack);
         break;
     }
+
     case AST_PROC_DECL: {
         assert(ast->type_info->kind == TYPE_POINTER);
 
@@ -252,36 +253,13 @@ void llvm_codegen_ast(
                     bump_c_str(&l->compiler->bump, param->proc_param.name);
                 LLVMSetValueName(param->proc_param.value.value, param_name);
             }
-
-            LLVMBasicBlockRef alloca_block =
-                LLVMAppendBasicBlock(fun, "allocas");
-            LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
-            LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
-
-            LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
-            LLVMBuildBr(mod->builder, entry);
-
-            LLVMPositionBuilderAtEnd(mod->builder, entry);
-
-            array_push(l->scope_stack, ast->proc.scope);
-            array_push(l->operand_scope_stack, ast->proc.scope);
-            llvm_codegen_ast_children(
-                l, mod, ast->proc.stmts, array_size(ast->proc.stmts), is_const);
-            array_pop(l->operand_scope_stack);
-            array_pop(l->scope_stack);
-
-            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
-            {
-                LLVMBuildRetVoid(mod->builder); // Add void return
-            }
-
-            LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
         }
 
         if (out_value) *out_value = ast->proc.value;
 
         break;
     }
+
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
@@ -2022,7 +2000,11 @@ void llvm_codegen_ast_children(
     {
         switch (ast->type)
         {
-        case AST_PROC_DECL: llvm_add_proc(l, mod, ast); break;
+        case AST_PROC_DECL: {
+            llvm_add_proc(l, mod, ast);
+            break;
+        }
+
         default: break;
         }
     }
@@ -2033,15 +2015,11 @@ void llvm_codegen_ast_children(
         {
         case AST_CONST_DECL:
         case AST_PROC_DECL:
-        case AST_TYPEDEF: llvm_codegen_ast(l, mod, ast, is_const, NULL); break;
-        case AST_VAR_DECL: {
-            Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
-            if (!proc)
-            {
-                llvm_codegen_ast(l, mod, ast, is_const, NULL);
-            }
+        case AST_TYPEDEF: {
+            llvm_codegen_ast(l, mod, ast, is_const, NULL);
             break;
         }
+
         default: break;
         }
     }
@@ -2053,21 +2031,64 @@ void llvm_codegen_ast_children(
         case AST_CONST_DECL:
         case AST_PROC_DECL:
         case AST_TYPEDEF: break;
-        case AST_VAR_DECL: {
-            Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
-            if (proc)
-            {
-                llvm_codegen_ast(l, mod, ast, is_const, NULL);
-            }
+
+        default: {
+            llvm_codegen_ast(l, mod, ast, is_const, NULL);
             break;
         }
-        default: llvm_codegen_ast(l, mod, ast, is_const, NULL); break;
         }
 
         if (ast->type == AST_RETURN || ast->type == AST_BREAK ||
             ast->type == AST_CONTINUE)
         {
             break;
+        }
+    }
+
+    // Generate children
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_PROC_DECL: {
+            if (ast->proc.flags & PROC_FLAG_HAS_BODY)
+            {
+                LLVMValueRef fun = ast->proc.value.value;
+                assert(fun);
+
+                LLVMBasicBlockRef alloca_block =
+                    LLVMAppendBasicBlock(fun, "allocas");
+                LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
+                LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
+
+                LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
+                LLVMBuildBr(mod->builder, entry);
+
+                LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+                array_push(l->scope_stack, ast->proc.scope);
+                array_push(l->operand_scope_stack, ast->proc.scope);
+                llvm_codegen_ast_children(
+                    l,
+                    mod,
+                    ast->proc.stmts,
+                    array_size(ast->proc.stmts),
+                    is_const);
+                array_pop(l->operand_scope_stack);
+                array_pop(l->scope_stack);
+
+                if (!LLVMGetBasicBlockTerminator(
+                        LLVMGetInsertBlock(mod->builder)))
+                {
+                    LLVMBuildRetVoid(mod->builder); // Add void return
+                }
+
+                LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
+            }
+            break;
+        }
+
+        default: break;
         }
     }
 }

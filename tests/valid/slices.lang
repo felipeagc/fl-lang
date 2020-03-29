@@ -53,12 +53,13 @@ proc "c" main() i32 {
         var my_array: *i32 = c.malloc(@sizeof(i32) * 10);
         my_array[2] = 3;
         my_array[3] = 4;
+
         var old_slice: [_]i32 = my_array[1..4];
 
         var lower: u64 = 1;
         var upper: u64 = 3;
 
-        var my_slice: [_]i32 = old_slice[lower..upper];
+        var my_slice: [_]i32 = my_array[1..4][lower..upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
