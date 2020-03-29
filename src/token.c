@@ -8,6 +8,7 @@ typedef enum TokenType {
 
     TOKEN_SEMICOLON,
     TOKEN_COLON,
+    TOKEN_UNDERSCORE,
 
     TOKEN_ASTERISK,
     TOKEN_AMPERSAND,
@@ -23,6 +24,7 @@ typedef enum TokenType {
     TOKEN_RSHIFT,
 
     TOKEN_DOT,
+    TOKEN_DOTDOT,
     TOKEN_ELLIPSIS,
     TOKEN_COMMA,
 
@@ -110,6 +112,7 @@ static const char *token_strings[] = {
 
     [TOKEN_SEMICOLON] = ";",
     [TOKEN_COLON] = ":",
+    [TOKEN_UNDERSCORE] = "_",
 
     [TOKEN_ASTERISK] = "*",
     [TOKEN_AMPERSAND] = "&",
@@ -125,6 +128,7 @@ static const char *token_strings[] = {
     [TOKEN_RSHIFT] = ">>",
 
     [TOKEN_DOT] = ".",
+    [TOKEN_DOTDOT] = "..",
     [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
 

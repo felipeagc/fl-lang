@@ -110,9 +110,13 @@ bool parse_array_type(Parser *p, Ast *ast)
     {
     case TOKEN_LBRACK: {
         parser_next(p, 1);
-        ast->type = AST_SLICE_TYPE;
 
-        if (parser_peek(p, 0)->type != TOKEN_RBRACK)
+        if (parser_peek(p, 0)->type == TOKEN_UNDERSCORE)
+        {
+            parser_next(p, 1);
+            ast->type = AST_SLICE_TYPE;
+        }
+        else
         {
             ast->type = AST_ARRAY_TYPE;
 
@@ -264,7 +268,7 @@ bool parse_subscript(Parser *p, Ast *ast)
         Ast lower = {0};
         if (!parse_expr(p, &lower)) res = false;
 
-        if (parser_peek(p, 0)->type == TOKEN_COLON)
+        if (parser_peek(p, 0)->type == TOKEN_DOTDOT)
         {
             parser_next(p, 1);
 

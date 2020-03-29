@@ -268,15 +268,27 @@ void lex_token(Lexer *l)
         tok.type = TOKEN_SEMICOLON;
         break;
     }
+    case '_': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_UNDERSCORE;
+        break;
+    }
     case '.': {
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_DOT;
-        if (lex_peek(l, 0) == '.' && lex_peek(l, 1) == '.')
+        if (lex_peek(l, 0) == '.')
         {
-            lex_next(l, 2);
-            tok.type = TOKEN_ELLIPSIS;
-            tok.loc.length = 3;
+            lex_next(l, 1);
+            tok.type = TOKEN_DOTDOT;
+            tok.loc.length = 2;
+            if (lex_peek(l, 0) == '.')
+            {
+                lex_next(l, 1);
+                tok.type = TOKEN_ELLIPSIS;
+                tok.loc.length = 3;
+            }
         }
         break;
     }
@@ -531,15 +543,18 @@ void lex_token(Lexer *l)
         if (is_numeric(c))
         {
             l->col--;
-            bool has_dot = false;
+            char *dot_ptr = NULL;
 
             while (is_numeric(tok.loc.buf[tok.loc.length]) ||
                    tok.loc.buf[tok.loc.length] == '.')
             {
                 if (tok.loc.buf[tok.loc.length] == '.')
                 {
-                    has_dot = true;
+                    if (!is_numeric(tok.loc.buf[tok.loc.length + 1])) break;
+                    assert(!dot_ptr);
+                    dot_ptr = &tok.loc.buf[tok.loc.length];
                 }
+
                 tok.loc.length++;
             }
 
@@ -551,7 +566,7 @@ void lex_token(Lexer *l)
                 &l->compiler->bump,
                 (String){.buf = tok.loc.buf, .length = tok.loc.length});
 
-            if (has_dot)
+            if (dot_ptr)
             {
                 tok.type = TOKEN_FLOAT_LIT;
                 tok.f64 = strtod(str, NULL);
