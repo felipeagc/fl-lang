@@ -145,6 +145,85 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
     return res;
 }
 
+static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
+{
+    bool res = false;
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            if (sym)
+            {
+                switch (sym->type)
+                {
+                case AST_STRUCT_FIELD:
+                case AST_VAR_DECL: {
+                    res = true;
+                    break;
+                }
+                default: break;
+                }
+            }
+            break;
+        }
+        default: break;
+        }
+        break;
+    }
+
+    case AST_PAREN_EXPR: {
+        res = is_expr_assignable(compiler, scope, ast->expr);
+        break;
+    }
+
+    case AST_UNARY_EXPR: {
+        switch (ast->unop.type)
+        {
+        case UNOP_DEREFERENCE:
+            res = is_expr_assignable(compiler, scope, ast->unop.sub);
+            break;
+
+        default: break;
+        }
+
+        break;
+    }
+
+    case AST_SUBSCRIPT: {
+        if (is_expr_assignable(compiler, scope, ast->subscript.left))
+        {
+            res = true;
+        }
+
+        break;
+    }
+
+    case AST_ACCESS: {
+        if (is_expr_const(compiler, scope, ast->access.left))
+        {
+            break;
+        }
+
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
+
+        if (accessed_scope)
+        {
+            res =
+                is_expr_assignable(compiler, accessed_scope, ast->access.right);
+        }
+        break;
+    }
+
+    default: break;
+    }
+
+    return res;
+}
+
 static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
 {
     bool res = false;
@@ -1068,6 +1147,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->assign.assigned_expr, NULL);
         analyze_ast(
             a, ast->assign.value_expr, ast->assign.assigned_expr->type_info);
+
+        if (!is_expr_assignable(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->assign.assigned_expr))
+        {
+            compile_error(
+                a->compiler,
+                ast->assign.assigned_expr->loc,
+                "expression is not assignable");
+            break;
+        }
         break;
     }
 

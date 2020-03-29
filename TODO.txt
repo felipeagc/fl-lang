@@ -22,4 +22,3 @@ Bugs:
 - Segfault when import path is not found
 - Circular imports
 - Circular structs
-- Assignment to non-lvalues

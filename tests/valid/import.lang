@@ -6,6 +6,9 @@ proc "c" main() void {
     var a: i32 = hello.some_const;
     var b: i32 = hello.some_var;
 
+    // Assignment to imported global variable
+    hello.some_var = 123;
+
     var some_var: hello.SomeType;
     some_var.field = 32;
 

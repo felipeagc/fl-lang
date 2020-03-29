@@ -1,0 +1,11 @@
+typedef Struct struct {
+    a: i32
+};
+
+const const_struct = Struct {12};
+
+proc "c" main() i32 {
+    const_struct.a = 123;
+
+    return 0;
+}

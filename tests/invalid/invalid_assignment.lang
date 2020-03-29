@@ -1,0 +1,4 @@
+proc "c" main() i32 {
+    1 = 1;
+    return 0;
+}
