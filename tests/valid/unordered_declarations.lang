@@ -3,7 +3,7 @@ proc "c" main() i32 {
 
     c.printf(c"other_int: %d\n", other_int);
 
-    const other_int: i32 = some_int;
+    const other_int = some_int;
 
     return 0;
 }
@@ -11,4 +11,4 @@ proc "c" main() i32 {
 import c "core:c";
 
 const some_int: i32 = 123;
-const puts_fn: proc* "c" (str: *char) i32 = c.puts;
+const puts_fn = c.puts;

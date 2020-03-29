@@ -698,12 +698,24 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_CONST_DECL: {
-        create_scopes_ast(a, ast->decl.type_expr);
+        if (ast->decl.type_expr)
+        {
+            create_scopes_ast(a, ast->decl.type_expr);
+        }
+        assert(ast->decl.value_expr);
+        create_scopes_ast(a, ast->decl.value_expr);
         break;
     }
 
     case AST_VAR_DECL: {
-        create_scopes_ast(a, ast->decl.type_expr);
+        if (ast->decl.type_expr)
+        {
+            create_scopes_ast(a, ast->decl.type_expr);
+        }
+        if (ast->decl.value_expr)
+        {
+            create_scopes_ast(a, ast->decl.value_expr);
+        }
         break;
     }
 
@@ -944,19 +956,38 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_CONST_DECL: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->decl.type_expr, &ty_ty);
-
-        if (!ast->decl.type_expr->as_type)
+        if (ast->decl.type_expr)
         {
-            compile_error(
-                a->compiler,
-                ast->decl.type_expr->loc,
-                "expression does not represent a type");
-            break;
+            static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+            analyze_ast(a, ast->decl.type_expr, &ty_ty);
+
+            if (!ast->decl.type_expr->as_type)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->decl.type_expr->loc,
+                    "expression does not represent a type");
+                break;
+            }
+
+            ast->type_info = ast->decl.type_expr->as_type;
         }
 
-        analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+        analyze_ast(a, ast->decl.value_expr, ast->type_info);
+
+        if (!ast->type_info)
+        {
+            if (!ast->decl.value_expr->type_info)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "could not infer type for constant declaration");
+                break;
+            }
+
+            ast->type_info = ast->decl.value_expr->type_info;
+        }
 
         if (!is_expr_const(
                 a->compiler, *array_last(a->scope_stack), ast->decl.value_expr))
@@ -967,25 +998,44 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 "expression is not constant");
             break;
         }
+
         break;
     }
 
     case AST_VAR_DECL: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->decl.type_expr, &ty_ty);
-
-        if (!ast->decl.type_expr->as_type)
+        if (ast->decl.type_expr)
         {
-            compile_error(
-                a->compiler,
-                ast->decl.type_expr->loc,
-                "expression does not represent a type");
-            break;
+            static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+            analyze_ast(a, ast->decl.type_expr, &ty_ty);
+
+            if (!ast->decl.type_expr->as_type)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->decl.type_expr->loc,
+                    "expression does not represent a type");
+                break;
+            }
+
+            ast->type_info = ast->decl.type_expr->as_type;
         }
 
         if (ast->decl.value_expr)
         {
-            analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
+            analyze_ast(a, ast->decl.value_expr, ast->type_info);
+
+            if (!ast->type_info)
+            {
+                if (!ast->decl.value_expr->type_info)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "could not infer type for constant declaration");
+                    break;
+                }
+                ast->type_info = ast->decl.value_expr->type_info;
+            }
         }
         break;
     }
@@ -1341,8 +1391,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
             case AST_VAR_DECL:
             case AST_CONST_DECL: {
-                ast_as_type(a->compiler, sym->sym_scope, sym->decl.type_expr);
-                ast->type_info = sym->decl.type_expr->as_type;
+                assert(sym->type_info);
+                ast->type_info = sym->type_info;
                 break;
             }
 
@@ -1919,7 +1969,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             for (size_t i = 0; i < array_size(ast->compound.values); ++i)
             {
-                analyze_ast(a, &ast->compound.values[i], compound_type->structure.fields[i]);
+                analyze_ast(
+                    a,
+                    &ast->compound.values[i],
+                    compound_type->structure.fields[i]);
             }
 
             break;

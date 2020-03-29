@@ -927,6 +927,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_PROC: {
         parser_next(p, 1);
 
@@ -1011,6 +1012,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_IMPORT: {
         parser_next(p, 1);
         ast->type = AST_IMPORT;
@@ -1035,6 +1037,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_VAR:
     case TOKEN_CONST: {
         Token *kind = parser_next(p, 1);
@@ -1048,10 +1051,14 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         else
             ast->decl.name = ident_tok->str;
 
-        if (!parser_consume(p, TOKEN_COLON)) res = false;
+        ast->decl.type_expr = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_COLON)
+        {
+            parser_next(p, 1);
 
-        ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
+            ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
+        }
 
         ast->decl.value_expr = NULL;
         if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
@@ -1072,6 +1079,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_TYPEDEF: {
         parser_next(p, 1);
 
@@ -1088,6 +1096,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_RETURN: {
         parser_next(p, 1);
 
@@ -1102,6 +1111,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_IF: {
         parser_next(p, 1);
 
@@ -1129,6 +1139,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_WHILE: {
         parser_next(p, 1);
 
@@ -1147,6 +1158,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_FOR: {
         parser_next(p, 1);
 
@@ -1184,18 +1196,21 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         break;
     }
+
     case TOKEN_BREAK: {
         parser_next(p, 1);
         ast->type = AST_BREAK;
         need_semi = true;
         break;
     }
+
     case TOKEN_CONTINUE: {
         parser_next(p, 1);
         ast->type = AST_CONTINUE;
         need_semi = true;
         break;
     }
+
     default: {
         Ast expr = {0};
         if (!parse_expr(p, &expr, false)) res = false;

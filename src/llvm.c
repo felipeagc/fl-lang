@@ -539,7 +539,7 @@ void llvm_codegen_ast(
     }
 
     case AST_CONST_DECL: {
-        TypeInfo *const_type = ast->decl.type_expr->as_type;
+        TypeInfo *const_type = ast->type_info;
 
         switch (const_type->kind)
         {
@@ -582,7 +582,7 @@ void llvm_codegen_ast(
         if (!proc)
         {
             assert(!ast->decl.value.value);
-            LLVMTypeRef llvm_ty = llvm_type(l, ast->decl.type_expr->as_type);
+            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
             // Global variable
             ast->decl.value.is_lvalue = true;
             ast->decl.value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
@@ -609,8 +609,7 @@ void llvm_codegen_ast(
 
         // Local variable
         ast->decl.value.is_lvalue = true;
-        ast->decl.value.value =
-            build_alloca(mod, llvm_type(l, ast->decl.type_expr->as_type));
+        ast->decl.value.value = build_alloca(mod, llvm_type(l, ast->type_info));
 
         if (ast->decl.value_expr)
         {
@@ -625,7 +624,7 @@ void llvm_codegen_ast(
                     l,
                     mod,
                     ast->decl.value_expr->type_info,
-                    ast->decl.type_expr->as_type,
+                    ast->type_info,
                     to_store);
                 LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
             }

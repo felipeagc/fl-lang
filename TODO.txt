@@ -7,10 +7,6 @@ Enums
 Unions
 Thread local variables
 
-Struct literals
-Array literals
-Variables/constants without type specifier
-
 Offsetof
 Dynamic arrays
 

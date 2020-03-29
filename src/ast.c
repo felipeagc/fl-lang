@@ -158,7 +158,7 @@ typedef struct Ast
         } intrinsic_call;
         struct
         {
-            struct Ast* type_expr;
+            struct Ast *type_expr;
             /*array*/ struct Ast *values;
         } compound;
         struct
