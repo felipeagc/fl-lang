@@ -4,8 +4,8 @@ LLVM_LDFLAGS=$(shell llvm-config-10 --ldflags)
 CFLAGS=-Wall -g $(LLVM_CFLAGS)
 LDFLAGS=$(LLVM_LDFLAGS) -lLLVM-10
 
-compiler: compiler.c
-	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ $<
+compiler: $(wildcard src/*.c)
+	$(CC) $(LDFLAGS) $(CFLAGS) -o $@ src/main.c
 
 .PHONY: clean test
 
