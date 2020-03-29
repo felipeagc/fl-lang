@@ -405,471 +405,6 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
     return ast->as_type;
 }
 
-static void get_expr_type(Compiler *compiler, Scope *scope, Ast *ast)
-{
-    if (ast->type_info && !ast->type_info->can_change) return;
-
-    switch (ast->type)
-    {
-    case AST_PRIMARY: {
-        switch (ast->primary.tok->type)
-        {
-        case TOKEN_U8:
-        case TOKEN_U16:
-        case TOKEN_U32:
-        case TOKEN_U64:
-        case TOKEN_I8:
-        case TOKEN_I16:
-        case TOKEN_I32:
-        case TOKEN_I64:
-        case TOKEN_CHAR:
-        case TOKEN_FLOAT:
-        case TOKEN_DOUBLE:
-        case TOKEN_BOOL:
-        case TOKEN_VOID: {
-            static TypeInfo ty = {.kind = TYPE_TYPE};
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_NULL: {
-            static TypeInfo void_ty = {.kind = TYPE_VOID};
-            static TypeInfo void_ptr_ty = {
-                .kind = TYPE_POINTER, .ptr.sub = &void_ty, .can_change = true};
-            ast->type_info = &void_ptr_ty;
-            break;
-        }
-        case TOKEN_TRUE:
-        case TOKEN_FALSE: {
-            static TypeInfo ty = {.kind = TYPE_BOOL};
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_INT_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .can_change = true,
-                .integer = {.is_signed = true, .num_bits = 64}};
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_FLOAT_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_FLOAT,
-                .floating.num_bits = 64,
-                .can_change = true,
-            };
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_CSTRING_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
-            static TypeInfo ty = {
-                .kind = TYPE_POINTER,
-                .ptr.sub = &i8_ty,
-            };
-            ast->type_info = &ty;
-            break;
-        }
-        case TOKEN_CHAR_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
-            ast->type_info = &i8_ty;
-            break;
-        }
-        case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
-            if (sym)
-            {
-                switch (sym->type)
-                {
-                case AST_VAR_DECL:
-                case AST_CONST_DECL: {
-                    ast_as_type(compiler, sym->sym_scope, sym->decl.type_expr);
-                    ast->type_info = sym->decl.type_expr->as_type;
-                    break;
-                }
-                case AST_PROC_PARAM: {
-                    ast_as_type(
-                        compiler, sym->sym_scope, sym->proc_param.type_expr);
-                    ast->type_info = sym->proc_param.type_expr->as_type;
-                    break;
-                }
-                case AST_STRUCT_FIELD: {
-                    ast_as_type(compiler, sym->sym_scope, sym->field.type_expr);
-                    ast->type_info = sym->field.type_expr->as_type;
-                    break;
-                }
-                case AST_PROC_DECL: {
-                    get_expr_type(compiler, sym->sym_scope, sym);
-                    ast->type_info = sym->type_info;
-                    break;
-                }
-                case AST_IMPORT: {
-                    static TypeInfo namespace_ty = {.kind = TYPE_NAMESPACE};
-                    ast->type_info = &namespace_ty;
-                    break;
-                }
-                case AST_TYPEDEF: {
-                    static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-                    ast->type_info = &ty_ty;
-                    break;
-                }
-                default: break;
-                }
-            }
-
-            break;
-        }
-        default: assert(0); break;
-        }
-        break;
-    }
-    case AST_PAREN_EXPR: {
-        get_expr_type(compiler, scope, ast->expr);
-        ast->type_info = ast->expr->type_info;
-        break;
-    }
-    case AST_PROC_CALL: {
-        get_expr_type(compiler, scope, ast->proc_call.expr);
-
-        TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
-        if (proc_ptr_ty && proc_ptr_ty->kind == TYPE_POINTER &&
-            proc_ptr_ty->ptr.sub->kind == TYPE_PROC)
-        {
-            ast->type_info = proc_ptr_ty->ptr.sub->proc.return_type;
-        }
-        break;
-    }
-    case AST_INTRINSIC_CALL: {
-        switch (ast->intrinsic_call.type)
-        {
-        case INTRINSIC_SIZEOF: {
-            ast->type_info = &SIZE_INT_TYPE;
-            break;
-        }
-        case INTRINSIC_ALIGNOF: {
-            ast->type_info = &SIZE_INT_TYPE;
-            break;
-        }
-        }
-
-        break;
-    }
-    case AST_CAST: {
-        ast_as_type(compiler, scope, ast->cast.type_expr);
-        ast->type_info = ast->cast.type_expr->as_type;
-
-        break;
-    }
-    case AST_UNARY_EXPR: {
-        get_expr_type(compiler, scope, ast->unop.sub);
-
-        if (!ast->unop.sub->type_info)
-        {
-            break;
-        }
-
-        switch (ast->unop.type)
-        {
-        case UNOP_DEREFERENCE: {
-            if (ast->unop.sub->type_info->kind == TYPE_TYPE)
-            {
-                TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
-                memset(ty, 0, sizeof(*ty));
-                ty->kind = TYPE_TYPE;
-                ast->type_info = ty;
-                break;
-            }
-
-            if (ast->unop.sub->type_info->kind != TYPE_POINTER)
-            {
-                break;
-            }
-
-            ast->type_info = ast->unop.sub->type_info->ptr.sub;
-            break;
-        }
-        case UNOP_ADDRESS: {
-            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_POINTER;
-            ty->ptr.sub = ast->unop.sub->type_info;
-            ast->type_info = ty;
-            break;
-        }
-        case UNOP_NEG: {
-            if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT)
-            {
-                break;
-            }
-
-            ast->type_info = ast->unop.sub->type_info;
-
-            break;
-        }
-        case UNOP_NOT: {
-            if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
-                ast->unop.sub->type_info->kind != TYPE_BOOL &&
-                ast->unop.sub->type_info->kind != TYPE_POINTER)
-            {
-                break;
-            }
-
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
-            break;
-        }
-        }
-
-        break;
-    }
-    case AST_BINARY_EXPR: {
-        switch (ast->binop.type)
-        {
-        case BINOP_ADD:
-        case BINOP_SUB:
-        case BINOP_MUL:
-        case BINOP_DIV:
-        case BINOP_MOD: {
-            get_expr_type(compiler, scope, ast->binop.left);
-            get_expr_type(compiler, scope, ast->binop.right);
-
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
-            {
-                break;
-            }
-
-            if (!exact_types(
-                    ast->binop.left->type_info, ast->binop.right->type_info))
-            {
-                break;
-            }
-
-            if (ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_FLOAT)
-            {
-                break;
-            }
-
-            ast->type_info = ast->binop.left->type_info;
-            break;
-        }
-        case BINOP_LSHIFT:
-        case BINOP_RSHIFT:
-        case BINOP_BITOR:
-        case BINOP_BITAND:
-        case BINOP_BITXOR: {
-            get_expr_type(compiler, scope, ast->binop.left);
-            get_expr_type(compiler, scope, ast->binop.right);
-
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
-            {
-                break;
-            }
-
-            if (!exact_types(
-                    ast->binop.left->type_info, ast->binop.right->type_info))
-            {
-                break;
-            }
-
-            if (ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_BOOL)
-            {
-                break;
-            }
-
-            ast->type_info = ast->binop.left->type_info;
-            break;
-        }
-        case BINOP_EQ:
-        case BINOP_NOTEQ:
-        case BINOP_LESS:
-        case BINOP_LESSEQ:
-        case BINOP_GREATER:
-        case BINOP_GREATEREQ: {
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
-            break;
-        }
-        case BINOP_AND:
-        case BINOP_OR: {
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
-            break;
-        }
-        }
-
-        break;
-    }
-    case AST_SUBSCRIPT: {
-        get_expr_type(compiler, scope, ast->subscript.left);
-
-        if (!ast->subscript.left->type_info)
-        {
-            break;
-        }
-
-        if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript.left->type_info->kind != TYPE_ARRAY &&
-            ast->subscript.left->type_info->kind != TYPE_SLICE)
-        {
-            break;
-        }
-
-        switch (ast->subscript.left->type_info->kind)
-        {
-        case TYPE_SLICE:
-        case TYPE_ARRAY: {
-            ast->type_info = ast->subscript.left->type_info->array.sub;
-            break;
-        }
-        case TYPE_POINTER: {
-            ast->type_info = ast->subscript.left->type_info->ptr.sub;
-            break;
-        }
-        default: break;
-        }
-        break;
-    }
-    case AST_SUBSCRIPT_SLICE: {
-        get_expr_type(compiler, scope, ast->subscript_slice.left);
-
-        if (!ast->subscript_slice.left->type_info)
-        {
-            break;
-        }
-
-        if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
-            ast->subscript_slice.left->type_info->kind != TYPE_SLICE)
-        {
-            break;
-        }
-
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_SLICE;
-        ast->type_info = ty;
-
-        switch (ast->subscript_slice.left->type_info->kind)
-        {
-        case TYPE_SLICE:
-        case TYPE_ARRAY: {
-            ast->type_info->array.sub =
-                ast->subscript_slice.left->type_info->array.sub;
-            break;
-        }
-        case TYPE_POINTER: {
-            ast->type_info->array.sub =
-                ast->subscript_slice.left->type_info->ptr.sub;
-            break;
-        }
-        default: break;
-        }
-
-        break;
-    }
-    case AST_ARRAY_TYPE: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        ast->type_info = &ty_ty;
-        break;
-    }
-    case AST_STRUCT: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        ast->type_info = &ty_ty;
-        break;
-    }
-    case AST_ACCESS: {
-        get_expr_type(compiler, scope, ast->access.left);
-
-        if (!ast->access.left->type_info)
-        {
-            break;
-        }
-
-        if (ast->access.left->type_info->kind == TYPE_SLICE)
-        {
-            Ast *right = get_inner_expr(ast->access.right);
-            if (right->type == AST_PRIMARY &&
-                right->primary.tok->type == TOKEN_IDENT)
-            {
-                if (string_equals(right->primary.tok->str, STR("len")))
-                {
-                    ast->type_info = &SIZE_INT_TYPE;
-                    break;
-                }
-                else if (string_equals(right->primary.tok->str, STR("ptr")))
-                {
-                    ast->type_info = ast->access.right->type_info;
-
-                    TypeInfo *ptr_ty =
-                        bump_alloc(&compiler->bump, sizeof(*ptr_ty));
-                    memset(ptr_ty, 0, sizeof(*ptr_ty));
-                    ptr_ty->kind = TYPE_POINTER;
-                    ptr_ty->ptr.sub = ast->access.left->type_info->array.sub;
-
-                    ast->type_info = ptr_ty;
-                    break;
-                }
-            }
-
-            break;
-        }
-
-        Scope *accessed_scope =
-            get_expr_scope(compiler, scope, ast->access.left);
-
-        if (accessed_scope)
-        {
-            get_expr_type(compiler, accessed_scope, ast->access.right);
-            ast->type_info = ast->access.right->type_info;
-        }
-
-        break;
-    }
-    case AST_PROC_DECL: {
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_PROC;
-
-        ty->proc.is_c_vararg =
-            (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
-
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
-             ++param)
-        {
-            ast_as_type(compiler, scope, param->decl.type_expr);
-            if (!param->decl.type_expr->as_type) return;
-            array_push(ty->proc.params, *param->decl.type_expr->as_type);
-        }
-
-        ast_as_type(compiler, scope, ast->proc.return_type);
-        if (!ast->proc.return_type->as_type) return;
-        ty->proc.return_type = ast->proc.return_type->as_type;
-
-        TypeInfo *ptr_ty = bump_alloc(&compiler->bump, sizeof(*ptr_ty));
-        memset(ptr_ty, 0, sizeof(*ptr_ty));
-        ptr_ty->kind = TYPE_POINTER;
-        ptr_ty->ptr.sub = ty;
-
-        ast->type_info = ptr_ty;
-        break;
-    }
-    default: break;
-    }
-}
-
 static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
 {
     if (ast->alias_to) return ast->alias_to;
@@ -915,6 +450,7 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
     return ast->alias_to;
 }
 
+// Returns the scope represented by the expression
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 {
     Scope *accessed_scope = NULL;
@@ -937,7 +473,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
     else
     {
         // Type based lookup
-        get_expr_type(compiler, scope, ast);
+
         if (!ast->type_info) return NULL;
 
         if (ast->type_info->kind == TYPE_STRUCT)
@@ -1512,17 +1048,37 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     ast_as_type(a->compiler, *array_last(a->scope_stack), ast);
-    get_expr_type(a->compiler, *array_last(a->scope_stack), ast);
 
     switch (ast->type)
     {
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
-        case TOKEN_NULL: {
-            assert(ast->type_info);
+        case TOKEN_U8:
+        case TOKEN_U16:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_I8:
+        case TOKEN_I16:
+        case TOKEN_I32:
+        case TOKEN_I64:
+        case TOKEN_CHAR:
+        case TOKEN_FLOAT:
+        case TOKEN_DOUBLE:
+        case TOKEN_BOOL:
+        case TOKEN_VOID: {
+            static TypeInfo ty = {.kind = TYPE_TYPE};
+            ast->type_info = &ty;
+            break;
+        }
 
-            if (ast->type_info->can_change && expected_type)
+        case TOKEN_NULL: {
+            static TypeInfo void_ty = {.kind = TYPE_VOID};
+            static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
+                                           .ptr.sub = &void_ty};
+            ast->type_info = &void_ptr_ty;
+
+            if (expected_type)
             {
                 switch (expected_type->kind)
                 {
@@ -1530,6 +1086,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     ast->type_info = expected_type;
                     break;
                 }
+
                 default: break;
                 }
             }
@@ -1589,6 +1146,30 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case TOKEN_CSTRING_LIT: {
+            static TypeInfo i8_ty = {
+                .kind = TYPE_INT,
+                .integer.is_signed = true,
+                .integer.num_bits = 8,
+            };
+            static TypeInfo ty = {
+                .kind = TYPE_POINTER,
+                .ptr.sub = &i8_ty,
+            };
+            ast->type_info = &ty;
+            break;
+        }
+
+        case TOKEN_CHAR_LIT: {
+            static TypeInfo i8_ty = {
+                .kind = TYPE_INT,
+                .integer.is_signed = true,
+                .integer.num_bits = 8,
+            };
+            ast->type_info = &i8_ty;
+            break;
+        }
+
         case TOKEN_IDENT: {
             Ast *sym =
                 get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
@@ -1601,6 +1182,50 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "invalid identifier: '%.*s'",
                     (int)ast->primary.tok->str.length,
                     ast->primary.tok->str.buf);
+                break;
+            }
+
+            switch (sym->type)
+            {
+            case AST_VAR_DECL:
+            case AST_CONST_DECL: {
+                ast_as_type(a->compiler, sym->sym_scope, sym->decl.type_expr);
+                ast->type_info = sym->decl.type_expr->as_type;
+                break;
+            }
+
+            case AST_PROC_PARAM: {
+                ast_as_type(
+                    a->compiler, sym->sym_scope, sym->proc_param.type_expr);
+                ast->type_info = sym->proc_param.type_expr->as_type;
+                break;
+            }
+
+            case AST_STRUCT_FIELD: {
+                ast_as_type(a->compiler, sym->sym_scope, sym->field.type_expr);
+                ast->type_info = sym->field.type_expr->as_type;
+                break;
+            }
+
+            case AST_PROC_DECL: {
+                assert(sym->type_info);
+                ast->type_info = sym->type_info;
+                break;
+            }
+
+            case AST_IMPORT: {
+                static TypeInfo namespace_ty = {.kind = TYPE_NAMESPACE};
+                ast->type_info = &namespace_ty;
+                break;
+            }
+
+            case AST_TYPEDEF: {
+                static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+                ast->type_info = &ty_ty;
+                break;
+            }
+
+            default: break;
             }
 
             break;
@@ -2261,9 +1886,38 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_ACCESS: {
         analyze_ast(a, ast->access.left, NULL);
 
-        if (!ast->type_info)
+        if (!ast->access.left->type_info)
         {
             compile_error(a->compiler, ast->loc, "invalid access");
+            break;
+        }
+
+        if (ast->access.left->type_info->kind == TYPE_SLICE)
+        {
+            Ast *right = get_inner_expr(ast->access.right);
+            if (right->type == AST_PRIMARY &&
+                right->primary.tok->type == TOKEN_IDENT)
+            {
+                if (string_equals(right->primary.tok->str, STR("len")))
+                {
+                    ast->type_info = &SIZE_INT_TYPE;
+                    break;
+                }
+                else if (string_equals(right->primary.tok->str, STR("ptr")))
+                {
+                    ast->type_info = ast->access.right->type_info;
+
+                    TypeInfo *ptr_ty =
+                        bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
+                    memset(ptr_ty, 0, sizeof(*ptr_ty));
+                    ptr_ty->kind = TYPE_POINTER;
+                    ptr_ty->ptr.sub = ast->access.left->type_info->array.sub;
+
+                    ast->type_info = ptr_ty;
+                    break;
+                }
+            }
+
             break;
         }
 
@@ -2275,6 +1929,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             array_push(a->scope_stack, accessed_scope);
             analyze_ast(a, ast->access.right, NULL);
             array_pop(a->scope_stack);
+
+            ast->type_info = ast->access.right->type_info;
         }
 
         break;
