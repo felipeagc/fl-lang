@@ -113,6 +113,21 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         break;
     }
 
+    case AST_COMPOUND_LIT: {
+        res = true;
+        for (Ast *value = ast->compound.values;
+             value != ast->compound.values + array_size(ast->compound.values);
+             ++value)
+        {
+            if (!is_expr_const(compiler, scope, value))
+            {
+                res = false;
+                break;
+            }
+        }
+        break;
+    }
+
     case AST_ACCESS: {
         Scope *accessed_scope =
             get_expr_scope(compiler, scope, ast->access.left);
@@ -190,6 +205,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_U16: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -197,6 +213,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_U32: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -204,6 +221,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_U64: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -211,6 +229,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_CHAR:
         case TOKEN_I8: {
             static TypeInfo ty = {
@@ -219,6 +238,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_I16: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -226,6 +246,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_I32: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -233,6 +254,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_I64: {
             static TypeInfo ty = {
                 .kind = TYPE_INT,
@@ -240,26 +262,31 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_FLOAT: {
             static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_DOUBLE: {
             static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_BOOL: {
             static TypeInfo ty = {.kind = TYPE_BOOL};
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_VOID: {
             static TypeInfo ty = {.kind = TYPE_VOID};
             ast->as_type = &ty;
             break;
         }
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str);
             if (sym && sym->type == AST_TYPEDEF)
@@ -278,10 +305,12 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_PAREN_EXPR: {
         ast->as_type = ast_as_type(compiler, scope, ast->expr);
         break;
     }
+
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
         {
@@ -300,6 +329,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_ARRAY_TYPE: {
         int64_t size = 0;
         bool resolves = resolve_expr_int(scope, ast->array_type.size, &size);
@@ -336,6 +366,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_SLICE_TYPE: {
         bool res = true;
 
@@ -351,6 +382,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_STRUCT: {
         TypeInfo **fields = NULL;
         bool res = true;
@@ -377,6 +409,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_PROC_TYPE: {
         TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
@@ -421,6 +454,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_ACCESS: {
         Scope *accessed_scope =
             get_expr_scope(compiler, scope, ast->access.left);
@@ -431,6 +465,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     default: break;
     }
 
@@ -462,10 +497,12 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     case AST_PAREN_EXPR: {
         ast->alias_to = get_aliased_expr(compiler, scope, ast->expr);
         break;
     }
+
     case AST_ACCESS: {
         Scope *accessed_scope =
             get_expr_scope(compiler, scope, ast->access.left);
@@ -476,6 +513,7 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
     default: break;
     }
 
@@ -499,6 +537,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
             accessed_scope = file->root->block.scope;
             break;
         }
+
         default: break;
         }
     }
@@ -556,6 +595,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
 
         break;
     }
+
     case AST_PROC_DECL: {
         assert(!ast->proc.scope);
         ast->proc.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
@@ -580,18 +620,31 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         array_pop(a->scope_stack);
         break;
     }
-    case AST_UNARY_EXPR: {
-        switch (ast->unop.type)
+
+    case AST_COMPOUND_LIT: {
+        create_scopes_ast(a, ast->compound.type_expr);
+
+        for (Ast *value = ast->compound.values;
+             value != ast->compound.values + array_size(ast->compound.values);
+             ++value)
         {
-        case UNOP_DEREFERENCE: {
-            create_scopes_ast(a, ast->unop.sub);
-            break;
-        }
-        default: break;
+            create_scopes_ast(a, value);
         }
 
         break;
     }
+
+    case AST_UNARY_EXPR: {
+        create_scopes_ast(a, ast->unop.sub);
+        break;
+    }
+
+    case AST_BINARY_EXPR: {
+        create_scopes_ast(a, ast->binop.left);
+        create_scopes_ast(a, ast->binop.right);
+        break;
+    }
+
     case AST_IF: {
         create_scopes_ast(a, ast->if_stmt.cond_expr);
         create_scopes_ast(a, ast->if_stmt.cond_stmt);
@@ -601,11 +654,13 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         }
         break;
     }
+
     case AST_WHILE: {
         create_scopes_ast(a, ast->while_stmt.cond);
         create_scopes_ast(a, ast->while_stmt.stmt);
         break;
     }
+
     case AST_FOR: {
         assert(!ast->for_stmt.scope);
         ast->for_stmt.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
@@ -631,26 +686,32 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         array_pop(a->scope_stack);
         break;
     }
+
     case AST_PAREN_EXPR: {
         create_scopes_ast(a, ast->expr);
         break;
     }
+
     case AST_TYPEDEF: {
         create_scopes_ast(a, ast->type_def.type_expr);
         break;
     }
+
     case AST_CONST_DECL: {
         create_scopes_ast(a, ast->decl.type_expr);
         break;
     }
+
     case AST_VAR_DECL: {
         create_scopes_ast(a, ast->decl.type_expr);
         break;
     }
+
     case AST_STRUCT_FIELD: {
         create_scopes_ast(a, ast->field.type_expr);
         break;
     }
+
     case AST_STRUCT: {
         assert(!ast->structure.scope);
         ast->structure.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
@@ -681,6 +742,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         array_pop(a->scope_stack);
         break;
     }
+
     case AST_UNINITIALIZED:
     case AST_BREAK:
     case AST_CONTINUE:
@@ -695,7 +757,6 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_PROC_PARAM:
     case AST_CAST:
     case AST_VAR_ASSIGN:
-    case AST_BINARY_EXPR:
     case AST_INTRINSIC_CALL:
     case AST_PROC_CALL:
     case AST_PROC_TYPE:
@@ -885,6 +946,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_CONST_DECL: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         analyze_ast(a, ast->decl.type_expr, &ty_ty);
+
+        if (!ast->decl.type_expr->as_type)
+        {
+            compile_error(
+                a->compiler,
+                ast->decl.type_expr->loc,
+                "expression does not represent a type");
+            break;
+        }
+
         analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
 
         if (!is_expr_const(
@@ -902,6 +973,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_VAR_DECL: {
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         analyze_ast(a, ast->decl.type_expr, &ty_ty);
+
+        if (!ast->decl.type_expr->as_type)
+        {
+            compile_error(
+                a->compiler,
+                ast->decl.type_expr->loc,
+                "expression does not represent a type");
+            break;
+        }
+
         if (ast->decl.value_expr)
         {
             analyze_ast(a, ast->decl.value_expr, ast->decl.type_expr->as_type);
@@ -1791,6 +1872,46 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_COMPOUND_LIT: {
+        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
+        analyze_ast(a, ast->compound.type_expr, &ty_ty);
+
+        if (!ast->compound.type_expr->as_type)
+        {
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
+        TypeInfo *compound_type = ast->compound.type_expr->as_type;
+        ast->type_info = compound_type;
+
+        switch (compound_type->kind)
+        {
+        case TYPE_ARRAY: {
+
+            for (Ast *value = ast->compound.values;
+                 value !=
+                 ast->compound.values + array_size(ast->compound.values);
+                 ++value)
+            {
+                analyze_ast(a, value, compound_type->array.sub);
+            }
+
+            break;
+        }
+
+        default: {
+            compile_error(
+                a->compiler,
+                ast->compound.type_expr->loc,
+                "type unsupported by compound literal");
+            break;
+        }
+        }
+
+        break;
+    }
+
     case AST_SUBSCRIPT: {
         analyze_ast(a, ast->subscript.left, NULL);
         analyze_ast(a, ast->subscript.right, NULL);
@@ -1912,13 +2033,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         static TypeInfo ty_ty = {.kind = TYPE_TYPE};
         ast->type_info = &ty_ty;
 
-        analyze_ast(a, ast->array_type.size, NULL);
         analyze_ast(a, ast->array_type.sub, &ty_ty);
+        analyze_ast(a, ast->array_type.size, NULL);
 
         if (ast->array_type.size->type_info->kind != TYPE_INT)
         {
             compile_error(
                 a->compiler, ast->loc, "array type needs an integer size");
+            break;
         }
 
         break;
@@ -1955,7 +2077,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (ast->access.left->type_info->kind == TYPE_SLICE)
+        if (ast->access.left->type_info->kind == TYPE_ARRAY ||
+            ast->access.left->type_info->kind == TYPE_SLICE)
         {
             Ast *right = get_inner_expr(ast->access.right);
             if (right->type == AST_PRIMARY &&
@@ -1994,7 +2117,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             array_pop(a->scope_stack);
 
             ast->type_info = ast->access.right->type_info;
+            break;
         }
+
+        compile_error(a->compiler, ast->loc, "invalid access");
 
         break;
     }

@@ -68,6 +68,7 @@ typedef enum AstType {
     AST_FOR,
     AST_BREAK,
     AST_CONTINUE,
+    AST_COMPOUND_LIT,
 } AstType;
 
 typedef struct AstValue
@@ -155,6 +156,11 @@ typedef struct Ast
             IntrinsicType type;
             /*array*/ struct Ast *params;
         } intrinsic_call;
+        struct
+        {
+            struct Ast* type_expr;
+            /*array*/ struct Ast *values;
+        } compound;
         struct
         {
             String name;

@@ -46,9 +46,9 @@ static inline Token *parser_consume(Parser *p, TokenType tok_type)
     return parser_next(p, 1);
 }
 
-bool parse_expr(Parser *p, Ast *ast);
+bool parse_expr(Parser *p, Ast *ast, bool parsing_type);
 
-bool parse_primary_expr(Parser *p, Ast *ast)
+bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
     Token *tok = parser_peek(p, 0);
@@ -87,7 +87,7 @@ bool parse_primary_expr(Parser *p, Ast *ast)
 
         ast->type = AST_PAREN_EXPR;
         ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->expr)) res = false;
+        if (!parse_expr(p, ast->expr, parsing_type)) res = false;
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
@@ -102,7 +102,7 @@ bool parse_primary_expr(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_array_type(Parser *p, Ast *ast)
+bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -121,7 +121,7 @@ bool parse_array_type(Parser *p, Ast *ast)
             ast->type = AST_ARRAY_TYPE;
 
             Ast size = {.loc = parser_peek(p, 0)->loc};
-            if (parse_expr(p, &size))
+            if (parse_expr(p, &size, false))
             {
                 Location last_loc = parser_peek(p, -1)->loc;
                 size.loc.length = last_loc.buf + last_loc.length - size.loc.buf;
@@ -139,7 +139,7 @@ bool parse_array_type(Parser *p, Ast *ast)
         if (!parser_consume(p, TOKEN_RBRACK)) res = false;
 
         Ast sub = {0};
-        if (parse_expr(p, &sub))
+        if (parse_expr(p, &sub, true))
         {
             ast->array_type.sub =
                 bump_alloc(&p->compiler->bump, sizeof(*ast->array_type.sub));
@@ -153,7 +153,7 @@ bool parse_array_type(Parser *p, Ast *ast)
         break;
     }
     default: {
-        if (!parse_primary_expr(p, ast)) res = false;
+        if (!parse_primary_expr(p, ast, parsing_type)) res = false;
         break;
     }
     }
@@ -161,11 +161,11 @@ bool parse_array_type(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_proc_call(Parser *p, Ast *ast)
+bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_array_type(p, ast)) res = false;
+    if (!parse_array_type(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -205,7 +205,7 @@ bool parse_proc_call(Parser *p, Ast *ast)
                    !parser_is_at_end(p))
             {
                 Ast param = {0};
-                if (parse_expr(p, &param))
+                if (parse_expr(p, &param, parsing_type))
                     array_push(ast->intrinsic_call.params, param);
                 else
                     res = false;
@@ -234,7 +234,7 @@ bool parse_proc_call(Parser *p, Ast *ast)
         while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
         {
             Ast param = {0};
-            if (parse_expr(p, &param))
+            if (parse_expr(p, &param, parsing_type))
                 array_push(ast->proc_call.params, param);
             else
                 res = false;
@@ -251,11 +251,11 @@ bool parse_proc_call(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_subscript(Parser *p, Ast *ast)
+bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_proc_call(p, ast)) res = false;
+    if (!parse_proc_call(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -266,7 +266,7 @@ bool parse_subscript(Parser *p, Ast *ast)
         parser_next(p, 1);
 
         Ast lower = {0};
-        if (!parse_expr(p, &lower)) res = false;
+        if (!parse_expr(p, &lower, parsing_type)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_DOTDOT)
         {
@@ -274,7 +274,7 @@ bool parse_subscript(Parser *p, Ast *ast)
 
             // Subscript slice
             Ast upper = {0};
-            if (!parse_expr(p, &upper)) res = false;
+            if (!parse_expr(p, &upper, parsing_type)) res = false;
 
             if (!parser_consume(p, TOKEN_RBRACK)) res = false;
 
@@ -316,11 +316,11 @@ bool parse_subscript(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_access(Parser *p, Ast *ast)
+bool parse_access(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_subscript(p, ast)) res = false;
+    if (!parse_subscript(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -337,7 +337,7 @@ bool parse_access(Parser *p, Ast *ast)
 
         Ast right = {0};
         right.loc = parser_peek(p, 0)->loc;
-        if (parse_subscript(p, &right))
+        if (parse_subscript(p, &right, parsing_type))
         {
             Location last_loc = parser_peek(p, -1)->loc;
             right.loc.length = last_loc.buf + last_loc.length - right.loc.buf;
@@ -355,7 +355,50 @@ bool parse_access(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_unary_expr(Parser *p, Ast *ast)
+bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
+{
+    bool res = true;
+
+    if (!parse_access(p, ast, parsing_type)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    if (!parsing_type && parser_peek(p, 0)->type == TOKEN_LCURLY)
+    {
+        Ast *type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *type_expr = *ast;
+
+        parser_next(p, 1);
+
+        ast->type = AST_COMPOUND_LIT;
+        memset(&ast->compound, 0, sizeof(ast->compound));
+        ast->compound.type_expr = type_expr;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+
+            Ast value = {0};
+            if (parse_expr(p, &value, parsing_type))
+            {
+                array_push(ast->compound.values, value);
+            }
+            else
+            {
+                res = false;
+            }
+
+            if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
+
+            if (!parser_consume(p, TOKEN_COMMA)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+    }
+
+    return res;
+}
+
+bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
     Token *tok = parser_peek(p, 0);
@@ -377,7 +420,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_unary_expr(p, right)) res = false;
+        if (!parse_unary_expr(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -407,7 +450,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
             Ast type = {0};
-            if (parse_expr(p, &type))
+            if (parse_expr(p, &type, parsing_type))
             {
                 field.field.type_expr =
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
@@ -424,10 +467,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
                 array_push(ast->structure.fields, field);
             }
 
-            if (parser_peek(p, 0)->type == TOKEN_RCURLY)
-            {
-                break;
-            }
+            if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
 
             if (!parser_consume(p, TOKEN_COMMA)) res = false;
         }
@@ -443,7 +483,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
         Ast type = {0};
-        if (parse_expr(p, &type))
+        if (parse_expr(p, &type, parsing_type))
         {
             ast->cast.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             *ast->cast.type_expr = type;
@@ -456,7 +496,7 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         Ast value = {0};
-        if (parse_expr(p, &value))
+        if (parse_expr(p, &value, parsing_type))
         {
             ast->cast.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             *ast->cast.value_expr = value;
@@ -507,7 +547,8 @@ bool parse_unary_expr(Parser *p, Ast *ast)
 
             param.proc_param.type_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, param.proc_param.type_expr)) res = false;
+            if (!parse_expr(p, param.proc_param.type_expr, parsing_type))
+                res = false;
 
             array_push(ast->proc.params, param);
 
@@ -520,12 +561,12 @@ bool parse_unary_expr(Parser *p, Ast *ast)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->proc.return_type)) res = false;
+        if (!parse_expr(p, ast->proc.return_type, parsing_type)) res = false;
 
         break;
     }
     default: {
-        res = parse_access(p, ast);
+        res = parse_compound_literal(p, ast, parsing_type);
         break;
     }
     }
@@ -533,11 +574,11 @@ bool parse_unary_expr(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_multiplication(Parser *p, Ast *ast)
+bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_unary_expr(p, ast)) res = false;
+    if (!parse_unary_expr(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -553,7 +594,7 @@ bool parse_multiplication(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_unary_expr(p, right)) res = false;
+        if (!parse_unary_expr(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -573,11 +614,11 @@ bool parse_multiplication(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_addition(Parser *p, Ast *ast)
+bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_multiplication(p, ast)) res = false;
+    if (!parse_multiplication(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -592,7 +633,7 @@ bool parse_addition(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_multiplication(p, right)) res = false;
+        if (!parse_multiplication(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -611,11 +652,11 @@ bool parse_addition(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_bitshift(Parser *p, Ast *ast)
+bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_addition(p, ast)) res = false;
+    if (!parse_addition(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -630,7 +671,7 @@ bool parse_bitshift(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_addition(p, right)) res = false;
+        if (!parse_addition(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -649,11 +690,11 @@ bool parse_bitshift(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_bitwise(Parser *p, Ast *ast)
+bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_bitshift(p, ast)) res = false;
+    if (!parse_bitshift(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -669,7 +710,7 @@ bool parse_bitwise(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_bitshift(p, right)) res = false;
+        if (!parse_bitshift(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -689,11 +730,11 @@ bool parse_bitwise(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_comparison(Parser *p, Ast *ast)
+bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_bitwise(p, ast)) res = false;
+    if (!parse_bitwise(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -712,7 +753,7 @@ bool parse_comparison(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_bitwise(p, right)) res = false;
+        if (!parse_bitwise(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -735,11 +776,11 @@ bool parse_comparison(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_logical(Parser *p, Ast *ast)
+bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_comparison(p, ast)) res = false;
+    if (!parse_comparison(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -754,7 +795,7 @@ bool parse_logical(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_comparison(p, right)) res = false;
+        if (!parse_comparison(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -773,11 +814,11 @@ bool parse_logical(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_op_assign(Parser *p, Ast *ast)
+bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_logical(p, ast)) res = false;
+    if (!parse_logical(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -800,7 +841,7 @@ bool parse_op_assign(Parser *p, Ast *ast)
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
         right->loc = parser_peek(p, 0)->loc;
-        if (!parse_logical(p, right)) res = false;
+        if (!parse_logical(p, right, parsing_type)) res = false;
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
@@ -828,12 +869,12 @@ bool parse_op_assign(Parser *p, Ast *ast)
     return res;
 }
 
-bool parse_expr(Parser *p, Ast *ast)
+bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     assert(!parser_is_at_end(p));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
-    bool res = parse_op_assign(p, ast);
+    bool res = parse_op_assign(p, ast, parsing_type);
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
     return res;
@@ -909,7 +950,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
             param.proc_param.type_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, param.proc_param.type_expr)) res = false;
+            if (!parse_expr(p, param.proc_param.type_expr, true)) res = false;
 
             array_push(ast->proc.params, param);
 
@@ -921,8 +962,9 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
+        // Parse return type
         ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->proc.return_type)) res = false;
+        if (!parse_expr(p, ast->proc.return_type, true)) res = false;
 
         ast->proc.stmts = NULL;
 
@@ -988,7 +1030,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (!parser_consume(p, TOKEN_COLON)) res = false;
 
         ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->decl.type_expr)) res = false;
+        if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
 
         ast->decl.value_expr = NULL;
         if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
@@ -996,7 +1038,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
             ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.value_expr)) res = false;
+            if (!parse_expr(p, ast->decl.value_expr, false)) res = false;
         }
         else if (kind->type == TOKEN_CONST)
         {
@@ -1021,7 +1063,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             ast->type_def.name = type_name_tok->str;
 
         ast->type_def.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->type_def.type_expr)) res = false;
+        if (!parse_expr(p, ast->type_def.type_expr, true)) res = false;
 
         break;
     }
@@ -1034,7 +1076,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
         {
             ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->expr)) res = false;
+            if (!parse_expr(p, ast->expr, false)) res = false;
         }
 
         break;
@@ -1048,7 +1090,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
         ast->if_stmt.cond_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->if_stmt.cond_expr)) res = false;
+        if (!parse_expr(p, ast->if_stmt.cond_expr, false)) res = false;
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
@@ -1075,7 +1117,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
         ast->while_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->while_stmt.cond)) res = false;
+        if (!parse_expr(p, ast->while_stmt.cond, false)) res = false;
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
@@ -1103,7 +1145,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
         {
             ast->for_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->for_stmt.cond)) res = false;
+            if (!parse_expr(p, ast->for_stmt.cond, false)) res = false;
         }
 
         if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
@@ -1135,7 +1177,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     }
     default: {
         Ast expr = {0};
-        if (!parse_expr(p, &expr)) res = false;
+        if (!parse_expr(p, &expr, false)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
         {
@@ -1149,7 +1191,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
             ast->assign.value_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->assign.value_expr)) res = false;
+            if (!parse_expr(p, ast->assign.value_expr, false)) res = false;
 
             if (!inside_procedure)
             {

@@ -73,24 +73,29 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
             return NULL;
         break;
     }
+
     case TYPE_FLOAT: {
         if (received->floating.num_bits != expected->floating.num_bits)
             return NULL;
         break;
     }
+
     case TYPE_POINTER: {
         if (!exact_types(received->ptr.sub, expected->ptr.sub)) return NULL;
         break;
     }
+
     case TYPE_ARRAY: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         if (received->array.size != expected->array.size) return NULL;
         break;
     }
+
     case TYPE_SLICE: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         break;
     }
+
     case TYPE_STRUCT: {
         if (array_size(received->structure.fields) !=
             array_size(expected->structure.fields))
@@ -108,6 +113,7 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         }
         break;
     }
+
     case TYPE_PROC: {
         if (!exact_types(
                 received->proc.return_type, expected->proc.return_type))
@@ -126,11 +132,12 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
         break;
     }
-    case TYPE_NAMESPACE: break;
-    case TYPE_BOOL: break;
-    case TYPE_VOID: break;
-    case TYPE_TYPE: break;
-    case TYPE_UNINITIALIZED: break;
+
+    case TYPE_NAMESPACE:
+    case TYPE_BOOL:
+    case TYPE_VOID:
+    case TYPE_TYPE:
+    case TYPE_UNINITIALIZED:
     case TYPE_NONE: break;
     }
 

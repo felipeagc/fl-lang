@@ -1,0 +1,18 @@
+import c "core:c";
+
+const const_array: [2]i32 = [2]i32{3, 4};
+
+proc "c" main() i32 {
+    var my_array: [2]i32 = [2]i32{1, 2};
+    for (var i: u64 = 0; i < my_array.len; i += 1) {
+        c.printf(c"my_array[%lu] = %d\n", i, my_array[i]);
+    }
+
+    var my_slice: [_]i32 = my_array[0..my_array.len];
+    for (var i: u64 = 0; i < my_slice.len; i += 1) {
+        c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+    }
+
+    return 0;
+}
+
