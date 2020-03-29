@@ -1888,6 +1888,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (compound_type->kind)
         {
         case TYPE_ARRAY: {
+            if (array_size(ast->compound.values) != compound_type->array.size)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "compound literal has wrong number of values");
+            }
 
             for (Ast *value = ast->compound.values;
                  value !=

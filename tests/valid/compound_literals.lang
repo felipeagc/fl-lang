@@ -1,5 +1,10 @@
 import c "core:c";
 
+typedef Struct struct {
+    a: i32
+};
+
+// const const_struct: Struct;
 const const_array: [2]i32 = [2]i32{3, 4};
 
 proc "c" main() i32 {
@@ -8,9 +13,22 @@ proc "c" main() i32 {
         c.printf(c"my_array[%lu] = %d\n", i, my_array[i]);
     }
 
-    var my_slice: [_]i32 = my_array[..];
-    for (var i: u64 = 0; i < my_slice.len; i += 1) {
-        c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+    for (var i: u64 = 0; i < const_array.len; i += 1) {
+        c.printf(c"const_array[%lu] = %d\n", i, const_array[i]);
+    }
+
+    {
+        var my_slice: [_]i32 = const_array[..];
+        for (var i: u64 = 0; i < my_slice.len; i += 1) {
+            c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+        }
+    }
+
+    {
+        var my_slice: [_]i32 = my_array[..];
+        for (var i: u64 = 0; i < my_slice.len; i += 1) {
+            c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+        }
     }
 
     return 0;

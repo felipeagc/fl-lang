@@ -522,9 +522,9 @@ void llvm_codegen_ast(
             }
 
             assert(llvm_ty);
-            AstValue size_val = {0};
-            size_val.value = LLVMAlignOf(llvm_ty);
-            if (out_value) *out_value = size_val;
+            AstValue align_val = {0};
+            align_val.value = LLVMAlignOf(llvm_ty);
+            if (out_value) *out_value = align_val;
 
             break;
         }
@@ -539,7 +539,39 @@ void llvm_codegen_ast(
     }
 
     case AST_CONST_DECL: {
-        llvm_codegen_ast(l, mod, ast->decl.value_expr, true, &ast->decl.value);
+        TypeInfo *const_type = ast->decl.type_expr->as_type;
+
+        switch (const_type->kind)
+        {
+        case TYPE_SLICE:
+        case TYPE_STRUCT:
+        case TYPE_ARRAY: {
+            LLVMValueRef glob =
+                LLVMAddGlobal(mod->mod, llvm_type(l, const_type), "");
+            LLVMSetLinkage(glob, LLVMInternalLinkage);
+            LLVMSetGlobalConstant(glob, true);
+
+            AstValue init_value = {0};
+
+            llvm_codegen_ast(l, mod, ast->decl.value_expr, true, &init_value);
+
+            assert(!init_value.is_lvalue);
+
+            LLVMSetInitializer(glob, init_value.value);
+
+            ast->decl.value.value = glob;
+            ast->decl.value.is_lvalue = true;
+
+            break;
+        }
+
+        default: {
+            llvm_codegen_ast(
+                l, mod, ast->decl.value_expr, true, &ast->decl.value);
+            break;
+        }
+        }
+
         if (out_value) *out_value = ast->decl.value;
         break;
     }
@@ -850,15 +882,17 @@ void llvm_codegen_ast(
         }
 
         case TYPE_ARRAY: {
+            AstValue subscript_value = {0};
+
             LLVMValueRef indices[2] = {
                 LLVMConstInt(LLVMInt64Type(), 0, false),
                 load_val(mod, &right_value),
             };
 
-            AstValue subscript_value = {0};
             subscript_value.is_lvalue = true;
             subscript_value.value =
                 LLVMBuildGEP(mod->builder, left_value.value, indices, 2, "");
+
             if (out_value) *out_value = subscript_value;
             break;
         }
@@ -1113,7 +1147,7 @@ void llvm_codegen_ast(
                     values[index] = val.value;
                 }
 
-                LLVMConstArray(
+                result_value.value = LLVMConstArray(
                     llvm_type(l, ast->type_info->array.sub),
                     values,
                     array_size(ast->compound.values));

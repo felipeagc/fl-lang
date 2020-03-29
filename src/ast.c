@@ -73,8 +73,8 @@ typedef enum AstType {
 
 typedef struct AstValue
 {
-    bool is_lvalue;
     LLVMValueRef value;
+    bool is_lvalue;
 } AstValue;
 
 enum {

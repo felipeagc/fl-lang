@@ -9,7 +9,7 @@ Thread local variables
 
 Struct literals
 Array literals
-Const without type specified
+Variables/constants without type specifier
 
 Offsetof
 Dynamic arrays
