@@ -921,7 +921,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     if (sym_name.length > 0)
     {
-        if (get_symbol(*array_last(a->scope_stack), sym_name))
+        if (scope_get_local(*array_last(a->scope_stack), sym_name))
         {
             compile_error(
                 a->compiler,

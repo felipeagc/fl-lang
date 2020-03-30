@@ -1,14 +1,14 @@
 extern fn main() i32 {
     puts_fn(c"Hello");
 
-    c.printf(c"other_int: %d\n", other_int);
+    printf(c"other_int: %d\n", other_int);
 
     const other_int = some_int;
 
     return 0;
 }
 
-import c "core:c";
+import "core:c";
 
 const some_int: i32 = 123;
-const puts_fn = c.puts;
+const puts_fn = puts;

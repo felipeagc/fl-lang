@@ -1,4 +1,4 @@
-import c "core:c";
+import "core:c";
 
 typedef Struct struct {
     a: i32,
@@ -11,36 +11,36 @@ const const_array = [2]i32{3, 4};
 extern fn main() i32 {
     var my_array = [2]i32{1, 2};
     for (var i: u64 = 0; i < my_array.len; i += 1) {
-        c.printf(c"my_array[%lu] = %d\n", i, my_array[i]);
+        printf(c"my_array[%lu] = %d\n", i, my_array[i]);
     }
 
     for (var i: u64 = 0; i < const_array.len; i += 1) {
-        c.printf(c"const_array[%lu] = %d\n", i, const_array[i]);
+        printf(c"const_array[%lu] = %d\n", i, const_array[i]);
     }
 
     {
         var my_slice = const_array[..];
         for (var i: u64 = 0; i < my_slice.len; i += 1) {
-            c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+            printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
 
     {
         var my_slice = my_array[..];
         for (var i: u64 = 0; i < my_slice.len; i += 1) {
-            c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+            printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
 
     {
         var my_struct = Struct{1, c"Hello"};
-        c.printf(c"my_struct.a = %d\n", my_struct.a);
-        c.printf(c"my_struct.b = \"%s\"\n", my_struct.b);
+        printf(c"my_struct.a = %d\n", my_struct.a);
+        printf(c"my_struct.b = \"%s\"\n", my_struct.b);
     }
 
     {
-        c.printf(c"const_struct.a = %d\n", const_struct.a);
-        c.printf(c"const_struct.b = \"%s\"\n", const_struct.b);
+        printf(c"const_struct.a = %d\n", const_struct.a);
+        printf(c"const_struct.b = \"%s\"\n", const_struct.b);
     }
 
     return 0;

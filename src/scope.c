@@ -8,6 +8,7 @@ typedef struct Scope
     ScopeType type;
     HashMap *map;
     struct Scope *parent;
+    /*array*/ struct Scope **siblings;
     struct Ast *procedure;
     struct AstValue value;
 } Scope;
@@ -41,6 +42,14 @@ struct Ast *get_symbol(Scope *scope, String name)
 {
     struct Ast *sym = scope_get_local(scope, name);
     if (sym) return sym;
+
+    for (Scope **sibling = scope->siblings;
+         sibling != scope->siblings + array_size(scope->siblings);
+         ++sibling)
+    {
+        sym = get_symbol(*sibling, name);
+        if (sym) return sym;
+    }
 
     if (scope->parent) return get_symbol(scope->parent, name);
 

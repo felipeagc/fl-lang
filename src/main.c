@@ -49,7 +49,8 @@
 
 SourceFile *process_file(Compiler *compiler, String absolute_path);
 
-void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
+void process_imports(
+    Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 {
     switch (ast->type)
     {
@@ -89,7 +90,10 @@ void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
         }
 
         ast->import.abs_path = abs_path;
-        process_file(compiler, abs_path);
+        SourceFile *imported_file = process_file(compiler, abs_path);
+
+        array_push(scope->siblings, imported_file->root->block.scope);
+
         break;
     }
     default: break;
@@ -98,12 +102,13 @@ void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
     // Analyze children ASTs
     switch (ast->type)
     {
+    case AST_BLOCK:
     case AST_ROOT: {
         for (Ast *stmt = ast->block.stmts;
              stmt != ast->block.stmts + array_size(ast->block.stmts);
              ++stmt)
         {
-            process_imports(compiler, file, stmt);
+            process_imports(compiler, file, ast->block.scope, stmt);
         }
         break;
     }
@@ -112,7 +117,7 @@ void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
              stmt != ast->proc.stmts + array_size(ast->proc.stmts);
              ++stmt)
         {
-            process_imports(compiler, file, stmt);
+            process_imports(compiler, file, ast->proc.scope, stmt);
         }
         break;
     }
@@ -142,14 +147,14 @@ SourceFile *process_file(Compiler *compiler, String absolute_path)
     print_errors(compiler);
     file->root = parser->ast;
 
-    process_imports(compiler, file, parser->ast);
-
     Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
     memset(analyzer, 0, sizeof(*analyzer));
     analyzer->compiler = compiler;
 
     create_scopes_ast(analyzer, parser->ast);
     print_errors(compiler);
+
+    process_imports(compiler, file, NULL, parser->ast);
 
     register_symbol_asts(analyzer, parser->ast, 1);
     print_errors(compiler);

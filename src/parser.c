@@ -1061,11 +1061,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         parser_next(p, 1);
         ast->type = AST_IMPORT;
 
-        Token *name_tok = parser_consume(p, TOKEN_IDENT);
-        if (name_tok)
+        if (parser_peek(p, 0)->type == TOKEN_IDENT)
+        {
+            Token *name_tok = parser_next(p, 1);
             ast->import.name = name_tok->str;
-        else
-            res = false;
+        }
 
         Token *path_tok = parser_consume(p, TOKEN_STRING_LIT);
         if (path_tok)

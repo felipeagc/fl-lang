@@ -1,5 +1,5 @@
 import hello "imported.lang";
-import c "core:c";
+import "core:c";
 
 extern fn main() void {
     hello.say_hello();
@@ -12,5 +12,5 @@ extern fn main() void {
     var some_var: hello.SomeType;
     some_var.field = 32;
 
-    c.printf(c"Hello\n");
+    printf(c"Hello\n");
 }

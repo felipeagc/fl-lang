@@ -1,41 +1,41 @@
-import c "core:c";
+import "core:c";
 
 const const1: float = -3 * 5.8 + 9.1;
 const const2: i32 = (123 + 321) * 2;
 const const3: bool = !(-(123 + 321) > 2.2);
 
 extern fn main() i32 {
-    c.printf(c"const1 = %f\n", const1);
-    c.printf(c"const2 = %d\n", const2);
-    c.printf(c"const3 = %hhu\n", const3);
+    printf(c"const1 = %f\n", const1);
+    printf(c"const2 = %d\n", const2);
+    printf(c"const3 = %hhu\n", const3);
 
     var mul1: float = 3.3 * 3;
-    c.printf(c"mul1 = %f\n", mul1);
+    printf(c"mul1 = %f\n", mul1);
 
     var mul2: double = 3.3 * 3;
-    c.printf(c"mul2 = %lf\n", mul2);
+    printf(c"mul2 = %lf\n", mul2);
 
     var sub1: i32 = 5 - 10;
-    c.printf(c"sub1 = %d\n", sub1);
+    printf(c"sub1 = %d\n", sub1);
 
     var sub2: u32 = 5 - 10;
-    c.printf(c"sub2 = %u\n", sub2);
+    printf(c"sub2 = %u\n", sub2);
 
-    c.printf(c"neg = %ld\n", -5);
-    c.printf(c"fneg = %f\n", -5.5 + 3);
+    printf(c"neg = %ld\n", -5);
+    printf(c"fneg = %f\n", -5.5 + 3);
 
     var cmp1: bool = 5 == 5;
-    c.printf(c"cmp1 = %hhu\n", cmp1);
+    printf(c"cmp1 = %hhu\n", cmp1);
 
     var cmp2: bool = 5 != 5;
-    c.printf(c"cmp2 = %hhu\n", cmp2);
+    printf(c"cmp2 = %hhu\n", cmp2);
 
     var cmp3: bool = (4 + 10) > 10.5;
-    c.printf(c"cmp3 = %hhu\n", cmp3);
+    printf(c"cmp3 = %hhu\n", cmp3);
     var not_cmp3: bool = !cmp3;
-    c.printf(c"not_cmp3 = %hhu\n", not_cmp3);
+    printf(c"not_cmp3 = %hhu\n", not_cmp3);
 
-    c.printf(c"cmp4 = %hhu\n", 99.9 > 5);
+    printf(c"cmp4 = %hhu\n", 99.9 > 5);
 
     1 == 1;
     (1 != 1) != (1 == 1);
@@ -45,31 +45,31 @@ extern fn main() i32 {
     var ptr1: *void = null;
     var ptr2: *void = cast(*void) 1;
 
-    c.printf(c"!ptr1 = %hhu\n", !ptr1);
-    c.printf(c"!ptr2 = %hhu\n", !ptr2);
+    printf(c"!ptr1 = %hhu\n", !ptr1);
+    printf(c"!ptr2 = %hhu\n", !ptr2);
 
     ptr1 != ptr2;
     ptr1 == ptr2;
     ptr1 < ptr2;
     ptr1 >= ptr2;
 
-    if (10 % 5 != 0) c.abort();
-    if (10 % 1.5 != 1) c.abort();
+    if (10 % 5 != 0) abort();
+    if (10 % 1.5 != 1) abort();
 
-    if (1 & 2 != 0) c.abort();
+    if (1 & 2 != 0) abort();
 
-    if((1 << 0) != 1) c.abort();
-    if((1 << 1) & 2 != 2) c.abort();
-    if((2 >> 1) != 1) c.abort();
+    if((1 << 0) != 1) abort();
+    if((1 << 1) & 2 != 2) abort();
+    if((2 >> 1) != 1) abort();
 
     {
         var n: i32 = 2;
         n += 2;
-        if (n != 4) c.abort();
+        if (n != 4) abort();
         n <<= 2;
-        if (n != 16) c.abort();
+        if (n != 16) abort();
         n >>= 2;
-        if (n != 4) c.abort();
+        if (n != 4) abort();
     }
 
     return 0;

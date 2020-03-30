@@ -1,4 +1,4 @@
-import c "core:c";
+import "core:c";
 
 typedef Struct2 struct {
     a: i32,
@@ -10,7 +10,7 @@ typedef Struct struct {
 
 
 fn test() *Struct {
-    return c.malloc(@sizeof(Struct));
+    return malloc(@sizeof(Struct));
 }
 
 extern fn main() void {

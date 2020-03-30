@@ -12,11 +12,24 @@ Macros (?)
 Offsetof
 Dynamic arrays
 
-Conditional compilation
-
 Attributes
 
+Import files as byte arrays
+
 Implement sizeof and alignof myself instead of letting LLVM handle it
+
+Essential things for writing applications:
+- static/extern variables
+- conditional compilation
+- extern blocks
+- linker cli options
+- binding generator
+
+Standard library:
+- utf-8 string module
+- threads module
+- os module
+- fs module
 
 Bugs:
 - I think struct fields don't have location information
