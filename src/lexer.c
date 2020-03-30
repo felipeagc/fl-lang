@@ -513,6 +513,10 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("true", TOKEN_TRUE);
             LEX_MATCH_STR("false", TOKEN_FALSE);
 
+            LEX_MATCH_STR("byte", TOKEN_U8);
+            LEX_MATCH_STR("int", TOKEN_INT);
+            LEX_MATCH_STR("uint", TOKEN_UINT);
+
             LEX_MATCH_STR("var", TOKEN_VAR);
             LEX_MATCH_STR("const", TOKEN_CONST);
             LEX_MATCH_STR("fn", TOKEN_FN);

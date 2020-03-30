@@ -1,6 +1,6 @@
 typedef c_int i32;
 typedef c_char char;
-typedef c_size u64;
+typedef c_size uint;
 
 extern fn printf(fmt: *c_char, ...) c_int;
 extern fn puts(str: *c_char) c_int;

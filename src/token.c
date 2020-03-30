@@ -101,6 +101,9 @@ typedef enum TokenType {
     TOKEN_BOOL,
     TOKEN_FALSE,
     TOKEN_TRUE,
+
+    TOKEN_INT,
+    TOKEN_UINT,
 } TokenType;
 
 static const char *token_strings[] = {
@@ -206,6 +209,9 @@ static const char *token_strings[] = {
     [TOKEN_BOOL] = "bool",
     [TOKEN_FALSE] = "false",
     [TOKEN_TRUE] = "true",
+
+    [TOKEN_INT] = "int",
+    [TOKEN_UINT] = "uint",
 };
 
 typedef struct Token

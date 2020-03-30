@@ -72,6 +72,8 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     case TOKEN_I16:
     case TOKEN_I32:
     case TOKEN_I64:
+    case TOKEN_UINT:
+    case TOKEN_INT:
     case TOKEN_FLOAT:
     case TOKEN_CHAR:
     case TOKEN_DOUBLE:

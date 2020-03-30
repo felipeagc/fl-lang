@@ -1,0 +1,7 @@
+import c "core:c";
+
+extern fn main() i32 {
+    if (@sizeof(int) != @sizeof(*void)) c.abort();
+
+    return 0;
+}

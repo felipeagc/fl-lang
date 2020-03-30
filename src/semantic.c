@@ -277,94 +277,34 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
     case AST_PRIMARY: {
         switch (ast->primary.tok->type)
         {
-        case TOKEN_U8: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = false, .num_bits = 8}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_U8: ast->as_type = &U8_TYPE; break;
 
-        case TOKEN_U16: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = false, .num_bits = 16}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_U16: ast->as_type = &U16_TYPE; break;
 
-        case TOKEN_U32: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = false, .num_bits = 32}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_U32: ast->as_type = &U32_TYPE; break;
 
-        case TOKEN_U64: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = false, .num_bits = 64}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_U64: ast->as_type = &U64_TYPE; break;
 
         case TOKEN_CHAR:
-        case TOKEN_I8: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = true, .num_bits = 8}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_I8: ast->as_type = &I8_TYPE; break;
 
-        case TOKEN_I16: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = true, .num_bits = 16}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_I16: ast->as_type = &I16_TYPE; break;
 
-        case TOKEN_I32: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = true, .num_bits = 32}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_I32: ast->as_type = &I32_TYPE; break;
 
-        case TOKEN_I64: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .integer = {.is_signed = true, .num_bits = 64}};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_I64: ast->as_type = &I64_TYPE; break;
 
-        case TOKEN_FLOAT: {
-            static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_INT: ast->as_type = &INT_TYPE; break;
 
-        case TOKEN_DOUBLE: {
-            static TypeInfo ty = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_UINT: ast->as_type = &UINT_TYPE; break;
 
-        case TOKEN_BOOL: {
-            static TypeInfo ty = {.kind = TYPE_BOOL};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_FLOAT: ast->as_type = &FLOAT_TYPE; break;
 
-        case TOKEN_VOID: {
-            static TypeInfo ty = {.kind = TYPE_VOID};
-            ast->as_type = &ty;
-            break;
-        }
+        case TOKEN_DOUBLE: ast->as_type = &DOUBLE_TYPE; break;
+
+        case TOKEN_BOOL: ast->as_type = &BOOL_TYPE; break;
+
+        case TOKEN_VOID: ast->as_type = &VOID_TYPE; break;
 
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str);
@@ -1029,16 +969,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_TYPEDEF: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->type_def.type_expr, &ty_ty);
+        analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
         break;
     }
 
     case AST_CONST_DECL: {
         if (ast->decl.type_expr)
         {
-            static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-            analyze_ast(a, ast->decl.type_expr, &ty_ty);
+            analyze_ast(a, ast->decl.type_expr, &TYPE_OF_TYPE);
 
             if (!ast->decl.type_expr->as_type)
             {
@@ -1084,8 +1022,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_VAR_DECL: {
         if (ast->decl.type_expr)
         {
-            static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-            analyze_ast(a, ast->decl.type_expr, &ty_ty);
+            analyze_ast(a, ast->decl.type_expr, &TYPE_OF_TYPE);
 
             if (!ast->decl.type_expr->as_type)
             {
@@ -1110,7 +1047,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     compile_error(
                         a->compiler,
                         ast->loc,
-                        "could not infer type for constant declaration");
+                        "could not infer type for variable declaration");
                     break;
                 }
                 ast->type_info = ast->decl.value_expr->type_info;
@@ -1120,8 +1057,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_PARAM: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->proc_param.type_expr, &ty_ty);
+        analyze_ast(a, ast->proc_param.type_expr, &TYPE_OF_TYPE);
         if (ast->proc_param.value_expr)
         {
             analyze_ast(
@@ -1133,8 +1069,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_STRUCT_FIELD: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->field.type_expr, &ty_ty);
+        analyze_ast(a, ast->field.type_expr, &TYPE_OF_TYPE);
         if (ast->field.value_expr)
         {
             analyze_ast(
@@ -1190,8 +1125,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             array_push(ty->proc.params, *param->decl.type_expr->as_type);
         }
 
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->proc.return_type, &ty_ty);
+        analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
         if (ast->proc.return_type->as_type)
         {
             ty->proc.return_type = ast->proc.return_type->as_type;
@@ -1355,20 +1289,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TOKEN_I16:
         case TOKEN_I32:
         case TOKEN_I64:
+        case TOKEN_INT:
+        case TOKEN_UINT:
         case TOKEN_CHAR:
         case TOKEN_FLOAT:
         case TOKEN_DOUBLE:
         case TOKEN_BOOL:
         case TOKEN_VOID: {
-            static TypeInfo ty = {.kind = TYPE_TYPE};
-            ast->type_info = &ty;
+            ast->type_info = &TYPE_OF_TYPE;
             break;
         }
 
         case TOKEN_NULL: {
-            static TypeInfo void_ty = {.kind = TYPE_VOID};
             static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
-                                           .ptr.sub = &void_ty};
+                                           .ptr.sub = &VOID_TYPE};
             ast->type_info = &void_ptr_ty;
 
             if (expected_type)
@@ -1388,17 +1322,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TOKEN_TRUE:
         case TOKEN_FALSE: {
-            static TypeInfo ty = {.kind = TYPE_BOOL};
-            ast->type_info = &ty;
+            ast->type_info = &BOOL_TYPE;
             break;
         }
 
         case TOKEN_INT_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_INT,
-                .can_change = true,
-                .integer = {.is_signed = true, .num_bits = 64}};
-            ast->type_info = &ty;
+            ast->type_info = &INT_LIT_TYPE;
 
             if (expected_type)
             {
@@ -1417,12 +1346,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_FLOAT_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_FLOAT,
-                .floating.num_bits = 64,
-                .can_change = true,
-            };
-            ast->type_info = &ty;
+            ast->type_info = &FLOAT_LIT_TYPE;
 
             if (expected_type)
             {
@@ -1440,26 +1364,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_CSTRING_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
             static TypeInfo ty = {
                 .kind = TYPE_POINTER,
-                .ptr.sub = &i8_ty,
+                .ptr.sub = &I8_TYPE,
             };
             ast->type_info = &ty;
             break;
         }
 
         case TOKEN_CHAR_LIT: {
-            static TypeInfo i8_ty = {
-                .kind = TYPE_INT,
-                .integer.is_signed = true,
-                .integer.num_bits = 8,
-            };
-            ast->type_info = &i8_ty;
+            ast->type_info = &I8_TYPE;
             break;
         }
 
@@ -1507,14 +1421,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             case AST_IMPORT: {
-                static TypeInfo namespace_ty = {.kind = TYPE_NAMESPACE};
-                ast->type_info = &namespace_ty;
+                ast->type_info = &NAMESPACE_TYPE;
                 break;
             }
 
             case AST_TYPEDEF: {
-                static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-                ast->type_info = &ty_ty;
+                ast->type_info = &TYPE_OF_TYPE;
                 break;
             }
 
@@ -1674,8 +1586,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
@@ -1683,16 +1593,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, param, NULL);
         }
 
-        analyze_ast(a, ast->proc.return_type, &ty_ty);
+        analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
 
-        ast->type_info = &ty_ty;
+        ast->type_info = &TYPE_OF_TYPE;
 
         break;
     }
 
     case AST_CAST: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->cast.type_expr, &ty_ty);
+        analyze_ast(a, ast->cast.type_expr, &TYPE_OF_TYPE);
         analyze_ast(a, ast->cast.value_expr, NULL);
 
         TypeInfo *dest_ty = ast->cast.type_expr->as_type;
@@ -1814,8 +1723,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
+            ast->type_info = &BOOL_TYPE;
             break;
         }
         }
@@ -1962,8 +1870,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
+            ast->type_info = &BOOL_TYPE;
 
             break;
         }
@@ -2003,8 +1910,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            static TypeInfo bool_ty = {.kind = TYPE_BOOL};
-            ast->type_info = &bool_ty;
+            ast->type_info = &BOOL_TYPE;
 
             break;
         }
@@ -2014,8 +1920,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_COMPOUND_LIT: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        analyze_ast(a, ast->compound.type_expr, &ty_ty);
+        analyze_ast(a, ast->compound.type_expr, &TYPE_OF_TYPE);
 
         if (!ast->compound.type_expr->as_type)
         {
@@ -2208,10 +2113,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_ARRAY_TYPE: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        ast->type_info = &ty_ty;
+        ast->type_info = &TYPE_OF_TYPE;
 
-        analyze_ast(a, ast->array_type.sub, &ty_ty);
+        analyze_ast(a, ast->array_type.sub, &TYPE_OF_TYPE);
         analyze_ast(a, ast->array_type.size, NULL);
 
         if (ast->array_type.size->type_info->kind != TYPE_INT)
@@ -2225,17 +2129,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_SLICE_TYPE: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        ast->type_info = &ty_ty;
+        ast->type_info = &TYPE_OF_TYPE;
 
-        analyze_ast(a, ast->array_type.sub, &ty_ty);
+        analyze_ast(a, ast->array_type.sub, &TYPE_OF_TYPE);
 
         break;
     }
 
     case AST_STRUCT: {
-        static TypeInfo ty_ty = {.kind = TYPE_TYPE};
-        ast->type_info = &ty_ty;
+        ast->type_info = &TYPE_OF_TYPE;
 
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);

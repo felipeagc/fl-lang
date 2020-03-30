@@ -54,11 +54,65 @@ typedef struct TypeInfo
     };
 } TypeInfo;
 
+// Unsigned int types
+static TypeInfo U8_TYPE = {.kind = TYPE_INT,
+                           .integer = {.is_signed = false, .num_bits = 8}};
+
+static TypeInfo U16_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = false, .num_bits = 16}};
+
+static TypeInfo U32_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = false, .num_bits = 32}};
+
+static TypeInfo U64_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = false, .num_bits = 64}};
+
+// Signed int types
+static TypeInfo I8_TYPE = {.kind = TYPE_INT,
+                           .integer = {.is_signed = true, .num_bits = 8}};
+
+static TypeInfo I16_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = true, .num_bits = 16}};
+
+static TypeInfo I32_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = true, .num_bits = 32}};
+
+static TypeInfo I64_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = true, .num_bits = 64}};
+
+// Architecture int types
+static TypeInfo INT_TYPE = {.kind = TYPE_INT,
+                            .integer = {.is_signed = true, .num_bits = 64}};
+
+static TypeInfo UINT_TYPE = {.kind = TYPE_INT,
+                             .integer = {.is_signed = false, .num_bits = 64}};
+
+// Numeric literal types
+static TypeInfo INT_LIT_TYPE = {.kind = TYPE_INT,
+                                .can_change = true,
+                                .integer = {.is_signed = true, .num_bits = 64}};
+
+static TypeInfo FLOAT_LIT_TYPE = {
+    .kind = TYPE_FLOAT, .can_change = true, .floating.num_bits = 64};
+
+// Other types
+static TypeInfo BOOL_TYPE = {.kind = TYPE_BOOL};
+
+static TypeInfo FLOAT_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
+
+static TypeInfo DOUBLE_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
+
+static TypeInfo VOID_TYPE = {.kind = TYPE_VOID};
+
 static TypeInfo SIZE_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 64}};
 
 static TypeInfo BOOL_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
+
+static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
+
+static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
 
 TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
