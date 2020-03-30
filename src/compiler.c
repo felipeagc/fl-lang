@@ -1,25 +1,3 @@
-typedef struct SourceFile
-{
-    String path;
-    String content;
-    struct Ast *root;
-} SourceFile;
-
-typedef struct Location
-{
-    SourceFile *file;
-    char *buf;
-    uint32_t length;
-    uint32_t line;
-    uint32_t col;
-} Location;
-
-typedef struct Error
-{
-    Location loc;
-    String message;
-} Error;
-
 typedef struct Compiler
 {
     BumpAlloc bump;
@@ -31,7 +9,7 @@ typedef struct Compiler
     String corelib_dir;
 } Compiler;
 
-void compiler_init(Compiler *compiler)
+static void compiler_init(Compiler *compiler)
 {
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
@@ -45,13 +23,14 @@ void compiler_init(Compiler *compiler)
         bump_str_join(&compiler->bump, compiler->compiler_dir, STR("core/"));
 }
 
-void compiler_destroy(Compiler *compiler)
+static void compiler_destroy(Compiler *compiler)
 {
     hash_destroy(&compiler->files);
     bump_destroy(&compiler->bump);
 }
 
-void compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
+static void
+compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
 {
     char buf[2048];
     assert(loc.file);
@@ -68,7 +47,7 @@ void compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
     array_push(compiler->errors, err);
 }
 
-void source_file_init(SourceFile *file, Compiler *compiler, String path)
+static void source_file_init(SourceFile *file, Compiler *compiler, String path)
 {
     memset(file, 0, sizeof(*file));
 
@@ -93,7 +72,7 @@ void source_file_init(SourceFile *file, Compiler *compiler, String path)
     fclose(f);
 }
 
-void print_errors(Compiler *compiler)
+static void print_errors(Compiler *compiler)
 {
     if (array_size(compiler->errors) > 0)
     {

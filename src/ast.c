@@ -39,6 +39,7 @@ typedef enum AstType {
     AST_UNINITIALIZED,
     AST_ROOT,
     AST_STRUCT,
+    AST_ENUM,
     AST_PROC_DECL,
     AST_PROC_TYPE,
     AST_IMPORT,
@@ -61,6 +62,7 @@ typedef enum AstType {
     AST_EXPR_STMT,
     AST_ACCESS,
     AST_STRUCT_FIELD,
+    AST_ENUM_FIELD,
     AST_PROC_PARAM,
     AST_CAST,
     AST_IF,
@@ -88,8 +90,8 @@ typedef struct Ast
 {
     AstType type;
     Location loc;
-    TypeInfo *type_info;
-    TypeInfo *as_type;
+    struct TypeInfo *type_info;
+    struct TypeInfo *as_type;
     struct Scope *sym_scope;
     struct Ast *alias_to;
 
@@ -149,6 +151,12 @@ typedef struct Ast
         } structure;
         struct
         {
+            struct Scope *scope;
+            struct Ast *type_expr;
+            /*array*/ struct Ast *fields;
+        } enumeration;
+        struct
+        {
             struct Ast *expr;
             /*array*/ struct Ast *params;
         } proc_call;
@@ -192,7 +200,14 @@ typedef struct Ast
             String name;
             struct Ast *type_expr;
             struct Ast *value_expr;
-        } field;
+        } struct_field;
+        struct
+        {
+            struct Ast* enumeration;
+            struct Ast *value_expr;
+            size_t index;
+            String name;
+        } enum_field;
         struct
         {
             struct Ast *assigned_expr;

@@ -463,32 +463,94 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
             Ast field = {0};
+            field.loc = parser_peek(p, 0)->loc;
             field.type = AST_STRUCT_FIELD;
 
             Token *name_tok = parser_consume(p, TOKEN_IDENT);
             if (!name_tok)
                 res = false;
             else
-                field.field.name = name_tok->str;
+                field.struct_field.name = name_tok->str;
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
             Ast type = {0};
-            if (parse_expr(p, &type, parsing_type))
+            if (parse_expr(p, &type, true))
             {
-                field.field.type_expr =
+                field.struct_field.type_expr =
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
-                *field.field.type_expr = type;
+                *field.struct_field.type_expr = type;
             }
             else
             {
                 res = false;
             }
 
+            Location last_loc = parser_peek(p, -1)->loc;
+            field.loc.length = last_loc.buf + last_loc.length - field.loc.buf;
+
             if (res)
             {
-                field.field.index = array_size(ast->structure.fields);
+                field.struct_field.index = array_size(ast->structure.fields);
                 array_push(ast->structure.fields, field);
+            }
+
+            if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
+
+            if (!parser_consume(p, TOKEN_COMMA)) res = false;
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
+    case TOKEN_ENUM: {
+        ast->type = AST_ENUM;
+        parser_next(p, 1);
+
+        ast->enumeration.type_expr =
+            bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->enumeration.type_expr, true)) res = false;
+
+        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+        ast->enumeration.fields = NULL;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+            Ast field = {0};
+            field.loc = parser_peek(p, 0)->loc;
+            field.type = AST_ENUM_FIELD;
+            field.enum_field.enumeration = ast;
+
+            Token *name_tok = parser_consume(p, TOKEN_IDENT);
+            if (!name_tok)
+                res = false;
+            else
+                field.enum_field.name = name_tok->str;
+
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            Ast type = {0};
+            if (parse_expr(p, &type, false))
+            {
+                field.enum_field.value_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                *field.enum_field.value_expr = type;
+            }
+            else
+            {
+                res = false;
+            }
+
+            Location last_loc = parser_peek(p, -1)->loc;
+            field.loc.length = last_loc.buf + last_loc.length - field.loc.buf;
+
+            if (res)
+            {
+                field.enum_field.index = array_size(ast->enumeration.fields);
+                array_push(ast->enumeration.fields, field);
             }
 
             if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;

@@ -4,6 +4,7 @@ typedef enum TypeKind {
     TYPE_TYPE,
     TYPE_PROC,
     TYPE_STRUCT,
+    TYPE_ENUM,
     TYPE_POINTER,
     TYPE_ARRAY,
     TYPE_SLICE,
@@ -56,6 +57,11 @@ typedef struct TypeInfo
             /*array*/ struct TypeInfo **fields;
             struct Scope *scope;
         } structure;
+        struct
+        {
+            struct TypeInfo *underlying_type;
+            struct Scope *scope;
+        } enumeration;
     };
 } TypeInfo;
 
@@ -157,6 +163,11 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 
     case TYPE_SLICE: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
+        break;
+    }
+
+    case TYPE_ENUM: {
+        if (received != expected) return NULL;
         break;
     }
 

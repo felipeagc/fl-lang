@@ -88,6 +88,11 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_ENUM: {
+        type->ref = llvm_type(l, type->enumeration.underlying_type);
+        break;
+    }
+
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_NONE:
@@ -436,6 +441,11 @@ void llvm_codegen_ast(
 
             case AST_STRUCT_FIELD: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
+                break;
+            }
+
+            case AST_ENUM_FIELD: {
+                llvm_codegen_ast(l, mod, sym, true, out_value);
                 break;
             }
 
@@ -1244,7 +1254,7 @@ void llvm_codegen_ast(
 
         LLVMValueRef indices[2] = {
             LLVMConstInt(LLVMInt32Type(), 0, false),
-            LLVMConstInt(LLVMInt32Type(), ast->field.index, false),
+            LLVMConstInt(LLVMInt32Type(), ast->struct_field.index, false),
         };
 
         AstValue field_value = {0};
@@ -1252,6 +1262,15 @@ void llvm_codegen_ast(
         field_value.value =
             LLVMBuildGEP(mod->builder, struct_val.value, indices, 2, "");
         if (out_value) *out_value = field_value;
+
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        AstValue field_val = {0};
+        llvm_codegen_ast(l, mod, ast->enum_field.value_expr, true, &field_val);
+
+        if (out_value) *out_value = field_val;
 
         break;
     }

@@ -34,6 +34,7 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
             {
                 switch (sym->type)
                 {
+                case AST_ENUM_FIELD:
                 case AST_PROC_DECL:
                 case AST_CONST_DECL: {
                     res = true;
@@ -421,11 +422,12 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            if (!ast_as_type(compiler, scope, field->field.type_expr, false))
+            if (!ast_as_type(
+                    compiler, scope, field->struct_field.type_expr, false))
             {
                 res = false;
             }
-            array_push(fields, field->field.type_expr->as_type);
+            array_push(fields, field->struct_field.type_expr->as_type);
         }
 
         if (res)
@@ -437,6 +439,23 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             ty->structure.scope = ast->structure.scope;
             ast->as_type = ty;
         }
+        break;
+    }
+
+    case AST_ENUM: {
+        TypeInfo *underlying_type =
+            ast_as_type(compiler, scope, ast->enumeration.type_expr, false);
+
+        if (underlying_type)
+        {
+            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_ENUM;
+            ty->enumeration.scope = ast->enumeration.scope;
+            ty->enumeration.underlying_type = underlying_type;
+            ast->as_type = ty;
+        }
+
         break;
     }
 
@@ -585,15 +604,39 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 
         if (!ast->type_info) return NULL;
 
-        if (ast->type_info->kind == TYPE_STRUCT)
+        switch (ast->type_info->kind)
         {
-            accessed_scope = ast->type_info->structure.scope;
+        case TYPE_TYPE: {
+            if (ast->as_type)
+            {
+                if (ast->as_type->kind == TYPE_ENUM)
+                {
+                    accessed_scope = ast->as_type->enumeration.scope;
+                }
+            }
+
+            break;
         }
-        else if (
-            ast->type_info->kind == TYPE_POINTER &&
-            ast->type_info->ptr.sub->kind == TYPE_STRUCT)
-        {
-            accessed_scope = ast->type_info->ptr.sub->structure.scope;
+
+        case TYPE_ENUM: {
+            accessed_scope = ast->type_info->enumeration.scope;
+            break;
+        }
+
+        case TYPE_STRUCT: {
+            accessed_scope = ast->type_info->structure.scope;
+            break;
+        }
+
+        case TYPE_POINTER: {
+            if (ast->type_info->ptr.sub->kind == TYPE_STRUCT)
+            {
+                accessed_scope = ast->type_info->ptr.sub->structure.scope;
+            }
+            break;
+        }
+
+        default: break;
         }
     }
 
@@ -763,7 +806,16 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_STRUCT_FIELD: {
-        create_scopes_ast(a, ast->field.type_expr);
+        create_scopes_ast(a, ast->struct_field.type_expr);
+        if (ast->struct_field.value_expr)
+        {
+            create_scopes_ast(a, ast->struct_field.value_expr);
+        }
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        create_scopes_ast(a, ast->enum_field.value_expr);
         break;
     }
 
@@ -782,13 +834,46 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            scope_set(ast->structure.scope, field->field.name, field);
+            scope_set(ast->structure.scope, field->struct_field.name, field);
         }
 
         array_push(a->scope_stack, ast->structure.scope);
         array_push(a->operand_scope_stack, ast->structure.scope);
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);
+             ++field)
+        {
+            create_scopes_ast(a, field);
+        }
+        array_pop(a->operand_scope_stack);
+        array_pop(a->scope_stack);
+        break;
+    }
+
+    case AST_ENUM: {
+        assert(!ast->enumeration.scope);
+        ast->enumeration.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->enumeration.scope, 0, sizeof(*ast->enumeration.scope));
+        scope_init(
+            ast->enumeration.scope,
+            a->compiler,
+            SCOPE_DEFAULT,
+            array_size(ast->enumeration.fields),
+            ast);
+
+        for (Ast *field = ast->enumeration.fields;
+             field !=
+             ast->enumeration.fields + array_size(ast->enumeration.fields);
+             ++field)
+        {
+            scope_set(ast->enumeration.scope, field->enum_field.name, field);
+        }
+
+        array_push(a->scope_stack, ast->structure.scope);
+        array_push(a->operand_scope_stack, ast->structure.scope);
+        for (Ast *field = ast->enumeration.fields;
+             field !=
+             ast->enumeration.fields + array_size(ast->enumeration.fields);
              ++field)
         {
             create_scopes_ast(a, field);
@@ -860,7 +945,12 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_STRUCT_FIELD: {
-        sym_name = ast->field.name;
+        sym_name = ast->struct_field.name;
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        sym_name = ast->enum_field.name;
         break;
     }
 
@@ -1093,12 +1183,44 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_STRUCT_FIELD: {
-        analyze_ast(a, ast->field.type_expr, &TYPE_OF_TYPE);
-        if (ast->field.value_expr)
+        analyze_ast(a, ast->struct_field.type_expr, &TYPE_OF_TYPE);
+        if (ast->struct_field.value_expr)
         {
             analyze_ast(
-                a, ast->field.value_expr, ast->field.type_expr->as_type);
+                a,
+                ast->struct_field.value_expr,
+                ast->struct_field.type_expr->as_type);
         }
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        TypeInfo *enum_type = ast->enum_field.enumeration->as_type;
+        if (!enum_type)
+        {
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
+        if (!is_expr_const(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->enum_field.value_expr))
+        {
+            compile_error(
+                a->compiler,
+                ast->enum_field.value_expr->loc,
+                "expression is not constant");
+            break;
+        }
+
+        assert(enum_type->kind == TYPE_ENUM);
+        assert(enum_type->enumeration.underlying_type);
+
+        analyze_ast(
+            a,
+            ast->enum_field.value_expr,
+            enum_type->enumeration.underlying_type);
         break;
     }
 
@@ -1435,19 +1557,29 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             case AST_PROC_PARAM: {
-                ast_as_type(
+                ast->type_info = ast_as_type(
                     a->compiler,
                     sym->sym_scope,
                     sym->proc_param.type_expr,
                     false);
-                ast->type_info = sym->proc_param.type_expr->as_type;
                 break;
             }
 
             case AST_STRUCT_FIELD: {
-                ast_as_type(
-                    a->compiler, sym->sym_scope, sym->field.type_expr, false);
-                ast->type_info = sym->field.type_expr->as_type;
+                ast->type_info = ast_as_type(
+                    a->compiler,
+                    sym->sym_scope,
+                    sym->struct_field.type_expr,
+                    false);
+                break;
+            }
+
+            case AST_ENUM_FIELD: {
+                ast->type_info = ast_as_type(
+                    a->compiler,
+                    sym->sym_scope,
+                    sym->enum_field.enumeration->enumeration.type_expr,
+                    false);
                 break;
             }
 
@@ -2191,12 +2323,32 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_ENUM: {
+        ast->type_info = &TYPE_OF_TYPE;
+
+        analyze_ast(a, ast->enumeration.type_expr, &TYPE_OF_TYPE);
+
+        array_push(a->scope_stack, ast->enumeration.scope);
+        for (Ast *field = ast->enumeration.fields;
+             field !=
+             ast->enumeration.fields + array_size(ast->enumeration.fields);
+             ++field)
+        {
+            analyze_ast(a, field, NULL);
+        }
+        array_pop(a->scope_stack);
+        break;
+    }
+
     case AST_ACCESS: {
         analyze_ast(a, ast->access.left, NULL);
 
         if (!ast->access.left->type_info)
         {
-            compile_error(a->compiler, ast->loc, "invalid access");
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "invalid access: could not resolve type of left expression");
             break;
         }
 
@@ -2243,7 +2395,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        compile_error(a->compiler, ast->loc, "invalid access");
+        compile_error(
+            a->compiler,
+            ast->loc,
+            "invalid access: could not get scope for left expression");
 
         break;
     }

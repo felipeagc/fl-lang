@@ -1,0 +1,19 @@
+import "core:c";
+
+typedef OsType enum i32 {
+    linux = 2,
+    windows = linux,
+};
+
+extern fn main() i32 {
+    var os_type = OsType.linux;
+    var os_type2 = OsType.windows;
+
+    if (os_type != os_type2) abort();
+
+    if (os_type == OsType.linux) {
+        printf(c"Hello\n");
+    }
+
+    return 0;
+}

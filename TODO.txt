@@ -2,7 +2,6 @@ Default struct member initialization
 Ternary
 Defer statement
 Using statement
-Enums
 Unions
 Thread local variables
 

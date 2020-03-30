@@ -34,13 +34,14 @@
 #include "hashmap.c"
 #include "bump_alloc.c"
 
+#include "location.c"
+#include "token.c"
+#include "ast.c"
 #include "compiler.c"
 
-#include "token.c"
 #include "printing.c"
 #include "lexer.c"
 #include "type.c"
-#include "ast.c"
 #include "scope.c"
 
 #include "parser.c"
