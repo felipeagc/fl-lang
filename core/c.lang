@@ -2,17 +2,17 @@ typedef c_int i32;
 typedef c_char char;
 typedef c_size u64;
 
-proc "c" printf(fmt: *c_char, ...) c_int;
-proc "c" puts(str: *c_char) c_int;
+extern fn printf(fmt: *c_char, ...) c_int;
+extern fn puts(str: *c_char) c_int;
 
-proc "c" exit(code: c_int) void;
-proc "c" abort() void;
+extern fn exit(code: c_int) void;
+extern fn abort() void;
 
-proc "c" malloc(size: c_size) *void;
-proc "c" realloc(ptr: *void, size: c_size) *void;
-proc "c" free(ptr: *void) void;
+extern fn malloc(size: c_size) *void;
+extern fn realloc(ptr: *void, size: c_size) *void;
+extern fn free(ptr: *void) void;
 
-proc "c" strlen(string: *c_char) c_size;
-proc "c" strdup(string: *c_char) *c_char;
-proc "c" strcmp(a: *c_char, b: *c_char) c_int;
-proc "c" strncmp(a: *c_char, b: *c_char, n: c_size) c_int;
+extern fn strlen(string: *c_char) c_size;
+extern fn strdup(string: *c_char) *c_char;
+extern fn strcmp(a: *c_char, b: *c_char) c_int;
+extern fn strncmp(a: *c_char, b: *c_char, n: c_size) c_int;

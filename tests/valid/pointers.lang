@@ -1,10 +1,10 @@
-proc "c" printf(fmt: *char, ...) void;
+extern fn printf(fmt: *char, ...) void;
 
-proc some_func(a: *void) void {
+fn some_func(a: *void) void {
     printf(c"Ptr: %p\n", a);
 }
 
-proc "c" main() void {
+extern fn main() void {
     var my_int: i32 = 123;
     var ptr: *i32 = &my_int;
     var ptr2: *i64 = &123;

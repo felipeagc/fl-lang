@@ -1,5 +1,5 @@
 var hello: i32 = 32;
 
-proc "c" main() void {
+extern fn main() void {
     const a: i32 = hello;
 }

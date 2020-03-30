@@ -1,3 +1,5 @@
+import c "core:c";
+
 typedef MyStruct struct {
     a: i32,
 };
@@ -11,64 +13,60 @@ typedef NestedStruct struct {
     },
 };
 
-proc "c" malloc(size: u64) *void;
-proc "c" free(ptr: *void) void;
-proc "c" printf(fmt: *char, ...) void;
-
-proc print_nested(n: *NestedStruct) void {
-    printf(c"n = %p\n", n);
-    printf(c"n.name = %s\n", n.name);
-    printf(c"n.name[0] = %c\n", n.name[0]);
-    printf(c"*n.name = %c\n", *n.name);
-    printf(c"n.sub.a = %d\n", n.sub.a);
-    printf(c"n.sub.b = %d\n", n.sub.b);
-    printf(c"(*n).sub.b = %d\n", (*n).sub.b);
-    printf(c"(*n).(sub).b = %d\n", (*n).(sub).b);
-    printf(c"n.sub.s[4].a = %d\n", n.sub.s[4].a);
+fn print_nested(n: *NestedStruct) void {
+    c.printf(c"n = %p\n", n);
+    c.printf(c"n.name = %s\n", n.name);
+    c.printf(c"n.name[0] = %c\n", n.name[0]);
+    c.printf(c"*n.name = %c\n", *n.name);
+    c.printf(c"n.sub.a = %d\n", n.sub.a);
+    c.printf(c"n.sub.b = %d\n", n.sub.b);
+    c.printf(c"(*n).sub.b = %d\n", (*n).sub.b);
+    c.printf(c"(*n).(sub).b = %d\n", (*n).(sub).b);
+    c.printf(c"n.sub.s[4].a = %d\n", n.sub.s[4].a);
 }
 
-proc "c" main() i32 {
+extern fn main() i32 {
     var a_struct: MyStruct;
     a_struct.a = 32;
     var b_struct: *MyStruct = &a_struct;
 
-    printf(c"a_struct.a = %d\n", a_struct.a);
-    printf(c"b_struct.a = %d\n", b_struct.a);
+    c.printf(c"a_struct.a = %d\n", a_struct.a);
+    c.printf(c"b_struct.a = %d\n", b_struct.a);
 
     var anon: struct { c: i32 };
     anon.c = 321;
-    printf(c"anon.c = %d\n", anon.c);
+    c.printf(c"anon.c = %d\n", anon.c);
 
     var nested: NestedStruct;
     nested.name = c"yo";
     nested.sub.a = 123;
     nested.sub.b = 321;
     nested.sub.s[4].a = 3;
-    printf(c"&nested = %p\n", &nested);
-    printf(c"nested.name = %s\n", nested.name);
+    c.printf(c"&nested = %p\n", &nested);
+    c.printf(c"nested.name = %s\n", nested.name);
     print_nested(&nested);
 
-    printf(c"@sizeof(NestedStruct) = %lu\n", @sizeof(NestedStruct));
-    printf(c"@sizeof(nested) = %lu\n", @sizeof(nested));
-    printf(c"@alignof(NestedStruct) = %lu\n", @alignof(NestedStruct));
-    printf(c"@alignof(nested) = %lu\n", @alignof(nested));
+    c.printf(c"@sizeof(NestedStruct) = %lu\n", @sizeof(NestedStruct));
+    c.printf(c"@sizeof(nested) = %lu\n", @sizeof(nested));
+    c.printf(c"@alignof(NestedStruct) = %lu\n", @alignof(NestedStruct));
+    c.printf(c"@alignof(nested) = %lu\n", @alignof(nested));
 
-    var ptr: *NestedStruct = malloc(@sizeof(*ptr));
-    free(ptr);
+    var ptr: *NestedStruct = c.malloc(@sizeof(*ptr));
+    c.free(ptr);
 
-    printf(c"@sizeof(*ptr) = %lu\n", @sizeof(*ptr));
+    c.printf(c"@sizeof(*ptr) = %lu\n", @sizeof(*ptr));
 
     var my_u32: u32 = 123;
-    printf(c"my_u32 = %u\n", my_u32);
+    c.printf(c"my_u32 = %u\n", my_u32);
 
     var my_u64: u64 = cast(u64) my_u32;
-    printf(c"my_u64 = %lu\n", my_u64);
+    c.printf(c"my_u64 = %lu\n", my_u64);
 
     var my_i64: i64 = cast(i64) my_u32;
-    printf(c"my_i64 = %ld\n", my_i64);
+    c.printf(c"my_i64 = %ld\n", my_i64);
 
     var my_float: float = cast(float) my_u32;
-    printf(c"my_float = %f\n", my_float);
+    c.printf(c"my_float = %f\n", my_float);
 
     return 0;
 }

@@ -1,6 +1,6 @@
 import c "core:c";
 
-proc "c" main() i32 {
+extern fn main() i32 {
     {
         // Slicing arrays
 

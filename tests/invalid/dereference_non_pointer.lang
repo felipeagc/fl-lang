@@ -1,4 +1,4 @@
-proc "c" main() void {
+extern fn main() void {
     var i: i32 = 1;
     var b: i32 = *i;
 }

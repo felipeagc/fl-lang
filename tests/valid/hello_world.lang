@@ -1,10 +1,10 @@
-proc "c" puts(str: *i8) void;
+extern fn puts(str: *i8) void;
 
-proc add(a: i32, b: i32) void {
+fn add(a: i32, b: i32) void {
 
 }
 
-proc "c" main() i32 {
+extern fn main() i32 {
     var a: i32 = 123;
     const b: i32 = 321;
     a = b;

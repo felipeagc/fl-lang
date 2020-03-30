@@ -225,7 +225,7 @@ void llvm_add_proc(LLContext *l, LLModule *mod, Ast *ast)
     ast->proc.value.value = fun;
 
     LLVMSetLinkage(fun, LLVMInternalLinkage);
-    if (string_equals(ast->proc.convention, STR("c")))
+    if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
     {
         LLVMSetLinkage(fun, LLVMExternalLinkage);
     }

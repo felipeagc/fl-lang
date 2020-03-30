@@ -1,7 +1,7 @@
-proc add(a: i32, b: i32) i32 {
+fn add(a: i32, b: i32) i32 {
     return 0;
 }
 
-proc "c" main() void {
+extern fn main() void {
     add(1, 2);
 }

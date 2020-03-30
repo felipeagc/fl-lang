@@ -449,6 +449,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         break;
     }
+
     case TOKEN_STRUCT: {
         ast->type = AST_STRUCT;
         parser_next(p, 1);
@@ -497,6 +498,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         break;
     }
+
     case TOKEN_CAST: {
         ast->type = AST_CAST;
         parser_next(p, 1);
@@ -529,18 +531,30 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         break;
     }
-    case TOKEN_PROC: {
+
+    case TOKEN_EXTERN: {
+        parser_next(p, 1);
+
+        if (parser_peek(p, 0)->type == TOKEN_FN)
+        {
+            ast->proc.flags |= PROC_FLAG_IS_EXTERN;
+            goto parse_fn_type_label;
+        }
+        else
+        {
+            res = false;
+        }
+
+        break;
+    }
+
+    case TOKEN_FN: {
+    parse_fn_type_label:
         parser_next(p, 1);
 
         ast->type = AST_PROC_TYPE;
 
         if (!parser_consume(p, TOKEN_ASTERISK)) res = false;
-
-        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
-        {
-            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
-            ast->proc.convention = convention_tok->str;
-        }
 
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -586,6 +600,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         break;
     }
+
     default: {
         res = parse_compound_literal(p, ast, parsing_type);
         break;
@@ -928,17 +943,28 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    case TOKEN_PROC: {
+    case TOKEN_EXTERN: {
+        parser_next(p, 1);
+
+        if (parser_peek(p, 0)->type == TOKEN_FN)
+        {
+            ast->proc.flags |= PROC_FLAG_IS_EXTERN;
+            goto parse_fn_decl_label;
+        }
+        else
+        {
+            res = false;
+        }
+
+        break;
+    }
+
+    case TOKEN_FN: {
+    parse_fn_decl_label:
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
         need_semi = false;
-
-        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
-        {
-            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
-            ast->proc.convention = convention_tok->str;
-        }
 
         Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
         if (!proc_name_tok)
@@ -1028,12 +1054,6 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             ast->import.path = path_tok->str;
         else
             res = false;
-
-        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
-        {
-            Token *convention_tok = parser_consume(p, TOKEN_STRING_LIT);
-            ast->proc.convention = convention_tok->str;
-        }
 
         break;
     }

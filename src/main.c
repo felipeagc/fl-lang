@@ -108,8 +108,8 @@ void process_imports(Compiler *compiler, SourceFile *file, Ast *ast)
         break;
     }
     case AST_PROC_DECL: {
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
+        for (Ast *stmt = ast->proc.stmts;
+             stmt != ast->proc.stmts + array_size(ast->proc.stmts);
              ++stmt)
         {
             process_imports(compiler, file, stmt);

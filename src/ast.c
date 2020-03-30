@@ -80,6 +80,7 @@ typedef struct AstValue
 enum {
     PROC_FLAG_HAS_BODY = 1 << 1,
     PROC_FLAG_IS_C_VARARGS = 1 << 2,
+    PROC_FLAG_IS_EXTERN = 1 << 3,
 };
 
 typedef struct Ast
@@ -112,7 +113,6 @@ typedef struct Ast
         struct
         {
             struct Scope *scope;
-            String convention;
             String name;
             uint32_t flags;
             struct Ast *return_type;

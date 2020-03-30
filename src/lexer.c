@@ -515,7 +515,7 @@ void lex_token(Lexer *l)
 
             LEX_MATCH_STR("var", TOKEN_VAR);
             LEX_MATCH_STR("const", TOKEN_CONST);
-            LEX_MATCH_STR("proc", TOKEN_PROC);
+            LEX_MATCH_STR("fn", TOKEN_FN);
             LEX_MATCH_STR("cast", TOKEN_CAST);
             LEX_MATCH_STR("import", TOKEN_IMPORT);
             LEX_MATCH_STR("typedef", TOKEN_TYPEDEF);
@@ -530,6 +530,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("continue", TOKEN_CONTINUE);
             LEX_MATCH_STR("for", TOKEN_FOR);
             LEX_MATCH_STR("return", TOKEN_RETURN);
+            LEX_MATCH_STR("extern", TOKEN_EXTERN);
 
             if (tok.type == TOKEN_IDENT)
             {
