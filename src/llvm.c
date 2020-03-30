@@ -342,6 +342,33 @@ void llvm_codegen_ast(
             break;
         }
 
+        case TOKEN_STRING_LIT: {
+            LLVMValueRef glob = LLVMAddGlobal(
+                mod->mod,
+                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
+                "");
+
+            // set as internal linkage and constant
+            LLVMSetLinkage(glob, LLVMInternalLinkage);
+            LLVMSetGlobalConstant(glob, true);
+
+            // Initialize with string:
+            LLVMSetInitializer(
+                glob,
+                LLVMConstString(
+                    ast->primary.tok->str.buf,
+                    ast->primary.tok->str.length,
+                    true));
+
+            AstValue value = {0};
+            value.is_lvalue = true;
+            value.value = glob;
+
+            if (out_value) *out_value = value;
+
+            break;
+        }
+
         case TOKEN_CSTRING_LIT: {
             LLVMValueRef glob = LLVMAddGlobal(
                 mod->mod,
@@ -365,7 +392,9 @@ void llvm_codegen_ast(
 
             AstValue value = {0};
             value.value = LLVMConstGEP(glob, indices, 2);
+
             if (out_value) *out_value = value;
+
             break;
         }
 

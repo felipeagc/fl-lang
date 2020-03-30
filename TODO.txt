@@ -1,11 +1,13 @@
 Default struct member initialization
 Ternary
-String type
 Defer statement
 Using statement
 Enums
 Unions
 Thread local variables
+
+Inline procedures
+Macros (?)
 
 Offsetof
 Dynamic arrays

@@ -1,0 +1,5 @@
+extern fn main() i32 {
+    var str: [5]char = "Hello";
+    var c_str: *char = c"Hello";
+    return 0;
+}

@@ -1363,6 +1363,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case TOKEN_STRING_LIT: {
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+            ty->kind = TYPE_ARRAY;
+            ty->array.size = ast->primary.tok->str.length;
+            ty->array.sub = &I8_TYPE;
+            ast->type_info = ty;
+            break;
+        }
+
         case TOKEN_CSTRING_LIT: {
             static TypeInfo ty = {
                 .kind = TYPE_POINTER,
