@@ -2230,6 +2230,25 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     if (ast->type_info && expected_type)
     {
+        // Automatically convert arrays to slices
+        if (ast->type_info->kind == TYPE_ARRAY &&
+            expected_type->kind == TYPE_SLICE)
+        {
+            if (exact_types(
+                    ast->type_info->array.sub, expected_type->array.sub))
+            {
+                Ast *wrapped = bump_alloc(&a->compiler->bump, sizeof(Ast));
+                *wrapped = *ast;
+
+                ast->type = AST_SUBSCRIPT_SLICE;
+                ast->subscript_slice.left = wrapped;
+                ast->subscript_slice.lower = NULL;
+                ast->subscript_slice.upper = NULL;
+
+                return analyze_ast(a, ast, expected_type);
+            }
+        }
+
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {

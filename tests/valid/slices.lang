@@ -80,5 +80,17 @@ extern fn main() i32 {
         c.free(my_array);
     }
 
+    {
+        // Array to slice conversion
+
+        const const_array = [5]i32{1, 2, 3, 4, 5};
+
+        var my_slice: [_]i32 = const_array;
+        for (var i: uint = 0; i < const_array.len; i += 1)
+        {
+            c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
+        }
+    }
+
     return 0;
 }
