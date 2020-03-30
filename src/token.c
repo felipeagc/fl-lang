@@ -77,6 +77,8 @@ typedef enum TokenType {
     TOKEN_RETURN,
     TOKEN_CONST,
     TOKEN_VAR,
+    TOKEN_DISTINCT,
+    TOKEN_DYNAMIC,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -185,6 +187,8 @@ static const char *token_strings[] = {
     [TOKEN_RETURN] = "return",
     [TOKEN_CONST] = "const",
     [TOKEN_VAR] = "var",
+    [TOKEN_DISTINCT] = "distinct",
+    [TOKEN_DYNAMIC] = "dynamic",
 
     [TOKEN_INT_LIT] = "integer literal",
     [TOKEN_FLOAT_LIT] = "float literal",

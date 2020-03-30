@@ -535,6 +535,8 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("for", TOKEN_FOR);
             LEX_MATCH_STR("return", TOKEN_RETURN);
             LEX_MATCH_STR("extern", TOKEN_EXTERN);
+            LEX_MATCH_STR("distinct", TOKEN_DISTINCT);
+            LEX_MATCH_STR("dynamic", TOKEN_DYNAMIC);
 
             if (tok.type == TOKEN_IDENT)
             {

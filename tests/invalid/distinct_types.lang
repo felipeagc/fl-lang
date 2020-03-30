@@ -1,0 +1,8 @@
+typedef MyInt distinct int;
+
+extern fn main() i32 {
+    var a: int = 123;
+    var b: MyInt = a;
+
+    return 0;
+}

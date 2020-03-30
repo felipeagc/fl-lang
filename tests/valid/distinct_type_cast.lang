@@ -1,0 +1,9 @@
+typedef MyInt distinct int;
+
+extern fn main() i32 {
+    var a: int = 123;
+    var b: MyInt = cast(MyInt)a;
+    a = cast(int)b;
+
+    return 0;
+}

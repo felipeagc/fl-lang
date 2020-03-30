@@ -268,7 +268,8 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
     return res;
 }
 
-static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
+static TypeInfo *
+ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 {
     if (ast->as_type) return ast->as_type;
 
@@ -312,7 +313,10 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
             {
                 assert(sym->sym_scope);
                 if (ast_as_type(
-                        compiler, sym->sym_scope, sym->type_def.type_expr))
+                        compiler,
+                        sym->sym_scope,
+                        sym->type_def.type_expr,
+                        false))
                 {
                     ast->as_type = sym->type_def.type_expr->as_type;
                 }
@@ -326,7 +330,12 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
     }
 
     case AST_PAREN_EXPR: {
-        ast->as_type = ast_as_type(compiler, scope, ast->expr);
+        ast->as_type = ast_as_type(compiler, scope, ast->expr, false);
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        ast->as_type = ast_as_type(compiler, scope, ast->distinct.sub, true);
         break;
     }
 
@@ -334,7 +343,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            if (ast_as_type(compiler, scope, ast->unop.sub))
+            if (ast_as_type(compiler, scope, ast->unop.sub, false))
             {
                 TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
                 memset(ty, 0, sizeof(*ty));
@@ -354,7 +363,8 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         bool resolves = resolve_expr_int(scope, ast->array_type.size, &size);
         bool res = true;
 
-        if (!ast_as_type(compiler, scope, ast->array_type.sub)) res = false;
+        if (!ast_as_type(compiler, scope, ast->array_type.sub, false))
+            res = false;
 
         if (!resolves)
         {
@@ -389,7 +399,8 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
     case AST_SLICE_TYPE: {
         bool res = true;
 
-        if (!ast_as_type(compiler, scope, ast->array_type.sub)) res = false;
+        if (!ast_as_type(compiler, scope, ast->array_type.sub, false))
+            res = false;
 
         if (res)
         {
@@ -410,7 +421,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            if (!ast_as_type(compiler, scope, field->field.type_expr))
+            if (!ast_as_type(compiler, scope, field->field.type_expr, false))
             {
                 res = false;
             }
@@ -444,7 +455,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
              ++param)
         {
             TypeInfo *param_as_type =
-                ast_as_type(compiler, scope, param->decl.type_expr);
+                ast_as_type(compiler, scope, param->decl.type_expr, false);
             if (!param_as_type)
             {
                 valid = false;
@@ -455,7 +466,7 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         }
 
         ty->proc.return_type =
-            ast_as_type(compiler, scope, ast->proc.return_type);
+            ast_as_type(compiler, scope, ast->proc.return_type, false);
 
         if (!ty->proc.return_type)
         {
@@ -480,12 +491,20 @@ static TypeInfo *ast_as_type(Compiler *compiler, Scope *scope, Ast *ast)
         if (accessed_scope)
         {
             ast->as_type =
-                ast_as_type(compiler, accessed_scope, ast->access.right);
+                ast_as_type(compiler, accessed_scope, ast->access.right, false);
         }
         break;
     }
 
     default: break;
+    }
+
+    if (is_distinct && ast->as_type)
+    {
+        TypeInfo *unique_type = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        *unique_type = *ast->as_type;
+        unique_type->flags |= TYPE_FLAG_DISTINCT;
+        ast->as_type = unique_type;
     }
 
     return ast->as_type;
@@ -655,6 +674,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
 
     case AST_UNARY_EXPR: {
         create_scopes_ast(a, ast->unop.sub);
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        create_scopes_ast(a, ast->distinct.sub);
         break;
     }
 
@@ -1274,7 +1298,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         return;
     }
 
-    ast_as_type(a->compiler, *array_last(a->scope_stack), ast);
+    ast_as_type(a->compiler, *array_last(a->scope_stack), ast, false);
 
     switch (ast->type)
     {
@@ -1412,13 +1436,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             case AST_PROC_PARAM: {
                 ast_as_type(
-                    a->compiler, sym->sym_scope, sym->proc_param.type_expr);
+                    a->compiler,
+                    sym->sym_scope,
+                    sym->proc_param.type_expr,
+                    false);
                 ast->type_info = sym->proc_param.type_expr->as_type;
                 break;
             }
 
             case AST_STRUCT_FIELD: {
-                ast_as_type(a->compiler, sym->sym_scope, sym->field.type_expr);
+                ast_as_type(
+                    a->compiler, sym->sym_scope, sym->field.type_expr, false);
                 ast->type_info = sym->field.type_expr->as_type;
                 break;
             }
@@ -1453,6 +1481,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_PAREN_EXPR: {
         analyze_ast(a, ast->expr, expected_type);
         ast->type_info = ast->expr->type_info;
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        analyze_ast(a, ast->distinct.sub, &TYPE_OF_TYPE);
+        ast->type_info = ast->distinct.sub->type_info;
         break;
     }
 

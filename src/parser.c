@@ -603,6 +603,22 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
 
+    case TOKEN_DISTINCT: {
+        parser_next(p, 1);
+
+        ast->type = AST_DISTINCT_TYPE;
+
+        ast->distinct.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(ast->distinct.sub, 0, sizeof(Ast));
+        ast->distinct.sub->loc = parser_peek(p, 0)->loc;
+        if (!parse_unary_expr(p, ast->distinct.sub, true)) res = false;
+        Location last_loc = parser_peek(p, -1)->loc;
+        ast->distinct.sub->loc.length =
+            last_loc.buf + last_loc.length - ast->distinct.sub->loc.buf;
+
+        break;
+    }
+
     default: {
         res = parse_compound_literal(p, ast, parsing_type);
         break;

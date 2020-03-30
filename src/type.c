@@ -14,11 +14,16 @@ typedef enum TypeKind {
     TYPE_NAMESPACE,
 } TypeKind;
 
+typedef enum TypeFlags {
+    TYPE_FLAG_DISTINCT = 1 << 0,
+    TYPE_FLAG_CAN_CHANGE = 1 << 7,
+} TypeFlags;
+
 typedef struct TypeInfo
 {
     TypeKind kind;
     LLVMTypeRef ref;
-    bool can_change;
+    uint32_t flags;
 
     union
     {
@@ -89,11 +94,11 @@ static TypeInfo UINT_TYPE = {.kind = TYPE_INT,
 
 // Numeric literal types
 static TypeInfo INT_LIT_TYPE = {.kind = TYPE_INT,
-                                .can_change = true,
+                                .flags = TYPE_FLAG_CAN_CHANGE,
                                 .integer = {.is_signed = true, .num_bits = 64}};
 
 static TypeInfo FLOAT_LIT_TYPE = {
-    .kind = TYPE_FLOAT, .can_change = true, .floating.num_bits = 64};
+    .kind = TYPE_FLOAT, .flags = TYPE_FLAG_CAN_CHANGE, .floating.num_bits = 64};
 
 // Other types
 static TypeInfo BOOL_TYPE = {.kind = TYPE_BOOL};
@@ -117,6 +122,11 @@ static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
 TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind != expected->kind) return NULL;
+    if ((received->flags & TYPE_FLAG_DISTINCT) ||
+        (expected->flags & TYPE_FLAG_DISTINCT))
+    {
+        if (expected != received) return NULL;
+    }
 
     switch (received->kind)
     {
@@ -240,17 +250,17 @@ TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
         other_type = a;
     }
 
-    if (float_type && other_type->can_change)
+    if (float_type && (other_type->flags & TYPE_FLAG_CAN_CHANGE))
     {
         return float_type;
     }
 
-    if (a->can_change)
+    if (a->flags & TYPE_FLAG_CAN_CHANGE)
     {
         return b;
     }
 
-    if (b->can_change)
+    if (b->flags & TYPE_FLAG_CAN_CHANGE)
     {
         return a;
     }

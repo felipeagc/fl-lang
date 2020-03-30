@@ -69,6 +69,7 @@ typedef enum AstType {
     AST_BREAK,
     AST_CONTINUE,
     AST_COMPOUND_LIT,
+    AST_DISTINCT_TYPE,
 } AstType;
 
 typedef struct AstValue
@@ -78,9 +79,9 @@ typedef struct AstValue
 } AstValue;
 
 enum {
-    PROC_FLAG_HAS_BODY = 1 << 1,
-    PROC_FLAG_IS_C_VARARGS = 1 << 2,
-    PROC_FLAG_IS_EXTERN = 1 << 3,
+    PROC_FLAG_HAS_BODY = 1 << 0,
+    PROC_FLAG_IS_C_VARARGS = 1 << 1,
+    PROC_FLAG_IS_EXTERN = 1 << 2,
 };
 
 typedef struct Ast
@@ -230,5 +231,9 @@ typedef struct Ast
             struct Ast *left;
             struct Ast *right;
         } access;
+        struct
+        {
+            struct Ast *sub;
+        } distinct;
     };
 } Ast;
