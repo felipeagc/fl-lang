@@ -22,8 +22,9 @@ typedef enum TypeFlags {
 
 typedef struct TypeInfo
 {
-    TypeKind kind;
     LLVMTypeRef ref;
+    struct Scope *scope;
+    TypeKind kind;
     uint32_t flags;
 
     union
@@ -55,12 +56,10 @@ typedef struct TypeInfo
         struct
         {
             /*array*/ struct TypeInfo **fields;
-            struct Scope *scope;
         } structure;
         struct
         {
             struct TypeInfo *underlying_type;
-            struct Scope *scope;
         } enumeration;
     };
 } TypeInfo;
@@ -125,9 +124,17 @@ static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
 
 static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
 
-TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
+static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
-    if (received->kind != expected->kind) return NULL;
+    if (received->kind != expected->kind)
+    {
+        if (received->kind == TYPE_ENUM)
+        {
+            return exact_types(received->enumeration.underlying_type, expected);
+        }
+        return NULL;
+    }
+
     if ((received->flags & TYPE_FLAG_DISTINCT) ||
         (expected->flags & TYPE_FLAG_DISTINCT))
     {
@@ -219,7 +226,8 @@ TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     return received;
 }
 
-TypeInfo *compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
+static TypeInfo *
+compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
     {
@@ -235,7 +243,8 @@ TypeInfo *compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
     return NULL;
 }
 
-TypeInfo *compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
+static TypeInfo *
+compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
     {
@@ -246,7 +255,7 @@ TypeInfo *compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
     return NULL;
 }
 
-TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
+static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
     TypeInfo *float_type = NULL;
     TypeInfo *other_type = NULL;
@@ -277,4 +286,21 @@ TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
     }
 
     return NULL;
+}
+
+static inline TypeInfo *get_inner_type(TypeInfo *type)
+{
+    if (!type) return type;
+
+    while (1)
+    {
+        switch (type->kind)
+        {
+        case TYPE_ENUM: type = type->enumeration.underlying_type; break;
+        default: goto end; break;
+        }
+    }
+
+end:
+    return type;
 }

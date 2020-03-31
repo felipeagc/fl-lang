@@ -90,6 +90,7 @@ typedef struct Ast
 {
     AstType type;
     Location loc;
+    struct Ast *parent;
     struct TypeInfo *type_info;
     struct TypeInfo *as_type;
     struct Scope *sym_scope;
@@ -203,7 +204,6 @@ typedef struct Ast
         } struct_field;
         struct
         {
-            struct Ast* enumeration;
             struct Ast *value_expr;
             size_t index;
             String name;

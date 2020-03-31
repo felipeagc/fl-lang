@@ -1,19 +1,31 @@
 import "core:c";
 
-typedef OsType enum i32 {
-    linux = 2,
-    windows = linux,
+typedef MyEnum distinct enum u32 {
+    one = 1,
+    two = 2,
+    two_again = two,
+};
+
+typedef MyEnum2 enum u32 {
+    three = 3,
+    four = 4,
+    five = 5,
+    five_again = five
 };
 
 extern fn main() i32 {
-    var os_type = OsType.linux;
-    var os_type2 = OsType.windows;
+    var enum1: MyEnum = MyEnum.two;
+    var enum2 = MyEnum.two_again;
+    var my_uint: u32 = MyEnum.one;
 
-    if (os_type != os_type2) abort();
+    var my_array: [MyEnum.two]i32;
 
-    if (os_type == OsType.linux) {
-        printf(c"Hello\n");
-    }
+    if (enum1 != enum2) abort();
+    if (enum1 != MyEnum.two_again) abort();
+
+    var hello: u32 = MyEnum2.five;
+
+    if (MyEnum2.five_again != hello) abort();
 
     return 0;
 }

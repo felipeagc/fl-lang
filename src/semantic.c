@@ -225,7 +225,8 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
     return res;
 }
 
-static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
+static bool
+resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
 {
     bool res = false;
     switch (ast->type)
@@ -238,6 +239,7 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
             res = true;
             break;
         }
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str);
             if (sym)
@@ -247,9 +249,20 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
                 case AST_CONST_DECL: {
                     assert(sym->sym_scope);
                     res = resolve_expr_int(
-                        sym->sym_scope, sym->decl.value_expr, i64);
+                        compiler, sym->sym_scope, sym->decl.value_expr, i64);
                     break;
                 }
+
+                case AST_ENUM_FIELD: {
+                    assert(sym->sym_scope);
+                    res = resolve_expr_int(
+                        compiler,
+                        sym->sym_scope,
+                        sym->enum_field.value_expr,
+                        i64);
+                    break;
+                }
+
                 default: break;
                 }
             }
@@ -259,10 +272,23 @@ static bool resolve_expr_int(Scope *scope, Ast *ast, int64_t *i64)
         }
         break;
     }
+
     case AST_PAREN_EXPR: {
-        res = resolve_expr_int(scope, ast->expr, i64);
+        res = resolve_expr_int(compiler, scope, ast->expr, i64);
         break;
     }
+
+    case AST_ACCESS: {
+        Scope *accessed_scope =
+            get_expr_scope(compiler, scope, ast->access.left);
+        if (accessed_scope)
+        {
+            res = resolve_expr_int(
+                compiler, accessed_scope, ast->access.right, i64);
+        }
+        break;
+    }
+
     default: break;
     }
 
@@ -361,56 +387,39 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_ARRAY_TYPE: {
         int64_t size = 0;
-        bool resolves = resolve_expr_int(scope, ast->array_type.size, &size);
-        bool res = true;
+        bool resolves =
+            resolve_expr_int(compiler, scope, ast->array_type.size, &size);
 
-        if (!ast_as_type(compiler, scope, ast->array_type.sub, false))
-            res = false;
+        if (!ast_as_type(compiler, scope, ast->array_type.sub, false)) break;
 
         if (!resolves)
         {
-            compile_error(
-                compiler,
-                ast->array_type.size->loc,
-                "expression does not resolve to integer");
-            res = false;
+            break;
         }
 
         if (resolves && size <= 0)
         {
-            compile_error(
-                compiler,
-                ast->array_type.size->loc,
-                "array size must be larger than zero");
-            res = false;
+            break;
         }
 
-        if (res)
-        {
-            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_ARRAY;
-            ty->array.sub = ast->array_type.sub->as_type;
-            ty->array.size = size;
-            ast->as_type = ty;
-        }
+        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_ARRAY;
+        ty->array.sub = ast->array_type.sub->as_type;
+        ty->array.size = size;
+        ast->as_type = ty;
+
         break;
     }
 
     case AST_SLICE_TYPE: {
-        bool res = true;
+        if (!ast_as_type(compiler, scope, ast->array_type.sub, false)) break;
 
-        if (!ast_as_type(compiler, scope, ast->array_type.sub, false))
-            res = false;
-
-        if (res)
-        {
-            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_SLICE;
-            ty->array.sub = ast->array_type.sub->as_type;
-            ast->as_type = ty;
-        }
+        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_SLICE;
+        ty->array.sub = ast->array_type.sub->as_type;
+        ast->as_type = ty;
         break;
     }
 
@@ -436,7 +445,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_STRUCT;
             ty->structure.fields = fields;
-            ty->structure.scope = ast->structure.scope;
+            ty->scope = ast->structure.scope;
             ast->as_type = ty;
         }
         break;
@@ -451,8 +460,9 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
             memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_ENUM;
-            ty->enumeration.scope = ast->enumeration.scope;
+            ty->scope = ast->enumeration.scope;
             ty->enumeration.underlying_type = underlying_type;
+
             ast->as_type = ty;
         }
 
@@ -609,29 +619,21 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
         case TYPE_TYPE: {
             if (ast->as_type)
             {
-                if (ast->as_type->kind == TYPE_ENUM)
-                {
-                    accessed_scope = ast->as_type->enumeration.scope;
-                }
+                accessed_scope = ast->as_type->scope;
             }
 
             break;
         }
 
-        case TYPE_ENUM: {
-            accessed_scope = ast->type_info->enumeration.scope;
-            break;
-        }
-
         case TYPE_STRUCT: {
-            accessed_scope = ast->type_info->structure.scope;
+            accessed_scope = ast->type_info->scope;
             break;
         }
 
         case TYPE_POINTER: {
             if (ast->type_info->ptr.sub->kind == TYPE_STRUCT)
             {
-                accessed_scope = ast->type_info->ptr.sub->structure.scope;
+                accessed_scope = ast->type_info->ptr.sub->scope;
             }
             break;
         }
@@ -869,8 +871,8 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             scope_set(ast->enumeration.scope, field->enum_field.name, field);
         }
 
-        array_push(a->scope_stack, ast->structure.scope);
-        array_push(a->operand_scope_stack, ast->structure.scope);
+        array_push(a->scope_stack, ast->enumeration.scope);
+        array_push(a->operand_scope_stack, ast->enumeration.scope);
         for (Ast *field = ast->enumeration.fields;
              field !=
              ast->enumeration.fields + array_size(ast->enumeration.fields);
@@ -1094,10 +1096,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.type_expr->as_type)
             {
-                compile_error(
-                    a->compiler,
-                    ast->decl.type_expr->loc,
-                    "expression does not represent a type");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1140,10 +1139,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.type_expr->as_type)
             {
-                compile_error(
-                    a->compiler,
-                    ast->decl.type_expr->loc,
-                    "expression does not represent a type");
+                assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
@@ -1195,13 +1191,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_ENUM_FIELD: {
-        TypeInfo *enum_type = ast->enum_field.enumeration->as_type;
-        if (!enum_type)
-        {
-            assert(array_size(a->compiler->errors) > 0);
-            break;
-        }
-
         if (!is_expr_const(
                 a->compiler,
                 *array_last(a->scope_stack),
@@ -1214,6 +1203,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        TypeInfo *enum_type = ast->parent->as_type;
+        if (!enum_type)
+        {
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
         assert(enum_type->kind == TYPE_ENUM);
         assert(enum_type->enumeration.underlying_type);
 
@@ -1221,6 +1217,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             a,
             ast->enum_field.value_expr,
             enum_type->enumeration.underlying_type);
+
         break;
     }
 
@@ -1551,8 +1548,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
             case AST_VAR_DECL:
             case AST_CONST_DECL: {
-                assert(sym->type_info);
-                ast->type_info = sym->type_info;
+                if (sym->type_info)
+                {
+                    ast->type_info = sym->type_info;
+                }
                 break;
             }
 
@@ -1576,10 +1575,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             case AST_ENUM_FIELD: {
                 ast->type_info = ast_as_type(
-                    a->compiler,
-                    sym->sym_scope,
-                    sym->enum_field.enumeration->enumeration.type_expr,
-                    false);
+                    a->compiler, sym->sym_scope, sym->parent, false);
                 break;
             }
 
@@ -1916,6 +1912,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_MOD: {
             analyze_ast(a, ast->binop.left, expected_type);
             analyze_ast(a, ast->binop.right, expected_type);
+            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
+            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
 
             if (!ast->binop.left->type_info || !ast->binop.right->type_info)
             {
@@ -1925,14 +1923,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (expected_type == NULL)
             {
-                TypeInfo *common_type = common_numeric_type(
-                    ast->binop.left->type_info, ast->binop.right->type_info);
+                TypeInfo *common_type =
+                    common_numeric_type(left_type, right_type);
                 analyze_ast(a, ast->binop.left, common_type);
                 analyze_ast(a, ast->binop.right, common_type);
+                left_type = get_inner_type(ast->binop.left->type_info);
+                right_type = get_inner_type(ast->binop.right->type_info);
             }
 
-            if (!exact_types(
-                    ast->binop.left->type_info, ast->binop.right->type_info))
+            if (!exact_types(left_type, right_type))
             {
                 compile_error(
                     a->compiler,
@@ -1941,8 +1940,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_FLOAT)
+            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_FLOAT)
             {
                 compile_error(
                     a->compiler,
@@ -1951,7 +1949,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            ast->type_info = ast->binop.left->type_info;
+            ast->type_info = left_type;
 
             break;
         }
@@ -1964,7 +1962,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, expected_type);
             analyze_ast(a, ast->binop.right, expected_type);
 
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
+            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+
+            if (!left_type || !right_type)
             {
                 assert(array_size(a->compiler->errors) > 0);
                 break;
@@ -1972,14 +1973,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (expected_type == NULL)
             {
-                TypeInfo *common_type = common_numeric_type(
-                    ast->binop.left->type_info, ast->binop.right->type_info);
+                TypeInfo *common_type =
+                    common_numeric_type(left_type, right_type);
                 analyze_ast(a, ast->binop.left, common_type);
                 analyze_ast(a, ast->binop.right, common_type);
+
+                left_type = get_inner_type(ast->binop.left->type_info);
+                right_type = get_inner_type(ast->binop.right->type_info);
             }
 
-            if (!exact_types(
-                    ast->binop.left->type_info, ast->binop.right->type_info))
+            if (!exact_types(left_type, right_type))
             {
                 compile_error(
                     a->compiler,
@@ -1988,8 +1991,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_BOOL)
+            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_BOOL)
             {
                 compile_error(
                     a->compiler,
@@ -1998,7 +2000,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            ast->type_info = ast->binop.left->type_info;
+            ast->type_info = left_type;
 
             break;
         }
@@ -2012,19 +2014,22 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, NULL);
             analyze_ast(a, ast->binop.right, NULL);
 
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
+            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+
+            if (!left_type || !right_type)
             {
                 assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
-            TypeInfo *common_type = common_numeric_type(
-                ast->binop.left->type_info, ast->binop.right->type_info);
+            TypeInfo *common_type = common_numeric_type(left_type, right_type);
             analyze_ast(a, ast->binop.left, common_type);
             analyze_ast(a, ast->binop.right, common_type);
+            left_type = get_inner_type(ast->binop.left->type_info);
+            right_type = get_inner_type(ast->binop.right->type_info);
 
-            if (!exact_types(
-                    ast->binop.left->type_info, ast->binop.right->type_info))
+            if (!exact_types(left_type, right_type))
             {
                 compile_error(
                     a->compiler,
@@ -2033,10 +2038,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->binop.left->type_info->kind != TYPE_BOOL &&
-                ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_FLOAT &&
-                ast->binop.left->type_info->kind != TYPE_POINTER)
+            if (left_type->kind != TYPE_BOOL && left_type->kind != TYPE_INT &&
+                left_type->kind != TYPE_FLOAT &&
+                left_type->kind != TYPE_POINTER)
             {
                 compile_error(
                     a->compiler,
@@ -2055,16 +2059,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, NULL);
             analyze_ast(a, ast->binop.right, NULL);
 
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
+            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+
+            if (!left_type || !right_type)
             {
                 assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
-            if (ast->binop.left->type_info->kind != TYPE_BOOL &&
-                ast->binop.left->type_info->kind != TYPE_INT &&
-                ast->binop.left->type_info->kind != TYPE_FLOAT &&
-                ast->binop.left->type_info->kind != TYPE_POINTER)
+            if (left_type->kind != TYPE_BOOL && left_type->kind != TYPE_INT &&
+                left_type->kind != TYPE_FLOAT &&
+                left_type->kind != TYPE_POINTER)
             {
                 compile_error(
                     a->compiler,
@@ -2073,10 +2079,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->binop.right->type_info->kind != TYPE_BOOL &&
-                ast->binop.right->type_info->kind != TYPE_INT &&
-                ast->binop.right->type_info->kind != TYPE_FLOAT &&
-                ast->binop.right->type_info->kind != TYPE_POINTER)
+            if (right_type->kind != TYPE_BOOL && right_type->kind != TYPE_INT &&
+                right_type->kind != TYPE_FLOAT &&
+                right_type->kind != TYPE_POINTER)
             {
                 compile_error(
                     a->compiler,
@@ -2293,10 +2298,35 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->array_type.sub, &TYPE_OF_TYPE);
         analyze_ast(a, ast->array_type.size, NULL);
 
-        if (ast->array_type.size->type_info->kind != TYPE_INT)
+        TypeInfo *size_type = get_inner_type(ast->array_type.size->type_info);
+        if (size_type->kind != TYPE_INT)
         {
             compile_error(
                 a->compiler, ast->loc, "array type needs an integer size");
+            break;
+        }
+
+        // Recompute as_type after getting the size's type
+        ast_as_type(a->compiler, *array_last(a->scope_stack), ast, false);
+
+        if (!ast->as_type)
+        {
+            if (ast->array_type.sub->type_info)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "could not resolve size for array type");
+                break;
+            }
+
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
+        if (!ast->array_type.size->type_info)
+        {
+            assert(array_size(a->compiler->errors) > 0);
             break;
         }
 
@@ -2329,6 +2359,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->enumeration.type_expr, &TYPE_OF_TYPE);
 
         array_push(a->scope_stack, ast->enumeration.scope);
+        array_push(a->operand_scope_stack, ast->enumeration.scope);
         for (Ast *field = ast->enumeration.fields;
              field !=
              ast->enumeration.fields + array_size(ast->enumeration.fields);
@@ -2336,6 +2367,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             analyze_ast(a, field, NULL);
         }
+        array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
         break;
     }

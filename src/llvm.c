@@ -1411,8 +1411,8 @@ void llvm_codegen_ast(
         llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
         llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
 
-        TypeInfo *lhs_type = ast->binop.left->type_info;
-        TypeInfo *rhs_type = ast->binop.right->type_info;
+        TypeInfo *lhs_type = get_inner_type(ast->binop.left->type_info);
+        TypeInfo *rhs_type = get_inner_type(ast->binop.right->type_info);
 
         AstValue result_value = {0};
 
