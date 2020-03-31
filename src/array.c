@@ -51,7 +51,7 @@ typedef struct ArrayHeader
     uint64_t capacity;
 } ArrayHeader;
 
-void *array_grow(void *a, uint64_t item_size, uint64_t cap)
+static void *array_grow(void *a, uint64_t item_size, uint64_t cap)
 {
     if (!a)
     {

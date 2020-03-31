@@ -204,7 +204,6 @@ typedef struct Ast
         struct
         {
             struct Ast *value_expr;
-            size_t index;
             String name;
         } enum_field;
         struct

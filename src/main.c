@@ -37,7 +37,60 @@
 #include "location.c"
 #include "token.c"
 #include "ast.c"
-#include "compiler.c"
+
+typedef struct Compiler
+{
+    BumpAlloc bump;
+    /*array*/ Error *errors;
+    HashMap files;
+    struct LLContext *backend;
+    String compiler_path;
+    String compiler_dir;
+    String corelib_dir;
+
+    Ast *builtin_module;
+} Compiler;
+
+static void
+compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
+{
+    char buf[2048];
+    assert(loc.file);
+
+    va_list vl;
+    va_start(vl, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, vl);
+    va_end(vl);
+
+    String message = bump_strdup(
+        &compiler->bump, (String){.buf = buf, .length = strlen(buf)});
+
+    Error err = {.loc = loc, .message = message};
+    array_push(compiler->errors, err);
+}
+
+static void print_errors(Compiler *compiler)
+{
+    if (array_size(compiler->errors) > 0)
+    {
+        for (Error *err = compiler->errors;
+             err != compiler->errors + array_size(compiler->errors);
+             ++err)
+        {
+            printf(
+                "%.*s (%u:%u): %.*s\n",
+                (int)err->loc.file->path.length,
+                err->loc.file->path.buf,
+                err->loc.line,
+                err->loc.col,
+                (int)err->message.length,
+                err->message.buf);
+        }
+        exit(1);
+    }
+}
+
+#include "ast_builder.c"
 
 #include "printing.c"
 #include "lexer.c"
@@ -48,33 +101,172 @@
 #include "semantic.c"
 #include "llvm.c"
 
-SourceFile *process_file(Compiler *compiler, String absolute_path);
+static void
+process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast);
 
-void process_imports(
-    Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
+static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast);
+
+static void compiler_init(Compiler *compiler)
+{
+    memset(compiler, 0, sizeof(*compiler));
+    bump_init(&compiler->bump, 1 << 16);
+    hash_init(&compiler->files, 521);
+
+    compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));
+    memset(compiler->backend, 0, sizeof(*compiler->backend));
+    llvm_init(compiler->backend, compiler);
+
+    char *c_compiler_path = get_exe_path();
+    char *c_compiler_dir = get_file_dir(c_compiler_path);
+    compiler->compiler_path = CSTR(c_compiler_path);
+    compiler->compiler_dir = CSTR(c_compiler_dir);
+    compiler->corelib_dir =
+        bump_str_join(&compiler->bump, compiler->compiler_dir, STR("core/"));
+
+    compiler->builtin_module = create_module_ast(compiler);
+
+    Ast *os_enum =
+        add_module_enum(compiler, compiler->builtin_module, STR("OsType"));
+    add_enum_field(compiler, os_enum, STR("linux"), 1);
+    add_enum_field(compiler, os_enum, STR("windows"), 2);
+    add_enum_field(compiler, os_enum, STR("macos"), 3);
+
+    Ast *build_mode_enum =
+        add_module_enum(compiler, compiler->builtin_module, STR("BuildMode"));
+    add_enum_field(compiler, build_mode_enum, STR("debug"), 1);
+    add_enum_field(compiler, build_mode_enum, STR("release"), 2);
+
+    add_module_constant(
+        compiler,
+        compiler->builtin_module,
+        STR("OS"),
+        access_expr(
+            compiler,
+            ident_expr(compiler, STR("OsType")),
+            ident_expr(compiler, STR("linux"))));
+
+    String core_builtin_path = STR("core:builtin");
+
+    SourceFile *file = bump_alloc(&compiler->bump, sizeof(*file));
+    memset(file, 0, sizeof(*file));
+    file->root = compiler->builtin_module;
+    hash_set(&compiler->files, core_builtin_path, file);
+
+    process_ast(compiler, file, compiler->builtin_module);
+}
+
+static void compiler_destroy(Compiler *compiler)
+{
+    hash_destroy(&compiler->files);
+    bump_destroy(&compiler->bump);
+}
+
+static void source_file_init(SourceFile *file, Compiler *compiler, String path)
+{
+    memset(file, 0, sizeof(*file));
+
+    file->path = bump_strdup(&compiler->bump, path);
+
+    FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
+    if (!f)
+    {
+        printf(
+            "Failed to open file: %.*s",
+            (int)file->path.length,
+            file->path.buf);
+        abort();
+    }
+
+    fseek(f, 0, SEEK_END);
+    file->content.length = (uint32_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    file->content.buf = malloc(file->content.length);
+    fread(file->content.buf, 1, file->content.length, f);
+    fclose(f);
+}
+
+static SourceFile *process_file(Compiler *compiler, String absolute_path);
+
+static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast)
+{
+    Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
+    memset(analyzer, 0, sizeof(*analyzer));
+    analyzer->compiler = compiler;
+
+    create_scopes_ast(analyzer, ast);
+    print_errors(compiler);
+
+    process_imports(compiler, file, NULL, ast);
+
+    register_symbol_asts(analyzer, ast, 1);
+    print_errors(compiler);
+
+    analyze_asts(analyzer, ast, 1);
+    print_errors(compiler);
+
+    llvm_codegen_ast(
+        compiler->backend, &compiler->backend->mod, ast, false, NULL);
+}
+
+static SourceFile *process_file(Compiler *compiler, String absolute_path)
+{
+    SourceFile *file = hash_get(&compiler->files, absolute_path);
+    if (file)
+    {
+        return file;
+    }
+
+    file = bump_alloc(&compiler->bump, sizeof(*file));
+    source_file_init(file, compiler, absolute_path);
+
+    hash_set(&compiler->files, absolute_path, file);
+
+    Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
+    lex_file(lexer, compiler, file);
+    print_errors(compiler);
+
+    Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
+    parse_file(parser, compiler, lexer);
+    print_errors(compiler);
+    file->root = parser->ast;
+
+    process_ast(compiler, file, parser->ast);
+
+    return file;
+}
+
+static void
+process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 {
     switch (ast->type)
     {
     case AST_IMPORT: {
         char *c_imported = bump_c_str(&compiler->bump, ast->import.path);
         static char *core_prefix = "core:";
-
         String abs_path = {0};
 
         if (strncmp(c_imported, core_prefix, strlen(core_prefix)) == 0)
         {
             // Core import
 
-            char *file_name_without_extension =
-                c_imported + strlen(core_prefix);
+            if (strcmp(c_imported, "core:builtin") == 0)
+            {
+                abs_path = STR("core:builtin");
+            }
+            else
+            {
+                char *file_name_without_extension =
+                    c_imported + strlen(core_prefix);
 
-            String import_file_name = bump_str_join(
-                &compiler->bump,
-                CSTR(file_name_without_extension),
-                CSTR(LANG_FILE_EXTENSION));
+                String import_file_name = bump_str_join(
+                    &compiler->bump,
+                    CSTR(file_name_without_extension),
+                    CSTR(LANG_FILE_EXTENSION));
 
-            abs_path = bump_str_join(
-                &compiler->bump, compiler->corelib_dir, import_file_name);
+                abs_path = bump_str_join(
+                    &compiler->bump, compiler->corelib_dir, import_file_name);
+            }
         }
         else
         {
@@ -93,7 +285,10 @@ void process_imports(
         ast->import.abs_path = abs_path;
         SourceFile *imported_file = process_file(compiler, abs_path);
 
-        array_push(scope->siblings, imported_file->root->block.scope);
+        if (ast->import.name.buf == NULL)
+        {
+            array_push(scope->siblings, imported_file->root->block.scope);
+        }
 
         break;
     }
@@ -126,63 +321,13 @@ void process_imports(
     }
 }
 
-SourceFile *process_file(Compiler *compiler, String absolute_path)
+static void compile_file(Compiler *compiler, String filepath)
 {
-    SourceFile *file = hash_get(&compiler->files, absolute_path);
-    if (file)
-    {
-        return file;
-    }
-
-    file = bump_alloc(&compiler->bump, sizeof(*file));
-    source_file_init(file, compiler, absolute_path);
-
-    hash_set(&compiler->files, absolute_path, file);
-
-    Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
-    lex_file(lexer, compiler, file);
-    print_errors(compiler);
-
-    Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
-    parse_file(parser, compiler, lexer);
-    print_errors(compiler);
-    file->root = parser->ast;
-
-    Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
-    memset(analyzer, 0, sizeof(*analyzer));
-    analyzer->compiler = compiler;
-
-    create_scopes_ast(analyzer, parser->ast);
-    print_errors(compiler);
-
-    process_imports(compiler, file, NULL, parser->ast);
-
-    register_symbol_asts(analyzer, parser->ast, 1);
-    print_errors(compiler);
-
-    analyze_asts(analyzer, parser->ast, 1);
-    print_errors(compiler);
-
-    llvm_codegen_ast(
-        compiler->backend, &compiler->backend->mod, file->root, false, NULL);
-
-    return file;
-}
-
-void compile_file(Compiler *compiler, String filepath)
-{
-    LLContext *llvm_context =
-        bump_alloc(&compiler->bump, sizeof(*llvm_context));
-    memset(llvm_context, 0, sizeof(*llvm_context));
-    llvm_init(llvm_context, compiler);
-    compiler->backend = llvm_context;
-
     process_file(compiler, filepath);
-
-    llvm_verify_module(llvm_context);
+    llvm_verify_module(compiler->backend);
 }
 
-void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
+static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 {
     LLVMInitializeAllTargetInfos();
     LLVMInitializeAllTargets();
@@ -252,7 +397,7 @@ static const char *COMPILER_USAGE[] = {
     NULL,
 };
 
-void print_usage(int argc, char **argv)
+static void print_usage(int argc, char **argv)
 {
     const char **line = COMPILER_USAGE;
     while (*line)

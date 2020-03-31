@@ -548,7 +548,6 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
             if (res)
             {
-                field.enum_field.index = array_size(ast->enumeration.fields);
                 array_push(ast->enumeration.fields, field);
             }
 
@@ -1121,6 +1120,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     case TOKEN_IMPORT: {
         parser_next(p, 1);
         ast->type = AST_IMPORT;
+        memset(&ast->import.name, 0, sizeof(ast->import.name));
 
         if (parser_peek(p, 0)->type == TOKEN_IDENT)
         {
