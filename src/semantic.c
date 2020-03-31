@@ -659,7 +659,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             a->compiler,
             SCOPE_DEFAULT,
             array_size(ast->block.stmts),
-            NULL);
+            ast);
         if (array_size(a->scope_stack) > 0)
         {
             ast->block.scope->parent = *array_last(a->scope_stack);
@@ -758,7 +758,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             a->compiler,
             SCOPE_DEFAULT,
             5, // Small number, because there's only gonna be 2 declarations max
-            NULL);
+            ast);
         if (array_size(a->scope_stack) > 0)
         {
             ast->for_stmt.scope->parent = *array_last(a->scope_stack);
@@ -1203,7 +1203,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *enum_type = ast->parent->as_type;
+        Ast *enum_ast = ast->sym_scope->ast;
+        assert(enum_ast);
+        assert(enum_ast->type == AST_ENUM);
+
+        TypeInfo *enum_type = enum_ast->as_type;
         if (!enum_type)
         {
             assert(array_size(a->compiler->errors) > 0);
@@ -1574,8 +1578,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             case AST_ENUM_FIELD: {
-                ast->type_info = ast_as_type(
-                    a->compiler, sym->sym_scope, sym->parent, false);
+                Ast *enum_ast = sym->sym_scope->ast;
+                assert(enum_ast);
+                assert(enum_ast->type == AST_ENUM);
+
+                ast->type_info =
+                    ast_as_type(a->compiler, sym->sym_scope, enum_ast, false);
                 break;
             }
 

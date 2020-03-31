@@ -9,8 +9,9 @@ typedef struct Scope
     HashMap *map;
     struct Scope *parent;
     /*array*/ struct Scope **siblings;
-    struct Ast *procedure;
     struct AstValue value;
+
+    struct Ast *ast;
 } Scope;
 
 void scope_init(
@@ -18,13 +19,13 @@ void scope_init(
     Compiler *compiler,
     ScopeType type,
     size_t size,
-    struct Ast *procedure)
+    struct Ast *ast)
 {
     memset(scope, 0, sizeof(*scope));
     scope->type = type;
     scope->map = bump_alloc(&compiler->bump, sizeof(*scope->map));
     hash_init(scope->map, size);
-    scope->procedure = procedure;
+    scope->ast = ast;
 }
 
 void scope_set(Scope *scope, String name, struct Ast *decl)
@@ -58,7 +59,8 @@ struct Ast *get_symbol(Scope *scope, String name)
 
 struct Ast *get_scope_procedure(Scope *scope)
 {
-    if (scope->procedure) return scope->procedure;
+    if (scope->ast && scope->ast->type == AST_PROC_DECL)
+        return scope->ast;
 
     if (scope->parent) return get_scope_procedure(scope->parent);
 

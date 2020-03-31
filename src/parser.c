@@ -522,7 +522,6 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
             field.type = AST_ENUM_FIELD;
-            field.parent = ast;
 
             Token *name_tok = parser_consume(p, TOKEN_IDENT);
             if (!name_tok)

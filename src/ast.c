@@ -90,7 +90,6 @@ typedef struct Ast
 {
     AstType type;
     Location loc;
-    struct Ast *parent;
     struct TypeInfo *type_info;
     struct TypeInfo *as_type;
     struct Scope *sym_scope;
