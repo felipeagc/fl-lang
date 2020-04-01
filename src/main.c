@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <float.h>
 #include <assert.h>
 
 #include <llvm-c/Analysis.h>
@@ -125,12 +126,21 @@ static void compiler_init(Compiler *compiler)
 
     // Initialize builtin scopes
     {
-        /* static Ast min_ast = {.type = AST_BUILTIN_MIN, .type_info =
-         * &UINT_TYPE}; */
-        /* static Ast max_ast = {.type = AST_BUILTIN_MAX, .type_info = &}; */
+        init_numeric_type(compiler, &U8_TYPE);
+        init_numeric_type(compiler, &U16_TYPE);
+        init_numeric_type(compiler, &U32_TYPE);
+        init_numeric_type(compiler, &U64_TYPE);
 
-        /* scope_init(&NUMERIC_TYPE_SCOPE, compiler, SCOPE_DEFAULT, 3, NULL); */
-        /* scope_set(scope, sym_name, ast); */
+        init_numeric_type(compiler, &I8_TYPE);
+        init_numeric_type(compiler, &I16_TYPE);
+        init_numeric_type(compiler, &I32_TYPE);
+        init_numeric_type(compiler, &I64_TYPE);
+
+        init_numeric_type(compiler, &UINT_TYPE);
+        init_numeric_type(compiler, &INT_TYPE);
+
+        init_numeric_type(compiler, &FLOAT_TYPE);
+        init_numeric_type(compiler, &DOUBLE_TYPE);
     }
 
     // Initialize builtin module

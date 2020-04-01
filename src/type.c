@@ -31,8 +31,8 @@ typedef struct TypeInfo
     {
         struct
         {
-            bool is_signed;
             uint32_t num_bits;
+            bool is_signed;
         } integer;
         struct
         {
@@ -65,57 +65,37 @@ typedef struct TypeInfo
 } TypeInfo;
 
 // Unsigned int types
-static Scope U8_TYPE_SCOPE = {0};
 static TypeInfo U8_TYPE = {.kind = TYPE_INT,
-                           .integer = {.is_signed = false, .num_bits = 8},
-                           .scope = &U8_TYPE_SCOPE};
+                           .integer = {.is_signed = false, .num_bits = 8}};
 
-static Scope U16_TYPE_SCOPE = {0};
 static TypeInfo U16_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 16},
-                            .scope = &U16_TYPE_SCOPE};
+                            .integer = {.is_signed = false, .num_bits = 16}};
 
-static Scope U32_TYPE_SCOPE = {0};
 static TypeInfo U32_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 32},
-                            .scope = &U32_TYPE_SCOPE};
+                            .integer = {.is_signed = false, .num_bits = 32}};
 
-static Scope U64_TYPE_SCOPE = {0};
 static TypeInfo U64_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 64},
-                            .scope = &U64_TYPE_SCOPE};
+                            .integer = {.is_signed = false, .num_bits = 64}};
 
 // Signed int types
-static Scope I8_TYPE_SCOPE = {0};
 static TypeInfo I8_TYPE = {.kind = TYPE_INT,
-                           .integer = {.is_signed = true, .num_bits = 8},
-                           .scope = &I8_TYPE_SCOPE};
+                           .integer = {.is_signed = true, .num_bits = 8}};
 
-static Scope I16_TYPE_SCOPE = {0};
 static TypeInfo I16_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 16},
-                            .scope = &I16_TYPE_SCOPE};
+                            .integer = {.is_signed = true, .num_bits = 16}};
 
-static Scope I32_TYPE_SCOPE = {0};
 static TypeInfo I32_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 32},
-                            .scope = &I32_TYPE_SCOPE};
+                            .integer = {.is_signed = true, .num_bits = 32}};
 
-static Scope I64_TYPE_SCOPE = {0};
 static TypeInfo I64_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 64},
-                            .scope = &I64_TYPE_SCOPE};
+                            .integer = {.is_signed = true, .num_bits = 64}};
 
 // Architecture int types
-static Scope INT_TYPE_SCOPE = {0};
 static TypeInfo INT_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 64},
-                            .scope = &INT_TYPE_SCOPE};
+                            .integer = {.is_signed = true, .num_bits = 64}};
 
-static Scope UINT_TYPE_SCOPE = {0};
 static TypeInfo UINT_TYPE = {.kind = TYPE_INT,
-                             .integer = {.is_signed = false, .num_bits = 64},
-                             .scope = &UINT_TYPE_SCOPE};
+                             .integer = {.is_signed = false, .num_bits = 64}};
 
 // Numeric literal types
 static TypeInfo INT_LIT_TYPE = {.kind = TYPE_INT,
@@ -128,13 +108,9 @@ static TypeInfo FLOAT_LIT_TYPE = {
 // Other types
 static TypeInfo BOOL_TYPE = {.kind = TYPE_BOOL};
 
-static Scope FLOAT_TYPE_SCOPE = {0};
-static TypeInfo FLOAT_TYPE = {
-    .kind = TYPE_FLOAT, .floating.num_bits = 32, .scope = &FLOAT_TYPE_SCOPE};
+static TypeInfo FLOAT_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
 
-static Scope DOUBLE_TYPE_SCOPE = {0};
-static TypeInfo DOUBLE_TYPE = {
-    .kind = TYPE_FLOAT, .floating.num_bits = 64, .scope = &DOUBLE_TYPE_SCOPE};
+static TypeInfo DOUBLE_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
 
 static TypeInfo VOID_TYPE = {.kind = TYPE_VOID};
 
@@ -326,7 +302,26 @@ end:
     return type;
 }
 
-static inline TypeInfo *create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
+static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
+{
+    Ast *min_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    Ast *max_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(min_ast, 0, sizeof(*min_ast));
+    memset(max_ast, 0, sizeof(*max_ast));
+    min_ast->type = AST_BUILTIN_MIN;
+    max_ast->type = AST_BUILTIN_MAX;
+
+    Scope *scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(scope, compiler, SCOPE_DEFAULT, 2, NULL);
+
+    type->scope = scope;
+    scope->type_info = type;
+    scope_set(scope, STR("min"), min_ast);
+    scope_set(scope, STR("max"), max_ast);
+}
+
+static inline TypeInfo *
+create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
@@ -340,12 +335,9 @@ static inline TypeInfo *create_array_type(Compiler *compiler, TypeInfo *subtype,
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->type_info = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    ptr_ast->type_info->kind = TYPE_POINTER;
-    ptr_ast->type_info->ptr.sub = ty->array.sub;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .type_info = &UINT_TYPE};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;
@@ -364,12 +356,9 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->type_info = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    ptr_ast->type_info->kind = TYPE_POINTER;
-    ptr_ast->type_info->ptr.sub = ty->array.sub;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .type_info = &UINT_TYPE};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;

@@ -1778,6 +1778,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             case AST_BUILTIN_CAP:
             case AST_BUILTIN_PTR:
             case AST_BUILTIN_LEN: {
+                analyze_ast(a, sym, NULL);
+                assert(sym->type_info);
                 ast->type_info = sym->type_info;
                 break;
             }
@@ -1790,6 +1792,58 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         default: break;
         }
+        break;
+    }
+
+    case AST_BUILTIN_LEN: {
+        Scope *scope = *array_last(a->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        switch (type->kind)
+        {
+        case TYPE_SLICE:
+        case TYPE_ARRAY: ast->type_info = &UINT_TYPE; break;
+
+        default: assert(0); break;
+        }
+        break;
+    }
+
+    case AST_BUILTIN_PTR: {
+        Scope *scope = *array_last(a->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        switch (type->kind)
+        {
+        case TYPE_SLICE:
+        case TYPE_ARRAY:
+            ast->type_info = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+            ast->type_info->kind = TYPE_POINTER;
+            ast->type_info->ptr.sub = type->array.sub;
+            break;
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_BUILTIN_MIN:
+    case AST_BUILTIN_MAX: {
+        Scope *scope = *array_last(a->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        switch (type->kind)
+        {
+        case TYPE_FLOAT:
+        case TYPE_INT: ast->type_info = type; break;
+
+        default: assert(0); break;
+        }
+
         break;
     }
 

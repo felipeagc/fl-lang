@@ -1411,6 +1411,127 @@ void llvm_codegen_ast(
         break;
     }
 
+    case AST_BUILTIN_MAX: {
+        Scope *scope = *array_last(l->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        AstValue result_value = {0};
+
+        switch (type->kind)
+        {
+        case TYPE_INT: {
+            uint64_t max_val;
+
+            if (type->integer.is_signed)
+            {
+                switch (type->integer.num_bits)
+                {
+                case 8: max_val = INT8_MAX; break;
+                case 16: max_val = INT16_MAX; break;
+                case 32: max_val = INT32_MAX; break;
+                case 64: max_val = INT64_MAX; break;
+                default: assert(0); break;
+                }
+            }
+            else
+            {
+                switch (type->integer.num_bits)
+                {
+                case 8: max_val = UINT8_MAX; break;
+                case 16: max_val = UINT16_MAX; break;
+                case 32: max_val = UINT32_MAX; break;
+                case 64: max_val = UINT64_MAX; break;
+                default: assert(0); break;
+                }
+            }
+
+            result_value.value =
+                LLVMConstInt(llvm_type(l, type), max_val, false);
+
+            break;
+        }
+
+        case TYPE_FLOAT: {
+            double max_val;
+
+            switch (type->floating.num_bits)
+            {
+            case 32: max_val = FLT_MAX; break;
+            case 64: max_val = DBL_MAX; break;
+            default: assert(0); break;
+            }
+
+            result_value.value = LLVMConstReal(llvm_type(l, type), max_val);
+
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        if (out_value) *out_value = result_value;
+
+        break;
+    }
+
+    case AST_BUILTIN_MIN: {
+        Scope *scope = *array_last(l->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        AstValue result_value = {0};
+
+        switch (type->kind)
+        {
+        case TYPE_INT: {
+            uint64_t min_val;
+
+            if (type->integer.is_signed)
+            {
+                switch (type->integer.num_bits)
+                {
+                case 8: min_val = INT8_MIN; break;
+                case 16: min_val = INT16_MIN; break;
+                case 32: min_val = INT32_MIN; break;
+                case 64: min_val = INT64_MIN; break;
+                default: assert(0); break;
+                }
+            }
+            else
+            {
+                min_val = 0;
+            }
+
+            result_value.value =
+                LLVMConstInt(llvm_type(l, type), min_val, false);
+
+            break;
+        }
+
+        case TYPE_FLOAT: {
+            double min_val;
+
+            switch (type->floating.num_bits)
+            {
+            case 32: min_val = FLT_MIN; break;
+            case 64: min_val = DBL_MIN; break;
+            default: assert(0); break;
+            }
+
+            result_value.value = LLVMConstReal(llvm_type(l, type), min_val);
+
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        if (out_value) *out_value = result_value;
+
+        break;
+    }
+
     case AST_ACCESS: {
         assert(array_size(l->scope_stack) > 0);
 

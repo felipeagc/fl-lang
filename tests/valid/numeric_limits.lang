@@ -1,0 +1,23 @@
+import "core:c";
+
+extern fn main() i32 {
+    printf(c"u64.max = %lu\n", u64.max);
+    printf(c"u64.min = %lu\n", u64.min);
+
+    printf(c"u32.max = %u\n", u32.max);
+    printf(c"u32.min = %u\n", u32.min);
+
+    printf(c"i64.max = %ld\n", i64.max);
+    printf(c"i64.min = %ld\n", i64.min);
+
+    printf(c"i32.max = %d\n", i32.max);
+    printf(c"i32.min = %d\n", i32.min);
+
+    printf(c"float.max = %f\n", float.max);
+    printf(c"float.min = %f\n", float.min);
+
+    printf(c"double.max = %lf\n", double.max);
+    printf(c"double.min = %lf\n", double.min);
+
+    return 0;
+}
