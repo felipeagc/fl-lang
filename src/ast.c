@@ -73,6 +73,12 @@ typedef enum AstType {
     AST_CONTINUE,
     AST_COMPOUND_LIT,
     AST_DISTINCT_TYPE,
+
+    AST_BUILTIN_LEN,
+    AST_BUILTIN_PTR,
+    AST_BUILTIN_CAP,
+    AST_BUILTIN_MAX,
+    AST_BUILTIN_MIN,
 } AstType;
 
 typedef struct AstValue

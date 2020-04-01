@@ -94,8 +94,8 @@ static void print_errors(Compiler *compiler)
 
 #include "printing.c"
 #include "lexer.c"
-#include "type.c"
 #include "scope.c"
+#include "type.c"
 
 #include "parser.c"
 #include "semantic.c"
@@ -123,6 +123,17 @@ static void compiler_init(Compiler *compiler)
     compiler->corelib_dir =
         bump_str_join(&compiler->bump, compiler->compiler_dir, STR("core/"));
 
+    // Initialize builtin scopes
+    {
+        /* static Ast min_ast = {.type = AST_BUILTIN_MIN, .type_info =
+         * &UINT_TYPE}; */
+        /* static Ast max_ast = {.type = AST_BUILTIN_MAX, .type_info = &}; */
+
+        /* scope_init(&NUMERIC_TYPE_SCOPE, compiler, SCOPE_DEFAULT, 3, NULL); */
+        /* scope_set(scope, sym_name, ast); */
+    }
+
+    // Initialize builtin module
     compiler->builtin_module = create_module_ast(compiler);
 
     Ast *os_enum =

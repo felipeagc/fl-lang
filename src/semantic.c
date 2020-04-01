@@ -464,12 +464,8 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             break;
         }
 
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_ARRAY;
-        ty->array.sub = ast->array_type.sub->as_type;
-        ty->array.size = size;
-        ast->as_type = ty;
+        ast->as_type =
+            create_array_type(compiler, ast->array_type.sub->as_type, size);
 
         break;
     }
@@ -477,10 +473,9 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
     case AST_SLICE_TYPE: {
         if (!ast_as_type(compiler, scope, ast->array_type.sub, false)) break;
 
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_SLICE;
-        ty->array.sub = ast->array_type.sub->as_type;
+        TypeInfo *ty =
+            create_slice_type(compiler, ast->array_type.sub->as_type);
+
         ast->as_type = ty;
         break;
     }
@@ -678,27 +673,20 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 
         switch (ast->type_info->kind)
         {
-        case TYPE_TYPE: {
-            if (ast->as_type)
-            {
-                accessed_scope = ast->as_type->scope;
-            }
-
+        case TYPE_TYPE:
+            if (ast->as_type) accessed_scope = ast->as_type->scope;
             break;
-        }
 
-        case TYPE_STRUCT: {
+        case TYPE_SLICE:
+        case TYPE_ARRAY:
+        case TYPE_STRUCT:
             accessed_scope = ast->type_info->scope;
+            assert(accessed_scope);
             break;
-        }
 
-        case TYPE_POINTER: {
-            if (ast->type_info->ptr.sub->kind == TYPE_STRUCT)
-            {
-                accessed_scope = ast->type_info->ptr.sub->scope;
-            }
+        case TYPE_POINTER:
+            accessed_scope = ast->type_info->ptr.sub->scope;
             break;
-        }
 
         default: break;
         }
@@ -915,7 +903,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         scope_init(
             ast->structure.scope,
             a->compiler,
-            SCOPE_STRUCT,
+            SCOPE_INSTANCED,
             array_size(ast->structure.fields),
             ast);
 
@@ -972,6 +960,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_BUILTIN_LEN:
+    case AST_BUILTIN_PTR:
+    case AST_BUILTIN_CAP:
+    case AST_BUILTIN_MAX:
+    case AST_BUILTIN_MIN:
     case AST_UNINITIALIZED:
     case AST_BREAK:
     case AST_CONTINUE:
@@ -1003,7 +996,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     switch (ast->type)
     {
-
     case AST_ROOT: {
         array_push(a->scope_stack, ast->block.scope);
         array_push(a->operand_scope_stack, ast->block.scope);
@@ -1114,6 +1106,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         array_pop(a->scope_stack);
         break;
     }
+
     default: return;
     }
 
@@ -1691,11 +1684,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_STRING_LIT: {
-            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-            ty->kind = TYPE_ARRAY;
-            ty->array.size = ast->primary.tok->str.length;
-            ty->array.sub = &I8_TYPE;
-            ast->type_info = ty;
+            ast->type_info = create_array_type(
+                a->compiler, &I8_TYPE, ast->primary.tok->str.length);
             break;
         }
 
@@ -1780,6 +1770,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             case AST_TYPEDEF: {
                 ast->type_info = &TYPE_OF_TYPE;
+                break;
+            }
+
+            case AST_BUILTIN_MAX:
+            case AST_BUILTIN_MIN:
+            case AST_BUILTIN_CAP:
+            case AST_BUILTIN_PTR:
+            case AST_BUILTIN_LEN: {
+                ast->type_info = sym->type_info;
                 break;
             }
 
@@ -1900,7 +1899,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            ast->type_info = &SIZE_INT_TYPE;
+            ast->type_info = &UINT_TYPE;
 
             break;
         }
@@ -1926,7 +1925,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            ast->type_info = &SIZE_INT_TYPE;
+            ast->type_info = &UINT_TYPE;
 
             break;
         }
@@ -2409,11 +2408,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->subscript_slice.left, NULL);
         if (ast->subscript_slice.lower)
         {
-            analyze_ast(a, ast->subscript_slice.lower, &SIZE_INT_TYPE);
+            analyze_ast(a, ast->subscript_slice.lower, &UINT_TYPE);
         }
         if (ast->subscript_slice.upper)
         {
-            analyze_ast(a, ast->subscript_slice.upper, &SIZE_INT_TYPE);
+            analyze_ast(a, ast->subscript_slice.upper, &UINT_TYPE);
         }
 
         if (!ast->subscript_slice.left->type_info)
@@ -2456,27 +2455,24 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_SLICE;
-        ast->type_info = ty;
+        TypeInfo *subtype = NULL;
 
         switch (ast->subscript_slice.left->type_info->kind)
         {
         case TYPE_SLICE:
         case TYPE_ARRAY: {
-            ast->type_info->array.sub =
-                ast->subscript_slice.left->type_info->array.sub;
+            subtype = ast->subscript_slice.left->type_info->array.sub;
             break;
         }
 
         case TYPE_POINTER: {
-            ast->type_info->array.sub =
-                ast->subscript_slice.left->type_info->ptr.sub;
+            subtype = ast->subscript_slice.left->type_info->ptr.sub;
             break;
         }
-        default: break;
+        default: assert(0); break;
         }
+
+        ast->type_info = create_slice_type(a->compiler, subtype);
 
         break;
     }
@@ -2571,36 +2567,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->loc,
                 "invalid access: could not resolve type of left "
                 "expression");
-            break;
-        }
-
-        if (ast->access.left->type_info->kind == TYPE_ARRAY ||
-            ast->access.left->type_info->kind == TYPE_SLICE)
-        {
-            Ast *right = get_inner_expr(ast->access.right);
-            if (right->type == AST_PRIMARY &&
-                right->primary.tok->type == TOKEN_IDENT)
-            {
-                if (string_equals(right->primary.tok->str, STR("len")))
-                {
-                    ast->type_info = &SIZE_INT_TYPE;
-                    break;
-                }
-                else if (string_equals(right->primary.tok->str, STR("ptr")))
-                {
-                    ast->type_info = ast->access.right->type_info;
-
-                    TypeInfo *ptr_ty =
-                        bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
-                    memset(ptr_ty, 0, sizeof(*ptr_ty));
-                    ptr_ty->kind = TYPE_POINTER;
-                    ptr_ty->ptr.sub = ast->access.left->type_info->array.sub;
-
-                    ast->type_info = ptr_ty;
-                    break;
-                }
-            }
-
             break;
         }
 

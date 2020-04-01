@@ -1,6 +1,6 @@
 typedef enum ScopeType {
     SCOPE_DEFAULT,
-    SCOPE_STRUCT,
+    SCOPE_INSTANCED,
 } ScopeType;
 
 typedef struct Scope
@@ -12,6 +12,7 @@ typedef struct Scope
     struct AstValue value;
 
     struct Ast *ast;
+    struct TypeInfo *type_info;
 } Scope;
 
 void scope_init(
@@ -59,8 +60,7 @@ struct Ast *get_symbol(Scope *scope, String name)
 
 struct Ast *get_scope_procedure(Scope *scope)
 {
-    if (scope->ast && scope->ast->type == AST_PROC_DECL)
-        return scope->ast;
+    if (scope->ast && scope->ast->type == AST_PROC_DECL) return scope->ast;
 
     if (scope->parent) return get_scope_procedure(scope->parent);
 

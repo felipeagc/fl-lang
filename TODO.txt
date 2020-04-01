@@ -18,7 +18,6 @@ Import files as byte arrays
 Implement sizeof and alignof myself instead of letting LLVM handle it
 
 TODO:
-- proper scopes for builtin types
 - templated functions
 - typeinfo type
 - any type

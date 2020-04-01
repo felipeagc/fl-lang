@@ -449,6 +449,15 @@ void llvm_codegen_ast(
                 break;
             }
 
+            case AST_BUILTIN_MAX:
+            case AST_BUILTIN_MIN:
+            case AST_BUILTIN_CAP:
+            case AST_BUILTIN_PTR:
+            case AST_BUILTIN_LEN: {
+                llvm_codegen_ast(l, mod, sym, is_const, out_value);
+                break;
+            }
+
             default: assert(0); break;
             }
 
@@ -1014,9 +1023,9 @@ void llvm_codegen_ast(
             if (!lower_value.value && !upper_value.value)
             {
                 lower_value.value =
-                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
                 upper_value.value = LLVMConstInt(
-                    llvm_type(l, &SIZE_INT_TYPE),
+                    llvm_type(l, &UINT_TYPE),
                     ast->subscript_slice.left->type_info->array.size,
                     false);
             }
@@ -1047,7 +1056,7 @@ void llvm_codegen_ast(
                     mod->builder, left_value.value, indices, 2, "");
 
                 lower_value.value =
-                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
                 upper_value.value = LLVMBuildLoad(mod->builder, len_ptr, "");
             }
 
@@ -1060,9 +1069,9 @@ void llvm_codegen_ast(
             if (!lower_value.value && !upper_value.value)
             {
                 lower_value.value =
-                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
                 upper_value.value =
-                    LLVMConstInt(llvm_type(l, &SIZE_INT_TYPE), 0, false);
+                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
             }
             break;
         }
@@ -1088,7 +1097,7 @@ void llvm_codegen_ast(
         {
             LLVMValueRef len = LLVMBuildSub(mod->builder, upper, lower, "");
             len = LLVMBuildIntCast2(
-                mod->builder, len, llvm_type(l, &SIZE_INT_TYPE), false, "");
+                mod->builder, len, llvm_type(l, &UINT_TYPE), false, "");
 
             LLVMValueRef indices[2] = {
                 LLVMConstInt(LLVMInt32Type(), 0, false),
@@ -1275,29 +1284,19 @@ void llvm_codegen_ast(
         break;
     }
 
-    case AST_ACCESS: {
-        assert(array_size(l->scope_stack) > 0);
+    case AST_BUILTIN_LEN: {
+        Scope *scope = *array_last(l->scope_stack);
+        assert(scope->type_info);
 
-        switch (ast->access.left->type_info->kind)
+        TypeInfo *type = scope->type_info;
+
+        switch (type->kind)
         {
         case TYPE_SLICE: {
-            AstValue slice_value = {0};
-            llvm_codegen_ast(l, mod, ast->access.left, false, &slice_value);
-
-            Ast *right = get_inner_expr(ast->access.right);
-            assert(right->type == AST_PRIMARY);
-            assert(right->primary.tok->type == TOKEN_IDENT);
+            AstValue slice_value = (*array_last(l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
-            uint32_t field_index = 0;
-            if (string_equals(right->primary.tok->str, STR("len")))
-            {
-                field_index = 0;
-            }
-            else if (string_equals(right->primary.tok->str, STR("ptr")))
-            {
-                field_index = 1;
-            }
+            uint32_t field_index = 0; // len index
 
             if (slice_value.is_lvalue)
             {
@@ -1329,75 +1328,121 @@ void llvm_codegen_ast(
         }
 
         case TYPE_ARRAY: {
-            Ast *right = get_inner_expr(ast->access.right);
-            assert(right->type == AST_PRIMARY);
-            assert(right->primary.tok->type == TOKEN_IDENT);
-
             AstValue result_value = {0};
+            result_value.is_lvalue = false;
+            result_value.value =
+                LLVMConstInt(llvm_type(l, &UINT_TYPE), type->array.size, false);
 
-            if (string_equals(right->primary.tok->str, STR("len")))
+            if (out_value) *out_value = result_value;
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_BUILTIN_PTR: {
+        Scope *scope = *array_last(l->scope_stack);
+        assert(scope->type_info);
+
+        TypeInfo *type = scope->type_info;
+
+        switch (type->kind)
+        {
+        case TYPE_SLICE: {
+            AstValue slice_value = (*array_last(l->scope_stack))->value;
+
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 1; // ptr index
+
+            if (slice_value.is_lvalue)
             {
-                result_value.is_lvalue = false;
-                result_value.value = LLVMConstInt(
-                    llvm_type(l, &SIZE_INT_TYPE),
-                    ast->access.left->type_info->array.size,
-                    false);
-            }
-            else if (string_equals(right->primary.tok->str, STR("ptr")))
-            {
-                AstValue array_value = {0};
-                llvm_codegen_ast(l, mod, ast->access.left, false, &array_value);
-
-                assert(array_value.is_lvalue);
-
                 LLVMValueRef indices[2] = {
                     LLVMConstInt(LLVMInt32Type(), 0, false),
-                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
                 };
 
-                result_value.is_lvalue = false;
-                result_value.value = LLVMBuildGEP(
-                    mod->builder, array_value.value, indices, 2, "");
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 2, "");
             }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 1, "");
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            result_value.value = field_ptr;
 
             if (out_value) *out_value = result_value;
 
             break;
         }
 
-        default: {
-            Scope *accessed_scope = get_expr_scope(
-                l->compiler, *array_last(l->scope_stack), ast->access.left);
+        case TYPE_ARRAY: {
+            AstValue array_value = (*array_last(l->scope_stack))->value;
 
-            switch (accessed_scope->type)
+            assert(array_value.is_lvalue);
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+            };
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = false;
+            result_value.value =
+                LLVMBuildGEP(mod->builder, array_value.value, indices, 2, "");
+
+            if (out_value) *out_value = result_value;
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_ACCESS: {
+        assert(array_size(l->scope_stack) > 0);
+
+        Scope *accessed_scope = get_expr_scope(
+            l->compiler, *array_last(l->scope_stack), ast->access.left);
+
+        switch (accessed_scope->type)
+        {
+        case SCOPE_DEFAULT: {
+            array_push(l->scope_stack, accessed_scope);
+            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+            array_pop(l->scope_stack);
+            break;
+        }
+        case SCOPE_INSTANCED: {
+            // Create a copy of the scope for this instance of the struct
+            Scope instance_scope = *accessed_scope;
+
+            AstValue accessed_value = {0};
+            llvm_codegen_ast(
+                l, mod, ast->access.left, is_const, &accessed_value);
+
+            if (ast->access.left->type_info->kind == TYPE_POINTER)
             {
-            case SCOPE_DEFAULT: {
-                array_push(l->scope_stack, accessed_scope);
-                llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-                array_pop(l->scope_stack);
-                break;
+                accessed_value.value = load_val(mod, &accessed_value);
             }
-            case SCOPE_STRUCT: {
-                // Create a copy of the scope for this instance of the struct
-                Scope instance_scope = *accessed_scope;
 
-                AstValue accessed_value = {0};
-                llvm_codegen_ast(
-                    l, mod, ast->access.left, false, &accessed_value);
+            instance_scope.value = accessed_value;
 
-                if (ast->access.left->type_info->kind == TYPE_POINTER)
-                {
-                    accessed_value.value = load_val(mod, &accessed_value);
-                }
-
-                instance_scope.value = accessed_value;
-
-                array_push(l->scope_stack, &instance_scope);
-                llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-                array_pop(l->scope_stack);
-                break;
-            }
-            }
+            array_push(l->scope_stack, &instance_scope);
+            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+            array_pop(l->scope_stack);
             break;
         }
         }
