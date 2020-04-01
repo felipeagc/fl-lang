@@ -145,6 +145,15 @@ static void compiler_init(Compiler *compiler)
             ident_expr(compiler, STR("OsType")),
             ident_expr(compiler, STR("linux"))));
 
+    add_module_constant(
+        compiler,
+        compiler->builtin_module,
+        STR("BUILD_MODE"),
+        access_expr(
+            compiler,
+            ident_expr(compiler, STR("BuildMode")),
+            ident_expr(compiler, STR("debug"))));
+
     String core_builtin_path = STR("core:builtin");
 
     SourceFile *file = bump_alloc(&compiler->bump, sizeof(*file));

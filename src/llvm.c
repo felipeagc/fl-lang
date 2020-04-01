@@ -2133,6 +2133,26 @@ void llvm_codegen_ast(
         break;
     }
 
+    case AST_STATIC_IF: {
+        int64_t i64;
+        bool resolved = resolve_expr_int(
+            l->compiler,
+            *array_last(l->scope_stack),
+            ast->static_if.cond_expr,
+            &i64);
+        assert(resolved);
+
+        Ast *stmts =
+            (i64 != 0) ? ast->static_if.if_stmts : ast->static_if.else_stmts;
+
+        for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+        {
+            llvm_codegen_ast(l, mod, stmt, false, NULL);
+        }
+
+        break;
+    }
+
     case AST_IF: {
         AstValue cond_val = {0};
         llvm_codegen_ast(l, mod, ast->if_stmt.cond_expr, false, &cond_val);

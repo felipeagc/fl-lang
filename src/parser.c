@@ -600,7 +600,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         if (parser_peek(p, 0)->type == TOKEN_FN)
         {
             ast->proc.flags |= PROC_FLAG_IS_EXTERN;
-            goto parse_fn_type_label;
+            goto parse_fn_type;
         }
         else
         {
@@ -611,7 +611,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
     }
 
     case TOKEN_FN: {
-    parse_fn_type_label:
+    parse_fn_type:
         parser_next(p, 1);
 
         ast->type = AST_PROC_TYPE;
@@ -1012,7 +1012,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
             Ast stmt = {0};
-            if (!parse_stmt(p, &stmt, true, true)) res = false;
+            if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
             array_push(ast->block.stmts, stmt);
         }
 
@@ -1027,7 +1027,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (parser_peek(p, 0)->type == TOKEN_FN)
         {
             ast->proc.flags |= PROC_FLAG_IS_EXTERN;
-            goto parse_fn_decl_label;
+            goto parse_fn_decl;
         }
         else
         {
@@ -1038,7 +1038,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     }
 
     case TOKEN_FN: {
-    parse_fn_decl_label:
+    parse_fn_decl:
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
@@ -1211,6 +1211,61 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    case TOKEN_STATIC: {
+        parser_next(p, 1);
+
+        switch (parser_peek(p, 0)->type)
+        {
+        case TOKEN_IF: {
+            parser_next(p, 1);
+
+            ast->type = AST_STATIC_IF;
+            need_semi = false;
+
+            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+            ast->static_if.cond_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->static_if.cond_expr, false)) res = false;
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+            {
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
+                array_push(ast->static_if.if_stmts, stmt);
+            }
+
+            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+            if (parser_peek(p, 0)->type == TOKEN_ELSE)
+            {
+                parser_next(p, 1);
+
+                if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+                while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+                {
+                    Ast stmt = {0};
+                    if (!parse_stmt(p, &stmt, inside_procedure, true))
+                        res = false;
+                    array_push(ast->static_if.else_stmts, stmt);
+                }
+
+                if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+            }
+            break;
+        }
+
+        default: res = false; break;
+        }
+
+        break;
+    }
+
     case TOKEN_IF: {
         parser_next(p, 1);
 
@@ -1225,7 +1280,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true, true)) res = false;
+        if (!parse_stmt(p, ast->if_stmt.cond_stmt, inside_procedure, true))
+            res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_ELSE)
         {
@@ -1233,7 +1289,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
             ast->if_stmt.else_stmt =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->if_stmt.else_stmt, true, true)) res = false;
+            if (!parse_stmt(p, ast->if_stmt.else_stmt, inside_procedure, true))
+                res = false;
         }
 
         break;

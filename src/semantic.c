@@ -240,6 +240,16 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
             break;
         }
 
+        case TOKEN_TRUE:
+            *i64 = 1;
+            res = true;
+            break;
+
+        case TOKEN_FALSE:
+            *i64 = 0;
+            res = true;
+            break;
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str);
             if (sym)
@@ -275,6 +285,58 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
 
     case AST_PAREN_EXPR: {
         res = resolve_expr_int(compiler, scope, ast->expr, i64);
+        break;
+    }
+
+    case AST_UNARY_EXPR: {
+        res = true;
+
+        int64_t sub_int;
+        if (!resolve_expr_int(compiler, scope, ast->unop.sub, &sub_int))
+            res = false;
+
+        switch (ast->unop.type)
+        {
+        case UNOP_NEG: *i64 = -sub_int; break;
+        case UNOP_NOT: *i64 = !sub_int; break;
+        default: res = false; break;
+        }
+
+        break;
+    }
+
+    case AST_BINARY_EXPR: {
+        res = true;
+
+        int64_t left_int;
+        int64_t right_int;
+        if (!resolve_expr_int(compiler, scope, ast->binop.left, &left_int))
+            res = false;
+        if (!resolve_expr_int(compiler, scope, ast->binop.right, &right_int))
+            res = false;
+
+        switch (ast->binop.type)
+        {
+        case BINOP_ADD: *i64 = left_int + right_int; break;
+        case BINOP_SUB: *i64 = left_int - right_int; break;
+        case BINOP_MUL: *i64 = left_int * right_int; break;
+        case BINOP_DIV: *i64 = left_int / right_int; break;
+        case BINOP_MOD: *i64 = left_int % right_int; break;
+        case BINOP_LSHIFT: *i64 = left_int << right_int; break;
+        case BINOP_RSHIFT: *i64 = left_int >> right_int; break;
+        case BINOP_BITAND: *i64 = left_int & right_int; break;
+        case BINOP_BITOR: *i64 = left_int | right_int; break;
+        case BINOP_BITXOR: *i64 = left_int ^ right_int; break;
+        case BINOP_EQ: *i64 = left_int == right_int; break;
+        case BINOP_NOTEQ: *i64 = left_int != right_int; break;
+        case BINOP_LESS: *i64 = left_int < right_int; break;
+        case BINOP_LESSEQ: *i64 = left_int <= right_int; break;
+        case BINOP_GREATER: *i64 = left_int > right_int; break;
+        case BINOP_GREATEREQ: *i64 = left_int >= right_int; break;
+        case BINOP_AND: *i64 = left_int && right_int; break;
+        case BINOP_OR: *i64 = left_int || right_int; break;
+        }
+
         break;
     }
 
@@ -743,6 +805,30 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_STATIC_IF: {
+        create_scopes_ast(a, ast->static_if.cond_expr);
+
+        int64_t i64;
+        if (!resolve_expr_int(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->static_if.cond_expr,
+                &i64))
+        {
+            break;
+        }
+
+        Ast *stmts =
+            (i64 != 0) ? ast->static_if.if_stmts : ast->static_if.else_stmts;
+
+        for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
+        {
+            create_scopes_ast(a, stmt);
+        }
+
+        break;
+    }
+
     case AST_WHILE: {
         create_scopes_ast(a, ast->while_stmt.cond);
         create_scopes_ast(a, ast->while_stmt.stmt);
@@ -757,7 +843,8 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             ast->for_stmt.scope,
             a->compiler,
             SCOPE_DEFAULT,
-            5, // Small number, because there's only gonna be 2 declarations max
+            5, // Small number, because there's only gonna be 2 declarations
+               // max
             ast);
         if (array_size(a->scope_stack) > 0)
         {
@@ -935,6 +1022,25 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_STATIC_IF: {
+        int64_t i64;
+        if (!resolve_expr_int(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->static_if.cond_expr,
+                &i64))
+        {
+            break;
+        }
+
+        Ast *stmts =
+            (i64 != 0) ? ast->static_if.if_stmts : ast->static_if.else_stmts;
+
+        register_symbol_asts(a, stmts, array_size(stmts));
+
+        break;
+    }
+
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         sym_name = ast->decl.name;
@@ -1058,7 +1164,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "procedure does not return void, 'return' must contain a "
+                    "procedure does not return void, 'return' must contain "
+                    "a "
                     "value");
                 break;
             }
@@ -1319,6 +1426,77 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_STATIC_IF: {
+        analyze_ast(a, ast->static_if.cond_expr, NULL);
+
+        if (!ast->static_if.cond_expr->type_info)
+        {
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
+        if (ast->static_if.cond_expr->type_info->kind != TYPE_INT &&
+            ast->static_if.cond_expr->type_info->kind != TYPE_FLOAT &&
+            ast->static_if.cond_expr->type_info->kind != TYPE_BOOL &&
+            ast->static_if.cond_expr->type_info->kind != TYPE_POINTER)
+        {
+            compile_error(
+                a->compiler,
+                ast->static_if.cond_expr->loc,
+                "conditional only works for numerical types");
+            break;
+        }
+
+        if (!is_expr_const(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->static_if.cond_expr))
+        {
+            compile_error(
+                a->compiler,
+                ast->static_if.cond_expr->loc,
+                "'static if' requires condition to be a constant value");
+            break;
+        }
+
+        int64_t i64;
+        if (!resolve_expr_int(
+                a->compiler,
+                *array_last(a->scope_stack),
+                ast->static_if.cond_expr,
+                &i64))
+        {
+            compile_error(
+                a->compiler,
+                ast->static_if.cond_expr->loc,
+                "could not resolve 'static if' condition");
+            break;
+        }
+
+        if (i64)
+        {
+            for (Ast *stmt = ast->static_if.if_stmts;
+                 stmt !=
+                 ast->static_if.if_stmts + array_size(ast->static_if.if_stmts);
+                 ++stmt)
+            {
+                analyze_ast(a, stmt, NULL);
+            }
+        }
+        else
+        {
+            for (Ast *stmt = ast->static_if.else_stmts;
+                 stmt != ast->static_if.else_stmts +
+                             array_size(ast->static_if.else_stmts);
+                 ++stmt)
+            {
+                analyze_ast(a, stmt, NULL);
+            }
+        }
+
+        break;
+    }
+
     case AST_WHILE: {
         analyze_ast(a, ast->while_stmt.cond, NULL);
 
@@ -1342,7 +1520,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             compile_error(
                 a->compiler,
                 ast->for_stmt.cond->loc,
-                "'while' statement only takes numerical types as conditions");
+                "'while' statement only takes numerical types as "
+                "conditions");
             break;
         }
 
@@ -1382,7 +1561,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->for_stmt.cond->loc,
-                    "'for' statement only takes numerical types as conditions");
+                    "'for' statement only takes numerical types as "
+                    "conditions");
                 break;
             }
         }
@@ -2258,7 +2438,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "slice subscript lower and upper bounds need to be of same "
+                    "slice subscript lower and upper bounds need to be of "
+                    "same "
                     "type");
                 break;
             }
@@ -2388,7 +2569,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             compile_error(
                 a->compiler,
                 ast->loc,
-                "invalid access: could not resolve type of left expression");
+                "invalid access: could not resolve type of left "
+                "expression");
             break;
         }
 

@@ -15,7 +15,7 @@ extern fn main() void {
 
     printf(c"Hello\n");
 
-    if (builtin.OS == builtin.OsType.linux)
+    static if (builtin.OS == builtin.OsType.linux)
     {
         printf(c"I'm on linux!\n");
     }

@@ -17,9 +17,14 @@ Import files as byte arrays
 
 Implement sizeof and alignof myself instead of letting LLVM handle it
 
+TODO:
+- proper scopes for builtin types
+- templated functions
+- typeinfo type
+- any type
+
 Essential things for writing applications:
 - static/extern variables
-- conditional compilation
 - extern blocks
 - linker cli options
 - binding generator

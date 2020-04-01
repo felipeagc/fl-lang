@@ -1,0 +1,23 @@
+import "core:c";
+
+static if (true) {
+    const some_const = 321;
+} else {
+    const some_invalid_code: u32 = c"wrong type";
+}
+
+extern fn main() i32 {
+    static if (some_const == 321) {
+        printf(c"Hello\n");
+    } else {
+        abort();
+    }
+
+    static if (some_const != 321) {
+        abort();
+    } else {
+        printf(c"Hello again\n");
+    }
+
+    return 0;
+}
