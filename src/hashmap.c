@@ -67,7 +67,7 @@ static void *hash_set(HashMap *map, String key, void *value)
     return value;
 }
 
-static void *hash_get(HashMap *map, String key)
+static bool hash_get(HashMap *map, String key, void **result)
 {
     uint64_t hash = hash_str(key);
     uint32_t i = hash % map->size;
@@ -80,10 +80,16 @@ static void *hash_get(HashMap *map, String key)
     }
     if (iters >= map->size)
     {
-        return NULL;
+        return false;
     }
 
-    return map->hashes[i] == 0 ? NULL : map->values[i];
+    if (map->hashes[i] != 0)
+    {
+        if (result) *result = map->values[i];
+        return true;
+    }
+
+    return false;
 }
 
 #if 0

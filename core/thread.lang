@@ -1,0 +1,6 @@
+version (linux) {
+    typedef Thread distinct *void;
+    typedef ThreadStart fn* (arg: *void) *void;
+
+    extern fn pthread_create(thrd: *Thread, attr: *void, start: ThreadStart, arg: *void) i32;
+}

@@ -37,7 +37,9 @@ void scope_set(Scope *scope, String name, struct Ast *decl)
 
 struct Ast *scope_get_local(Scope *scope, String name)
 {
-    return hash_get(scope->map, name);
+    Ast *sym = NULL;
+    hash_get(scope->map, name, (void **)&sym);
+    return sym;
 }
 
 struct Ast *get_symbol(Scope *scope, String name)

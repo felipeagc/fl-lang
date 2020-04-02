@@ -1,6 +1,5 @@
 import hello "imported.lang";
 import "core:c";
-import builtin "core:builtin";
 
 extern fn main() void {
     hello.say_hello();
@@ -14,9 +13,4 @@ extern fn main() void {
     some_var.field = 32;
 
     printf(c"Hello\n");
-
-    static if (builtin.OS == builtin.OsType.linux)
-    {
-        printf(c"I'm on linux!\n");
-    }
 }

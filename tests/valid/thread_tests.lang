@@ -1,0 +1,15 @@
+import "core:c";
+import "core:thread";
+
+fn thread_start(arg: *void) *void {
+    printf(c"Hello!\n");
+
+    return null;
+}
+
+extern fn main() i32 {
+    var thread: Thread;
+    pthread_create(&thread, null, thread_start, null);
+
+    return 0;
+}

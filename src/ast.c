@@ -38,6 +38,7 @@ typedef enum IntrinsicType {
 typedef enum AstType {
     AST_UNINITIALIZED,
     AST_ROOT,
+    AST_VERSION_BLOCK,
     AST_STRUCT,
     AST_ENUM,
     AST_PROC_DECL,
@@ -66,7 +67,6 @@ typedef enum AstType {
     AST_PROC_PARAM,
     AST_CAST,
     AST_IF,
-    AST_STATIC_IF,
     AST_WHILE,
     AST_FOR,
     AST_BREAK,
@@ -138,10 +138,9 @@ typedef struct Ast
         } if_stmt;
         struct
         {
-            struct Ast *cond_expr;
-            /*array*/ struct Ast *if_stmts;
-            /*array*/ struct Ast *else_stmts;
-        } static_if;
+            String version;
+            /*array*/ struct Ast *stmts;
+        } version_block;
         struct
         {
             struct Ast *cond;

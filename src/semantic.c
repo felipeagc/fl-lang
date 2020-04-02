@@ -7,6 +7,8 @@ typedef struct Analyzer
     /*array*/ Ast **continue_stack;
 } Analyzer;
 
+static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type);
+
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
 static inline Ast *get_inner_expr(Ast *ast)
@@ -317,24 +319,24 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
 
         switch (ast->binop.type)
         {
-        case BINOP_ADD: *i64 = left_int + right_int; break;
-        case BINOP_SUB: *i64 = left_int - right_int; break;
-        case BINOP_MUL: *i64 = left_int * right_int; break;
-        case BINOP_DIV: *i64 = left_int / right_int; break;
-        case BINOP_MOD: *i64 = left_int % right_int; break;
-        case BINOP_LSHIFT: *i64 = left_int << right_int; break;
-        case BINOP_RSHIFT: *i64 = left_int >> right_int; break;
-        case BINOP_BITAND: *i64 = left_int & right_int; break;
-        case BINOP_BITOR: *i64 = left_int | right_int; break;
-        case BINOP_BITXOR: *i64 = left_int ^ right_int; break;
-        case BINOP_EQ: *i64 = left_int == right_int; break;
-        case BINOP_NOTEQ: *i64 = left_int != right_int; break;
-        case BINOP_LESS: *i64 = left_int < right_int; break;
-        case BINOP_LESSEQ: *i64 = left_int <= right_int; break;
-        case BINOP_GREATER: *i64 = left_int > right_int; break;
-        case BINOP_GREATEREQ: *i64 = left_int >= right_int; break;
-        case BINOP_AND: *i64 = left_int && right_int; break;
-        case BINOP_OR: *i64 = left_int || right_int; break;
+        case BINOP_ADD: *i64 = (left_int + right_int); break;
+        case BINOP_SUB: *i64 = (left_int - right_int); break;
+        case BINOP_MUL: *i64 = (left_int * right_int); break;
+        case BINOP_DIV: *i64 = (left_int / right_int); break;
+        case BINOP_MOD: *i64 = (left_int % right_int); break;
+        case BINOP_LSHIFT: *i64 = (left_int << right_int); break;
+        case BINOP_RSHIFT: *i64 = (left_int >> right_int); break;
+        case BINOP_BITAND: *i64 = (left_int & right_int); break;
+        case BINOP_BITOR: *i64 = (left_int | right_int); break;
+        case BINOP_BITXOR: *i64 = (left_int ^ right_int); break;
+        case BINOP_EQ: *i64 = (left_int == right_int); break;
+        case BINOP_NOTEQ: *i64 = (left_int != right_int); break;
+        case BINOP_LESS: *i64 = (left_int < right_int); break;
+        case BINOP_LESSEQ: *i64 = (left_int <= right_int); break;
+        case BINOP_GREATER: *i64 = (left_int > right_int); break;
+        case BINOP_GREATEREQ: *i64 = (left_int >= right_int); break;
+        case BINOP_AND: *i64 = (left_int && right_int); break;
+        case BINOP_OR: *i64 = (left_int || right_int); break;
         }
 
         break;
@@ -655,10 +657,13 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
         switch (aliased->type)
         {
         case AST_IMPORT: {
-            SourceFile *file =
-                hash_get(&compiler->files, aliased->import.abs_path);
-            assert(file);
-            accessed_scope = file->root->block.scope;
+            SourceFile *file = NULL;
+            if (hash_get(
+                    &compiler->files, aliased->import.abs_path, (void **)&file))
+            {
+                assert(file);
+                accessed_scope = file->root->block.scope;
+            }
             break;
         }
 
@@ -793,25 +798,16 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_STATIC_IF: {
-        create_scopes_ast(a, ast->static_if.cond_expr);
-
-        int64_t i64;
-        if (!resolve_expr_int(
-                a->compiler,
-                *array_last(a->scope_stack),
-                ast->static_if.cond_expr,
-                &i64))
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
         {
-            break;
-        }
-
-        Ast *stmts =
-            (i64 != 0) ? ast->static_if.if_stmts : ast->static_if.else_stmts;
-
-        for (Ast *stmt = stmts; stmt != stmts + array_size(stmts); ++stmt)
-        {
-            create_scopes_ast(a, stmt);
+            for (Ast *stmt = ast->version_block.stmts;
+                 stmt != ast->version_block.stmts +
+                             array_size(ast->version_block.stmts);
+                 ++stmt)
+            {
+                create_scopes_ast(a, stmt);
+            }
         }
 
         break;
@@ -1014,21 +1010,14 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_STATIC_IF: {
-        int64_t i64;
-        if (!resolve_expr_int(
-                a->compiler,
-                *array_last(a->scope_stack),
-                ast->static_if.cond_expr,
-                &i64))
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
         {
-            break;
+            register_symbol_asts(
+                a,
+                ast->version_block.stmts,
+                array_size(ast->version_block.stmts));
         }
-
-        Ast *stmts =
-            (i64 != 0) ? ast->static_if.if_stmts : ast->static_if.else_stmts;
-
-        register_symbol_asts(a, stmts, array_size(stmts));
 
         break;
     }
@@ -1056,6 +1045,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_TYPEDEF: {
         sym_name = ast->type_def.name;
+        printf("Hello: %.*s\n", (int)sym_name.length, sym_name.buf);
         break;
     }
 
@@ -1419,68 +1409,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
-    case AST_STATIC_IF: {
-        analyze_ast(a, ast->static_if.cond_expr, NULL);
-
-        if (!ast->static_if.cond_expr->type_info)
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
         {
-            assert(array_size(a->compiler->errors) > 0);
-            break;
-        }
-
-        if (ast->static_if.cond_expr->type_info->kind != TYPE_INT &&
-            ast->static_if.cond_expr->type_info->kind != TYPE_FLOAT &&
-            ast->static_if.cond_expr->type_info->kind != TYPE_BOOL &&
-            ast->static_if.cond_expr->type_info->kind != TYPE_POINTER)
-        {
-            compile_error(
-                a->compiler,
-                ast->static_if.cond_expr->loc,
-                "conditional only works for numerical types");
-            break;
-        }
-
-        if (!is_expr_const(
-                a->compiler,
-                *array_last(a->scope_stack),
-                ast->static_if.cond_expr))
-        {
-            compile_error(
-                a->compiler,
-                ast->static_if.cond_expr->loc,
-                "'static if' requires condition to be a constant value");
-            break;
-        }
-
-        int64_t i64;
-        if (!resolve_expr_int(
-                a->compiler,
-                *array_last(a->scope_stack),
-                ast->static_if.cond_expr,
-                &i64))
-        {
-            compile_error(
-                a->compiler,
-                ast->static_if.cond_expr->loc,
-                "could not resolve 'static if' condition");
-            break;
-        }
-
-        if (i64)
-        {
-            for (Ast *stmt = ast->static_if.if_stmts;
-                 stmt !=
-                 ast->static_if.if_stmts + array_size(ast->static_if.if_stmts);
-                 ++stmt)
-            {
-                analyze_ast(a, stmt, NULL);
-            }
-        }
-        else
-        {
-            for (Ast *stmt = ast->static_if.else_stmts;
-                 stmt != ast->static_if.else_stmts +
-                             array_size(ast->static_if.else_stmts);
+            for (Ast *stmt = ast->version_block.stmts;
+                 stmt != ast->version_block.stmts +
+                             array_size(ast->version_block.stmts);
                  ++stmt)
             {
                 analyze_ast(a, stmt, NULL);

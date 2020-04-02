@@ -7,6 +7,7 @@ static Ast *create_module_ast(Compiler *compiler)
     return module;
 }
 
+#if 0
 static Ast *add_module_enum(Compiler *compiler, Ast *module, String enum_name)
 {
     Ast *enumeration = bump_alloc(&compiler->bump, sizeof(Ast));
@@ -83,4 +84,4 @@ add_module_constant(Compiler *compiler, Ast *module, String name, Ast *value)
     array_push(module->block.stmts, constant);
     return array_last(module->block.stmts);
 }
-
+#endif

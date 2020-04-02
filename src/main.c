@@ -44,6 +44,7 @@ typedef struct Compiler
     BumpAlloc bump;
     /*array*/ Error *errors;
     HashMap files;
+    HashMap versions;
     struct LLContext *backend;
     String compiler_path;
     String compiler_dir;
@@ -68,6 +69,11 @@ compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
 
     Error err = {.loc = loc, .message = message};
     array_push(compiler->errors, err);
+}
+
+static bool compiler_has_version(Compiler *compiler, String version)
+{
+    return hash_get(&compiler->versions, version, NULL);
 }
 
 static void print_errors(Compiler *compiler)
@@ -112,6 +118,7 @@ static void compiler_init(Compiler *compiler)
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
     hash_init(&compiler->files, 521);
+    hash_init(&compiler->versions, 16);
 
     compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));
     memset(compiler->backend, 0, sizeof(*compiler->backend));
@@ -146,34 +153,10 @@ static void compiler_init(Compiler *compiler)
     // Initialize builtin module
     compiler->builtin_module = create_module_ast(compiler);
 
-    Ast *os_enum =
-        add_module_enum(compiler, compiler->builtin_module, STR("OsType"));
-    add_enum_field(compiler, os_enum, STR("linux"), 1);
-    add_enum_field(compiler, os_enum, STR("windows"), 2);
-    add_enum_field(compiler, os_enum, STR("macos"), 3);
-
-    Ast *build_mode_enum =
-        add_module_enum(compiler, compiler->builtin_module, STR("BuildMode"));
-    add_enum_field(compiler, build_mode_enum, STR("debug"), 1);
-    add_enum_field(compiler, build_mode_enum, STR("release"), 2);
-
-    add_module_constant(
-        compiler,
-        compiler->builtin_module,
-        STR("OS"),
-        access_expr(
-            compiler,
-            ident_expr(compiler, STR("OsType")),
-            ident_expr(compiler, STR("linux"))));
-
-    add_module_constant(
-        compiler,
-        compiler->builtin_module,
-        STR("BUILD_MODE"),
-        access_expr(
-            compiler,
-            ident_expr(compiler, STR("BuildMode")),
-            ident_expr(compiler, STR("debug"))));
+    hash_set(&compiler->versions, STR("linux"), NULL);
+    hash_set(&compiler->versions, STR("posix"), NULL);
+    hash_set(&compiler->versions, STR("x86_64"), NULL);
+    hash_set(&compiler->versions, STR("debug"), NULL);
 
     String core_builtin_path = STR("core:builtin");
 
@@ -187,6 +170,7 @@ static void compiler_init(Compiler *compiler)
 
 static void compiler_destroy(Compiler *compiler)
 {
+    hash_destroy(&compiler->versions);
     hash_destroy(&compiler->files);
     bump_destroy(&compiler->bump);
 }
@@ -241,9 +225,10 @@ static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast)
 
 static SourceFile *process_file(Compiler *compiler, String absolute_path)
 {
-    SourceFile *file = hash_get(&compiler->files, absolute_path);
-    if (file)
+    SourceFile *file = NULL;
+    if (hash_get(&compiler->files, absolute_path, (void **)&file))
     {
+        assert(file);
         return file;
     }
 

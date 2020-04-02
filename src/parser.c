@@ -1211,57 +1211,32 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    case TOKEN_STATIC: {
+    case TOKEN_VERSION: {
         parser_next(p, 1);
 
-        switch (parser_peek(p, 0)->type)
+        ast->type = AST_VERSION_BLOCK;
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        Token *version_ident = parser_consume(p, TOKEN_IDENT);
+        if (version_ident)
+            ast->version_block.version = version_ident->str;
+        else
+            res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
-        case TOKEN_IF: {
-            parser_next(p, 1);
-
-            ast->type = AST_STATIC_IF;
-            need_semi = false;
-
-            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
-
-            ast->static_if.cond_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->static_if.cond_expr, false)) res = false;
-
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
-
-            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
-            {
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
-                array_push(ast->static_if.if_stmts, stmt);
-            }
-
-            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
-
-            if (parser_peek(p, 0)->type == TOKEN_ELSE)
-            {
-                parser_next(p, 1);
-
-                if (!parser_consume(p, TOKEN_LCURLY)) res = false;
-
-                while (parser_peek(p, 0)->type != TOKEN_RCURLY)
-                {
-                    Ast stmt = {0};
-                    if (!parse_stmt(p, &stmt, inside_procedure, true))
-                        res = false;
-                    array_push(ast->static_if.else_stmts, stmt);
-                }
-
-                if (!parser_consume(p, TOKEN_RCURLY)) res = false;
-            }
-            break;
+            Ast stmt = {0};
+            if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
+            array_push(ast->version_block.stmts, stmt);
         }
 
-        default: res = false; break;
-        }
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
 
         break;
     }
