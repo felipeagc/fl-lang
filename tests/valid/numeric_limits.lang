@@ -1,6 +1,6 @@
 import "core:c";
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     printf(c"u64.max = %lu\n", u64.max);
     printf(c"u64.min = %lu\n", u64.min);
 

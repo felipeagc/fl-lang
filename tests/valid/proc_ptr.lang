@@ -1,12 +1,12 @@
-typedef MyFunc fn* () void;
+typedef MyFunc fn* ();
 
-extern fn printf(fmt: *char, ...) i32;
+extern fn printf(fmt: *char, ...) -> i32;
 
-fn callback() void {
+fn callback() {
     printf(c"Hey!\n");
 }
 
-extern fn main() void {
+extern fn main() {
     var my_func: MyFunc = callback;
     my_func();
 }

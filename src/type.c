@@ -114,6 +114,8 @@ static TypeInfo DOUBLE_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
 
 static TypeInfo VOID_TYPE = {.kind = TYPE_VOID};
 
+static TypeInfo VOID_PTR_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &VOID_TYPE};
+
 static TypeInfo BOOL_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
 

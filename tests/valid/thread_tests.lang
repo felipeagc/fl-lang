@@ -4,7 +4,7 @@ import "core:thread";
 var my_val: i32 = 123;
 var mtx: Mutex;
 
-fn thread_start(arg: *void) *void {
+fn thread_start(arg: *void) -> *void {
     mutex_lock(&mtx);
     my_val = 321;
     mutex_unlock(&mtx);
@@ -16,7 +16,7 @@ fn thread_start(arg: *void) *void {
     return null;
 }
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     mutex_init(&mtx);
 
     var thread = thread_create(thread_start, null);

@@ -553,8 +553,15 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             array_push(ty->proc.params, *param_as_type);
         }
 
-        ty->proc.return_type =
-            ast_as_type(compiler, scope, ast->proc.return_type, false);
+        if (ast->proc.return_type)
+        {
+            ty->proc.return_type =
+                ast_as_type(compiler, scope, ast->proc.return_type, false);
+        }
+        else
+        {
+            ty->proc.return_type = &VOID_TYPE;
+        }
 
         if (!ty->proc.return_type)
         {
@@ -1045,7 +1052,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_TYPEDEF: {
         sym_name = ast->type_def.name;
-        printf("Hello: %.*s\n", (int)sym_name.length, sym_name.buf);
         break;
     }
 
@@ -1142,24 +1148,31 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             scope->ast->proc.returned = true;
         }
 
-        assert(proc->proc.return_type->as_type);
-        if (ast->expr)
+        TypeInfo *return_type = NULL;
+        if (proc->type_info)
         {
-            analyze_ast(a, ast->expr, proc->proc.return_type->as_type);
-        }
-        else
-        {
-            if (proc->proc.return_type->as_type->kind != TYPE_VOID)
+            assert(proc->type_info->kind == TYPE_POINTER);
+            return_type = proc->type_info->ptr.sub->proc.return_type;
+
+            if (!ast->expr)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "procedure does not return void, 'return' must contain "
-                    "a "
-                    "value");
-                break;
+                if (return_type->kind != TYPE_VOID)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "procedure does not return void, 'return' must contain "
+                        "a value");
+                    break;
+                }
             }
         }
+
+        if (ast->expr)
+        {
+            analyze_ast(a, ast->expr, return_type);
+        }
+
         break;
     }
 
@@ -1369,10 +1382,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             array_push(ty->proc.params, *param->decl.type_expr->as_type);
         }
 
-        analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
-        if (ast->proc.return_type->as_type)
+        if (ast->proc.return_type)
         {
-            ty->proc.return_type = ast->proc.return_type->as_type;
+            analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
+            if (ast->proc.return_type->as_type)
+            {
+                ty->proc.return_type = ast->proc.return_type->as_type;
+            }
+        }
+        else
+        {
+            ty->proc.return_type = &VOID_TYPE;
         }
 
         TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
@@ -1562,9 +1582,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_NULL: {
-            static TypeInfo void_ptr_ty = {.kind = TYPE_POINTER,
-                                           .ptr.sub = &VOID_TYPE};
-            ast->type_info = &void_ptr_ty;
+            ast->type_info = &VOID_PTR_TYPE;
 
             if (expected_type)
             {
@@ -1946,7 +1964,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, param, NULL);
         }
 
-        analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
+        if (ast->proc.return_type)
+        {
+            analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
+        }
 
         ast->type_info = &TYPE_OF_TYPE;
 
@@ -2729,13 +2750,19 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
             array_pop(a->operand_scope_stack);
             array_pop(a->scope_stack);
 
-            if (ast->proc.return_type->as_type->kind != TYPE_VOID &&
-                (ast->proc.flags & PROC_FLAG_HAS_BODY))
+            TypeInfo *proc_type = ast->type_info;
+
+            if (proc_type)
             {
-                if (!ast->proc.returned)
+                assert(proc_type->kind == TYPE_POINTER);
+                if (proc_type->ptr.sub->proc.return_type->kind != TYPE_VOID &&
+                    (ast->proc.flags & PROC_FLAG_HAS_BODY))
                 {
-                    compile_error(
-                        a->compiler, ast->loc, "procedure did not return");
+                    if (!ast->proc.returned)
+                    {
+                        compile_error(
+                            a->compiler, ast->loc, "procedure did not return");
+                    }
                 }
             }
 

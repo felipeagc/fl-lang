@@ -657,8 +657,14 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-        ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->proc.return_type, parsing_type)) res = false;
+        ast->proc.return_type = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_ARROW)
+        {
+            parser_next(p, 1);
+
+            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->proc.return_type, true)) res = false;
+        }
 
         break;
     }
@@ -1089,8 +1095,14 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         // Parse return type
-        ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->proc.return_type, true)) res = false;
+        ast->proc.return_type = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_ARROW)
+        {
+            parser_next(p, 1);
+
+            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->proc.return_type, true)) res = false;
+        }
 
         ast->proc.stmts = NULL;
 

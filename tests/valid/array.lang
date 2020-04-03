@@ -6,9 +6,9 @@ var global_array2: [ARRAY_SIZE]*char;
 var global_array3: [2]i32;
 var global_array4: [2][3]i32;
 
-extern fn printf(fmt: *char, ...) void;
+extern fn printf(fmt: *char, ...);
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     global_array1[1] = 321;
     printf(c"global_array1[1] = %d\n", global_array1[1]);
 

@@ -1,4 +1,4 @@
-extern fn main() i32 {
+extern fn main() -> i32 {
     var str: [_]char = "Hello";
     var c_str: *char = c"Hello";
     return 0;

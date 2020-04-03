@@ -13,7 +13,7 @@ typedef NestedStruct struct {
     },
 };
 
-fn print_nested(n: *NestedStruct) void {
+fn print_nested(n: *NestedStruct) {
     printf(c"n = %p\n", n);
     printf(c"n.name = %s\n", n.name);
     printf(c"n.name[0] = %c\n", n.name[0]);
@@ -25,7 +25,7 @@ fn print_nested(n: *NestedStruct) void {
     printf(c"n.sub.s[4].a = %d\n", n.sub.s[4].a);
 }
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     var a_struct: MyStruct;
     a_struct.a = 32;
     var b_struct: *MyStruct = &a_struct;

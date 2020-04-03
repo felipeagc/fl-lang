@@ -1,6 +1,6 @@
 import "core:c";
 
-extern fn main() void {
+extern fn main() {
     var test: i32 = 321;
 
     if (test) printf(c"Hello!\n");

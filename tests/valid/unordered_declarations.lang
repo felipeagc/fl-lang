@@ -1,4 +1,4 @@
-extern fn main() i32 {
+extern fn main() -> i32 {
     puts_fn(c"Hello");
 
     printf(c"other_int: %d\n", other_int);

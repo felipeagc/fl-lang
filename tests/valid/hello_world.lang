@@ -1,10 +1,10 @@
-extern fn puts(str: *i8) void;
+extern fn puts(str: *i8);
 
-fn add(a: i32, b: i32) void {
+fn add(a: i32, b: i32) {
 
 }
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     var a: i32 = 123;
     const b: i32 = 321;
     a = b;

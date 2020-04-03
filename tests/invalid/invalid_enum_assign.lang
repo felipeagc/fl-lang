@@ -2,7 +2,7 @@ typedef MyEnum enum u32 {
     one = 1,
 };
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     var my_enum: MyEnum = 1;
     return 0;
 }

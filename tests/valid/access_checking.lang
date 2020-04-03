@@ -9,12 +9,12 @@ typedef Struct struct {
 };
 
 
-fn test() *Struct {
+fn test() -> *Struct {
     return malloc(@sizeof(Struct));
 }
 
-extern fn main() void {
-    var func: fn* () *Struct = test;
+extern fn main() {
+    var func: fn* () -> *Struct = test;
     test().array[0].a = 123;
     func().array[0].a = 123;
     func()[0].array[0].a = 123;

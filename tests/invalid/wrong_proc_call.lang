@@ -1,5 +1,5 @@
-fn add(a: i32, b: i32) i32;
+fn add(a: i32, b: i32) -> i32;
 
-extern fn main() void {
+extern fn main() {
     add(1, c"");
 }

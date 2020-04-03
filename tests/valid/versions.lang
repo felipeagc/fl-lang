@@ -1,6 +1,6 @@
 import "core:c";
 
-extern fn main() i32 {
+extern fn main() -> i32 {
     version (linux) {
         printf(c"I'm on linux\n");
     }

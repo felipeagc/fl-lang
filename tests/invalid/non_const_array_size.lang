@@ -1,4 +1,4 @@
-extern fn main() void {
+extern fn main() {
     var size: i32 = 1;
     var array: [size]i32;
 }

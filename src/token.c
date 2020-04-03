@@ -28,6 +28,8 @@ typedef enum TokenType {
     TOKEN_ELLIPSIS,
     TOKEN_COMMA,
 
+    TOKEN_ARROW, // ->
+
     TOKEN_NOT,    // !
     TOKEN_ASSIGN, // =
 
@@ -139,6 +141,8 @@ static const char *token_strings[] = {
     [TOKEN_DOTDOT] = "..",
     [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
+    
+    [TOKEN_ARROW] = "->",
 
     [TOKEN_NOT] = "!",
     [TOKEN_ASSIGN] = "=",

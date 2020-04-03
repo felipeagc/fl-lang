@@ -7,6 +7,6 @@ typedef SomeType struct {
     field: i64,
 };
 
-fn say_hello() void {
+fn say_hello() {
     c.printf(c"Hello!\n");
 }
