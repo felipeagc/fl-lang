@@ -96,6 +96,7 @@ enum {
 typedef struct Ast
 {
     AstType type;
+    bool public;
     Location loc;
     struct TypeInfo *type_info;
     struct TypeInfo *as_type;

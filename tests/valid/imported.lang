@@ -1,12 +1,12 @@
-import c "core:c";
+pub import c "core:c";
 
-const some_const: i32 = 512;
-var some_var: i32 = 123;
+pub const some_const: i32 = 512;
+pub var some_var: i32 = 123;
 
-typedef SomeType struct {
+pub typedef SomeType struct {
     field: i64,
 };
 
-fn say_hello() {
+pub fn say_hello() {
     c.printf(c"Hello!\n");
 }

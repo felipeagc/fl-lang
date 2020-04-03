@@ -449,7 +449,7 @@ void llvm_codegen_ast(
 
         case TOKEN_IDENT: {
             Ast *sym =
-                get_symbol(*array_last(l->scope_stack), ast->primary.tok->str);
+                get_symbol(*array_last(l->scope_stack), ast->primary.tok->str, ast->loc.file);
             assert(sym);
 
             switch (sym->type)

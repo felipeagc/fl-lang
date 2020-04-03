@@ -1,18 +1,18 @@
-typedef c_int i32;
-typedef c_char char;
-typedef c_size uint;
+pub typedef c_int i32;
+pub typedef c_char char;
+pub typedef c_size uint;
 
-extern fn printf(fmt: *c_char, ...) -> c_int;
-extern fn puts(str: *c_char) -> c_int;
+pub extern fn printf(fmt: *c_char, ...) -> c_int;
+pub extern fn puts(str: *c_char) -> c_int;
 
-extern fn exit(code: c_int);
-extern fn abort();
+pub extern fn exit(code: c_int);
+pub extern fn abort();
 
-extern fn malloc(size: c_size) -> *void;
-extern fn realloc(ptr: *void, size: c_size) -> *void;
-extern fn free(ptr: *void);
+pub extern fn malloc(size: c_size) -> *void;
+pub extern fn realloc(ptr: *void, size: c_size) -> *void;
+pub extern fn free(ptr: *void);
 
-extern fn strlen(string: *c_char) -> c_size;
-extern fn strdup(string: *c_char) -> *c_char;
-extern fn strcmp(a: *c_char, b: *c_char) -> c_int;
-extern fn strncmp(a: *c_char, b: *c_char, n: c_size) -> c_int;
+pub extern fn strlen(string: *c_char) -> c_size;
+pub extern fn strdup(string: *c_char) -> *c_char;
+pub extern fn strcmp(a: *c_char, b: *c_char) -> c_int;
+pub extern fn strncmp(a: *c_char, b: *c_char, n: c_size) -> c_int;

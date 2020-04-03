@@ -42,20 +42,23 @@ struct Ast *scope_get_local(Scope *scope, String name)
     return sym;
 }
 
-struct Ast *get_symbol(Scope *scope, String name)
+struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
 {
     struct Ast *sym = scope_get_local(scope, name);
-    if (sym) return sym;
+    if (sym && (sym->loc.file == from_file || sym->public))
+    {
+        return sym;
+    }
 
     for (Scope **sibling = scope->siblings;
          sibling != scope->siblings + array_size(scope->siblings);
          ++sibling)
     {
-        sym = get_symbol(*sibling, name);
-        if (sym) return sym;
+        sym = get_symbol(*sibling, name, from_file);
+        if (sym && (sym->loc.file == from_file || sym->public)) return sym;
     }
 
-    if (scope->parent) return get_symbol(scope->parent, name);
+    if (scope->parent) return get_symbol(scope->parent, name, from_file);
 
     return NULL;
 }

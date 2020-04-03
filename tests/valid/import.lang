@@ -13,4 +13,6 @@ extern fn main() {
     some_var.field = 32;
 
     printf(c"Hello\n");
+
+    hello.c.printf(c"yo\n");
 }

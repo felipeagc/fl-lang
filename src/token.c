@@ -83,6 +83,7 @@ typedef enum TokenType {
     TOKEN_DYNAMIC,
     TOKEN_STATIC,
     TOKEN_VERSION,
+    TOKEN_PUB,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -197,6 +198,7 @@ static const char *token_strings[] = {
     [TOKEN_DYNAMIC] = "dynamic",
     [TOKEN_STATIC] = "static",
     [TOKEN_VERSION] = "version",
+    [TOKEN_PUB] = "pub",
 
     [TOKEN_INT_LIT] = "integer literal",
     [TOKEN_FLOAT_LIT] = "float literal",

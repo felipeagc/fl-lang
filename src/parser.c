@@ -465,6 +465,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
             field.type = AST_STRUCT_FIELD;
+            field.public = true;
 
             Token *name_tok = parser_consume(p, TOKEN_IDENT);
             if (!name_tok)
@@ -1027,6 +1028,50 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    case TOKEN_PUB: {
+        parser_next(p, 1);
+
+        ast->public = true;
+
+        switch (parser_peek(p, 0)->type)
+        {
+        case TOKEN_FN: {
+            goto parse_fn_decl;
+            break;
+        }
+
+        case TOKEN_CONST: {
+            goto parse_const_decl;
+            break;
+        }
+
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        case TOKEN_TYPEDEF: {
+            goto parse_typedef_decl;
+            break;
+        }
+
+        case TOKEN_EXTERN: {
+            goto parse_extern_decl;
+            break;
+        }
+
+        case TOKEN_IMPORT: {
+            goto parse_import_decl;
+            break;
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
+    parse_extern_decl:
     case TOKEN_EXTERN: {
         parser_next(p, 1);
 
@@ -1043,8 +1088,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    case TOKEN_FN: {
     parse_fn_decl:
+    case TOKEN_FN: {
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
@@ -1129,6 +1174,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    parse_import_decl:
     case TOKEN_IMPORT: {
         parser_next(p, 1);
         ast->type = AST_IMPORT;
@@ -1149,6 +1195,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    parse_var_decl:
+    parse_const_decl:
     case TOKEN_VAR:
     case TOKEN_CONST: {
         Token *kind = parser_next(p, 1);
@@ -1191,6 +1239,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    parse_typedef_decl:
     case TOKEN_TYPEDEF: {
         parser_next(p, 1);
 

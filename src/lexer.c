@@ -545,6 +545,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("dynamic", TOKEN_DYNAMIC);
             LEX_MATCH_STR("static", TOKEN_STATIC);
             LEX_MATCH_STR("version", TOKEN_VERSION);
+            LEX_MATCH_STR("pub", TOKEN_PUB);
 
             if (tok.type == TOKEN_IDENT)
             {

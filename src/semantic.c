@@ -31,7 +31,8 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
+
             if (sym)
             {
                 switch (sym->type)
@@ -157,7 +158,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
             {
                 switch (sym->type)
@@ -253,7 +254,7 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
             break;
 
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
             {
                 switch (sym->type)
@@ -399,7 +400,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         case TOKEN_VOID: ast->as_type = &VOID_TYPE; break;
 
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym && sym->type == AST_TYPEDEF)
             {
                 assert(sym->sym_scope);
@@ -615,7 +616,7 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            Ast *sym = get_symbol(scope, ast->primary.tok->str);
+            Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
             {
                 switch (sym->type)
@@ -1664,7 +1665,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TOKEN_IDENT: {
             Ast *sym =
-                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str);
+                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str, ast->loc.file);
 
             if (!sym)
             {

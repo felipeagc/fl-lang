@@ -311,7 +311,9 @@ static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
     memset(min_ast, 0, sizeof(*min_ast));
     memset(max_ast, 0, sizeof(*max_ast));
     min_ast->type = AST_BUILTIN_MIN;
+    min_ast->public = true;
     max_ast->type = AST_BUILTIN_MAX;
+    max_ast->public = true;
 
     Scope *scope = bump_alloc(&compiler->bump, sizeof(Scope));
     scope_init(scope, compiler, SCOPE_DEFAULT, 2, NULL);
@@ -337,9 +339,10 @@ create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->public = true;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;
@@ -358,9 +361,10 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->public = true;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;
