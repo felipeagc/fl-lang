@@ -633,13 +633,22 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast param = {0};
             param.type = AST_PROC_PARAM;
 
-            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-            if (!ident_tok)
-                res = false;
-            else
-                param.proc_param.name = ident_tok->str;
+            Token *ident_tok = parser_peek(p, 0);
+            param.loc = ident_tok->loc;
 
-            if (ident_tok) param.loc = ident_tok->loc;
+            if (ident_tok->type == TOKEN_UNDERSCORE)
+            {
+                parser_next(p, 1);
+            }
+            else if (ident_tok->type == TOKEN_IDENT)
+            {
+                parser_next(p, 1);
+                param.proc_param.name = ident_tok->str;
+            }
+            else
+            {
+                res = false;
+            }
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 
@@ -1115,13 +1124,22 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             Ast param = {0};
             param.type = AST_PROC_PARAM;
 
-            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-            if (!ident_tok)
-                res = false;
-            else
-                param.proc_param.name = ident_tok->str;
+            Token *ident_tok = parser_peek(p, 0);
+            param.loc = ident_tok->loc;
 
-            if (ident_tok) param.loc = ident_tok->loc;
+            if (ident_tok->type == TOKEN_UNDERSCORE)
+            {
+                parser_next(p, 1);
+            }
+            else if (ident_tok->type == TOKEN_IDENT)
+            {
+                parser_next(p, 1);
+                param.proc_param.name = ident_tok->str;
+            }
+            else
+            {
+                res = false;
+            }
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
 

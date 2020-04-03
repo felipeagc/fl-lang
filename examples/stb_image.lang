@@ -1,0 +1,103 @@
+pub typedef stbi_uc u8;
+pub typedef stbi_us u16;
+pub typedef stbi_io_callbacks struct {
+    read: fn* (_: *void, _: *i8, _: i32) -> i32,
+    skip: fn* (_: *void, _: i32),
+    eof: fn* (_: *void) -> i32,
+};
+pub extern fn stbi_load_from_memory(buffer: *stbi_uc, len: i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_uc;
+pub extern fn stbi_load_from_callbacks(clbk: *stbi_io_callbacks, user: *void, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_uc;
+pub extern fn stbi_load(filename: *i8, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_uc;
+pub extern fn stbi_load_from_file(f: *i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_uc;
+pub extern fn stbi_load_gif_from_memory(buffer: *stbi_uc, len: i32, delays: **i32, x: *i32, y: *i32, z: *i32, comp: *i32, req_comp: i32) -> *stbi_uc;
+pub extern fn stbi_convert_wchar_to_utf8(buffer: *i8, bufferlen: i32, input: *i32) -> i32;
+pub extern fn stbi_load_16_from_memory(buffer: *stbi_uc, len: i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_us;
+pub extern fn stbi_load_16_from_callbacks(clbk: *stbi_io_callbacks, user: *void, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_us;
+pub extern fn stbi_load_16(filename: *i8, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_us;
+pub extern fn stbi_load_from_file_16(f: *i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *stbi_us;
+pub extern fn stbi_loadf_from_memory(buffer: *stbi_uc, len: i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *float;
+pub extern fn stbi_loadf_from_callbacks(clbk: *stbi_io_callbacks, user: *void, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *float;
+pub extern fn stbi_loadf(filename: *i8, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *float;
+pub extern fn stbi_loadf_from_file(f: *i32, x: *i32, y: *i32, channels_in_file: *i32, desired_channels: i32) -> *float;
+pub extern fn stbi_hdr_to_ldr_gamma(gamma: float);
+pub extern fn stbi_hdr_to_ldr_scale(scale: float);
+pub extern fn stbi_ldr_to_hdr_gamma(gamma: float);
+pub extern fn stbi_ldr_to_hdr_scale(scale: float);
+pub extern fn stbi_is_hdr_from_callbacks(clbk: *stbi_io_callbacks, user: *void) -> i32;
+pub extern fn stbi_is_hdr_from_memory(buffer: *stbi_uc, len: i32) -> i32;
+pub extern fn stbi_is_hdr(filename: *i8) -> i32;
+pub extern fn stbi_is_hdr_from_file(f: *i32) -> i32;
+pub extern fn stbi_failure_reason() -> *i8;
+pub extern fn stbi_image_free(retval_from_stbi_load: *void);
+pub extern fn stbi_info_from_memory(buffer: *stbi_uc, len: i32, x: *i32, y: *i32, comp: *i32) -> i32;
+pub extern fn stbi_info_from_callbacks(clbk: *stbi_io_callbacks, user: *void, x: *i32, y: *i32, comp: *i32) -> i32;
+pub extern fn stbi_is_16_bit_from_memory(buffer: *stbi_uc, len: i32) -> i32;
+pub extern fn stbi_is_16_bit_from_callbacks(clbk: *stbi_io_callbacks, user: *void) -> i32;
+pub extern fn stbi_info(filename: *i8, x: *i32, y: *i32, comp: *i32) -> i32;
+pub extern fn stbi_info_from_file(f: *i32, x: *i32, y: *i32, comp: *i32) -> i32;
+pub extern fn stbi_is_16_bit(filename: *i8) -> i32;
+pub extern fn stbi_is_16_bit_from_file(f: *i32) -> i32;
+pub extern fn stbi_set_unpremultiply_on_load(flag_true_if_should_unpremultiply: i32);
+pub extern fn stbi_convert_iphone_png_to_rgb(flag_true_if_should_convert: i32);
+pub extern fn stbi_set_flip_vertically_on_load(flag_true_if_should_flip: i32);
+pub extern fn stbi_set_flip_vertically_on_load_thread(flag_true_if_should_flip: i32);
+pub extern fn stbi_zlib_decode_malloc_guesssize(buffer: *i8, len: i32, initial_size: i32, outlen: *i32) -> *i8;
+pub extern fn stbi_zlib_decode_malloc_guesssize_headerflag(buffer: *i8, len: i32, initial_size: i32, outlen: *i32, parse_header: i32) -> *i8;
+pub extern fn stbi_zlib_decode_malloc(buffer: *i8, len: i32, outlen: *i32) -> *i8;
+pub extern fn stbi_zlib_decode_buffer(obuffer: *i8, olen: i32, ibuffer: *i8, ilen: i32) -> i32;
+pub extern fn stbi_zlib_decode_noheader_malloc(buffer: *i8, len: i32, outlen: *i32) -> *i8;
+pub extern fn stbi_zlib_decode_noheader_buffer(obuffer: *i8, olen: i32, ibuffer: *i8, ilen: i32) -> i32;
+pub typedef stbi__uint16 u16;
+pub typedef stbi__int16 i16;
+pub typedef stbi__uint32 u32;
+pub typedef stbi__int32 i32;
+pub typedef validate_uint32 [1]u8;
+pub typedef stbi__context struct {
+    img_x: stbi__uint32,
+    img_y: stbi__uint32,
+    img_n: i32,
+    img_out_n: i32,
+    io: stbi_io_callbacks,
+    io_user_data: *void,
+    read_from_callbacks: i32,
+    buflen: i32,
+    buffer_start: [128]stbi_uc,
+    img_buffer: *stbi_uc,
+    img_buffer_end: *stbi_uc,
+    img_buffer_original: *stbi_uc,
+    img_buffer_original_end: *stbi_uc,
+};
+pub extern fn stbi__refill_buffer(s: *stbi__context);
+pub extern fn stbi__start_mem(s: *stbi__context, buffer: *stbi_uc, len: i32);
+pub extern fn stbi__start_callbacks(s: *stbi__context, c: *stbi_io_callbacks, user: *void);
+pub extern fn stbi__stdio_read(user: *void, data: *i8, size: i32) -> i32;
+pub extern fn stbi__stdio_skip(user: *void, n: i32);
+pub extern fn stbi__stdio_eof(user: *void) -> i32;
+pub extern fn stbi__start_file(s: *stbi__context, f: *i32);
+pub extern fn stbi__rewind(s: *stbi__context);
+pub typedef stbi__result_info struct {
+    bits_per_channel: i32,
+    num_channels: i32,
+    channel_order: i32,
+};
+pub extern fn stbi__err(str: *i8) -> i32;
+pub extern fn stbi__malloc(size: i32) -> *void;
+pub extern fn stbi__addsizes_valid(a: i32, b: i32) -> i32;
+pub extern fn stbi__mul2sizes_valid(a: i32, b: i32) -> i32;
+pub extern fn stbi__mad3sizes_valid(a: i32, b: i32, c: i32, add: i32) -> i32;
+pub extern fn stbi__mad4sizes_valid(a: i32, b: i32, c: i32, d: i32, add: i32) -> i32;
+pub extern fn stbi__malloc_mad3(a: i32, b: i32, c: i32, add: i32) -> *void;
+pub extern fn stbi__malloc_mad4(a: i32, b: i32, c: i32, d: i32, add: i32) -> *void;
+pub extern fn stbi__ldr_to_hdr(data: *stbi_uc, x: i32, y: i32, comp: i32) -> *float;
+pub extern fn stbi__load_main(s: *stbi__context, x: *i32, y: *i32, comp: *i32, req_comp: i32, ri: *stbi__result_info, bpc: i32) -> *void;
+pub extern fn stbi__convert_16_to_8(orig: *stbi__uint16, w: i32, h: i32, channels: i32) -> *stbi_uc;
+pub extern fn stbi__convert_8_to_16(orig: *stbi_uc, w: i32, h: i32, channels: i32) -> *stbi__uint16;
+pub extern fn stbi__vertical_flip(image: *void, w: i32, h: i32, bytes_per_pixel: i32);
+pub extern fn stbi__load_and_postprocess_8bit(s: *stbi__context, x: *i32, y: *i32, comp: *i32, req_comp: i32) -> *u8;
+pub extern fn stbi__load_and_postprocess_16bit(s: *stbi__context, x: *i32, y: *i32, comp: *i32, req_comp: i32) -> *stbi__uint16;
+pub extern fn stbi__float_postprocess(result: *float, x: *i32, y: *i32, comp: *i32, req_comp: i32);
+pub extern fn MultiByteToWideChar(cp: u32, flags: u64, str: *i8, cbmb: i32, widestr: *i32, cchwide: i32) -> i32;
+pub extern fn WideCharToMultiByte(cp: u32, flags: u64, widestr: *i32, cchwide: i32, str: *i8, cbmb: i32, defchar: *i8, used_default: *i32) -> i32;
+pub extern fn stbi__fopen(filename: *i8, mode: *i8) -> *i32;
+pub extern fn stbi__loadf_main(s: *stbi__context, x: *i32, y: *i32, comp: *i32, req_comp: i32) -> *float;
+

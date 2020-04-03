@@ -1,0 +1,171 @@
+pub typedef GLFWglproc fn* ();
+pub typedef GLFWvkproc fn* ();
+pub typedef GLFWmonitor struct {
+};
+pub typedef GLFWwindow struct {
+};
+pub typedef GLFWcursor struct {
+};
+pub typedef GLFWerrorfun fn* (_: i32, _: *i8);
+pub typedef GLFWwindowposfun fn* (_: *GLFWwindow, _: i32, _: i32);
+pub typedef GLFWwindowsizefun fn* (_: *GLFWwindow, _: i32, _: i32);
+pub typedef GLFWwindowclosefun fn* (_: *GLFWwindow);
+pub typedef GLFWwindowrefreshfun fn* (_: *GLFWwindow);
+pub typedef GLFWwindowfocusfun fn* (_: *GLFWwindow, _: i32);
+pub typedef GLFWwindowiconifyfun fn* (_: *GLFWwindow, _: i32);
+pub typedef GLFWwindowmaximizefun fn* (_: *GLFWwindow, _: i32);
+pub typedef GLFWframebuffersizefun fn* (_: *GLFWwindow, _: i32, _: i32);
+pub typedef GLFWwindowcontentscalefun fn* (_: *GLFWwindow, _: float, _: float);
+pub typedef GLFWmousebuttonfun fn* (_: *GLFWwindow, _: i32, _: i32, _: i32);
+pub typedef GLFWcursorposfun fn* (_: *GLFWwindow, _: double, _: double);
+pub typedef GLFWcursorenterfun fn* (_: *GLFWwindow, _: i32);
+pub typedef GLFWscrollfun fn* (_: *GLFWwindow, _: double, _: double);
+pub typedef GLFWkeyfun fn* (_: *GLFWwindow, _: i32, _: i32, _: i32, _: i32);
+pub typedef GLFWcharfun fn* (_: *GLFWwindow, _: u32);
+pub typedef GLFWcharmodsfun fn* (_: *GLFWwindow, _: u32, _: i32);
+pub typedef GLFWdropfun fn* (_: *GLFWwindow, _: i32, _: **i8);
+pub typedef GLFWmonitorfun fn* (_: *GLFWmonitor, _: i32);
+pub typedef GLFWjoystickfun fn* (_: i32, _: i32);
+pub typedef GLFWvidmode struct {
+    width: i32,
+    height: i32,
+    redBits: i32,
+    greenBits: i32,
+    blueBits: i32,
+    refreshRate: i32,
+};
+pub typedef GLFWgammaramp struct {
+    red: *u16,
+    green: *u16,
+    blue: *u16,
+    size: u32,
+};
+pub typedef GLFWimage struct {
+    width: i32,
+    height: i32,
+    pixels: *u8,
+};
+pub typedef GLFWgamepadstate struct {
+    buttons: [15]u8,
+    axes: [6]float,
+};
+pub extern fn glfwInit() -> i32;
+pub extern fn glfwTerminate();
+pub extern fn glfwInitHint(hint: i32, value: i32);
+pub extern fn glfwGetVersion(major: *i32, minor: *i32, rev: *i32);
+pub extern fn glfwGetVersionString() -> *i8;
+pub extern fn glfwGetError(description: **i8) -> i32;
+pub extern fn glfwSetErrorCallback(callback: GLFWerrorfun) -> GLFWerrorfun;
+pub extern fn glfwGetMonitors(count: *i32) -> **GLFWmonitor;
+pub extern fn glfwGetPrimaryMonitor() -> *GLFWmonitor;
+pub extern fn glfwGetMonitorPos(monitor: *GLFWmonitor, xpos: *i32, ypos: *i32);
+pub extern fn glfwGetMonitorWorkarea(monitor: *GLFWmonitor, xpos: *i32, ypos: *i32, width: *i32, height: *i32);
+pub extern fn glfwGetMonitorPhysicalSize(monitor: *GLFWmonitor, widthMM: *i32, heightMM: *i32);
+pub extern fn glfwGetMonitorContentScale(monitor: *GLFWmonitor, xscale: *float, yscale: *float);
+pub extern fn glfwGetMonitorName(monitor: *GLFWmonitor) -> *i8;
+pub extern fn glfwSetMonitorUserPointer(monitor: *GLFWmonitor, pointer: *void);
+pub extern fn glfwGetMonitorUserPointer(monitor: *GLFWmonitor) -> *void;
+pub extern fn glfwSetMonitorCallback(callback: GLFWmonitorfun) -> GLFWmonitorfun;
+pub extern fn glfwGetVideoModes(monitor: *GLFWmonitor, count: *i32) -> *GLFWvidmode;
+pub extern fn glfwGetVideoMode(monitor: *GLFWmonitor) -> *GLFWvidmode;
+pub extern fn glfwSetGamma(monitor: *GLFWmonitor, gamma: float);
+pub extern fn glfwGetGammaRamp(monitor: *GLFWmonitor) -> *GLFWgammaramp;
+pub extern fn glfwSetGammaRamp(monitor: *GLFWmonitor, ramp: *GLFWgammaramp);
+pub extern fn glfwDefaultWindowHints();
+pub extern fn glfwWindowHint(hint: i32, value: i32);
+pub extern fn glfwWindowHintString(hint: i32, value: *i8);
+pub extern fn glfwCreateWindow(width: i32, height: i32, title: *i8, monitor: *GLFWmonitor, share: *GLFWwindow) -> *GLFWwindow;
+pub extern fn glfwDestroyWindow(window: *GLFWwindow);
+pub extern fn glfwWindowShouldClose(window: *GLFWwindow) -> i32;
+pub extern fn glfwSetWindowShouldClose(window: *GLFWwindow, value: i32);
+pub extern fn glfwSetWindowTitle(window: *GLFWwindow, title: *i8);
+pub extern fn glfwSetWindowIcon(window: *GLFWwindow, count: i32, images: *GLFWimage);
+pub extern fn glfwGetWindowPos(window: *GLFWwindow, xpos: *i32, ypos: *i32);
+pub extern fn glfwSetWindowPos(window: *GLFWwindow, xpos: i32, ypos: i32);
+pub extern fn glfwGetWindowSize(window: *GLFWwindow, width: *i32, height: *i32);
+pub extern fn glfwSetWindowSizeLimits(window: *GLFWwindow, minwidth: i32, minheight: i32, maxwidth: i32, maxheight: i32);
+pub extern fn glfwSetWindowAspectRatio(window: *GLFWwindow, numer: i32, denom: i32);
+pub extern fn glfwSetWindowSize(window: *GLFWwindow, width: i32, height: i32);
+pub extern fn glfwGetFramebufferSize(window: *GLFWwindow, width: *i32, height: *i32);
+pub extern fn glfwGetWindowFrameSize(window: *GLFWwindow, left: *i32, top: *i32, right: *i32, bottom: *i32);
+pub extern fn glfwGetWindowContentScale(window: *GLFWwindow, xscale: *float, yscale: *float);
+pub extern fn glfwGetWindowOpacity(window: *GLFWwindow) -> float;
+pub extern fn glfwSetWindowOpacity(window: *GLFWwindow, opacity: float);
+pub extern fn glfwIconifyWindow(window: *GLFWwindow);
+pub extern fn glfwRestoreWindow(window: *GLFWwindow);
+pub extern fn glfwMaximizeWindow(window: *GLFWwindow);
+pub extern fn glfwShowWindow(window: *GLFWwindow);
+pub extern fn glfwHideWindow(window: *GLFWwindow);
+pub extern fn glfwFocusWindow(window: *GLFWwindow);
+pub extern fn glfwRequestWindowAttention(window: *GLFWwindow);
+pub extern fn glfwGetWindowMonitor(window: *GLFWwindow) -> *GLFWmonitor;
+pub extern fn glfwSetWindowMonitor(window: *GLFWwindow, monitor: *GLFWmonitor, xpos: i32, ypos: i32, width: i32, height: i32, refreshRate: i32);
+pub extern fn glfwGetWindowAttrib(window: *GLFWwindow, attrib: i32) -> i32;
+pub extern fn glfwSetWindowAttrib(window: *GLFWwindow, attrib: i32, value: i32);
+pub extern fn glfwSetWindowUserPointer(window: *GLFWwindow, pointer: *void);
+pub extern fn glfwGetWindowUserPointer(window: *GLFWwindow) -> *void;
+pub extern fn glfwSetWindowPosCallback(window: *GLFWwindow, callback: GLFWwindowposfun) -> GLFWwindowposfun;
+pub extern fn glfwSetWindowSizeCallback(window: *GLFWwindow, callback: GLFWwindowsizefun) -> GLFWwindowsizefun;
+pub extern fn glfwSetWindowCloseCallback(window: *GLFWwindow, callback: GLFWwindowclosefun) -> GLFWwindowclosefun;
+pub extern fn glfwSetWindowRefreshCallback(window: *GLFWwindow, callback: GLFWwindowrefreshfun) -> GLFWwindowrefreshfun;
+pub extern fn glfwSetWindowFocusCallback(window: *GLFWwindow, callback: GLFWwindowfocusfun) -> GLFWwindowfocusfun;
+pub extern fn glfwSetWindowIconifyCallback(window: *GLFWwindow, callback: GLFWwindowiconifyfun) -> GLFWwindowiconifyfun;
+pub extern fn glfwSetWindowMaximizeCallback(window: *GLFWwindow, callback: GLFWwindowmaximizefun) -> GLFWwindowmaximizefun;
+pub extern fn glfwSetFramebufferSizeCallback(window: *GLFWwindow, callback: GLFWframebuffersizefun) -> GLFWframebuffersizefun;
+pub extern fn glfwSetWindowContentScaleCallback(window: *GLFWwindow, callback: GLFWwindowcontentscalefun) -> GLFWwindowcontentscalefun;
+pub extern fn glfwPollEvents();
+pub extern fn glfwWaitEvents();
+pub extern fn glfwWaitEventsTimeout(timeout: double);
+pub extern fn glfwPostEmptyEvent();
+pub extern fn glfwGetInputMode(window: *GLFWwindow, mode: i32) -> i32;
+pub extern fn glfwSetInputMode(window: *GLFWwindow, mode: i32, value: i32);
+pub extern fn glfwRawMouseMotionSupported() -> i32;
+pub extern fn glfwGetKeyName(key: i32, scancode: i32) -> *i8;
+pub extern fn glfwGetKeyScancode(key: i32) -> i32;
+pub extern fn glfwGetKey(window: *GLFWwindow, key: i32) -> i32;
+pub extern fn glfwGetMouseButton(window: *GLFWwindow, button: i32) -> i32;
+pub extern fn glfwGetCursorPos(window: *GLFWwindow, xpos: *double, ypos: *double);
+pub extern fn glfwSetCursorPos(window: *GLFWwindow, xpos: double, ypos: double);
+pub extern fn glfwCreateCursor(image: *GLFWimage, xhot: i32, yhot: i32) -> *GLFWcursor;
+pub extern fn glfwCreateStandardCursor(shape: i32) -> *GLFWcursor;
+pub extern fn glfwDestroyCursor(cursor: *GLFWcursor);
+pub extern fn glfwSetCursor(window: *GLFWwindow, cursor: *GLFWcursor);
+pub extern fn glfwSetKeyCallback(window: *GLFWwindow, callback: GLFWkeyfun) -> GLFWkeyfun;
+pub extern fn glfwSetCharCallback(window: *GLFWwindow, callback: GLFWcharfun) -> GLFWcharfun;
+pub extern fn glfwSetCharModsCallback(window: *GLFWwindow, callback: GLFWcharmodsfun) -> GLFWcharmodsfun;
+pub extern fn glfwSetMouseButtonCallback(window: *GLFWwindow, callback: GLFWmousebuttonfun) -> GLFWmousebuttonfun;
+pub extern fn glfwSetCursorPosCallback(window: *GLFWwindow, callback: GLFWcursorposfun) -> GLFWcursorposfun;
+pub extern fn glfwSetCursorEnterCallback(window: *GLFWwindow, callback: GLFWcursorenterfun) -> GLFWcursorenterfun;
+pub extern fn glfwSetScrollCallback(window: *GLFWwindow, callback: GLFWscrollfun) -> GLFWscrollfun;
+pub extern fn glfwSetDropCallback(window: *GLFWwindow, callback: GLFWdropfun) -> GLFWdropfun;
+pub extern fn glfwJoystickPresent(jid: i32) -> i32;
+pub extern fn glfwGetJoystickAxes(jid: i32, count: *i32) -> *float;
+pub extern fn glfwGetJoystickButtons(jid: i32, count: *i32) -> *u8;
+pub extern fn glfwGetJoystickHats(jid: i32, count: *i32) -> *u8;
+pub extern fn glfwGetJoystickName(jid: i32) -> *i8;
+pub extern fn glfwGetJoystickGUID(jid: i32) -> *i8;
+pub extern fn glfwSetJoystickUserPointer(jid: i32, pointer: *void);
+pub extern fn glfwGetJoystickUserPointer(jid: i32) -> *void;
+pub extern fn glfwJoystickIsGamepad(jid: i32) -> i32;
+pub extern fn glfwSetJoystickCallback(callback: GLFWjoystickfun) -> GLFWjoystickfun;
+pub extern fn glfwUpdateGamepadMappings(string: *i8) -> i32;
+pub extern fn glfwGetGamepadName(jid: i32) -> *i8;
+pub extern fn glfwGetGamepadState(jid: i32, state: *GLFWgamepadstate) -> i32;
+pub extern fn glfwSetClipboardString(window: *GLFWwindow, string: *i8);
+pub extern fn glfwGetClipboardString(window: *GLFWwindow) -> *i8;
+pub extern fn glfwGetTime() -> double;
+pub extern fn glfwSetTime(time: double);
+pub extern fn glfwGetTimerValue() -> i32;
+pub extern fn glfwGetTimerFrequency() -> i32;
+pub extern fn glfwMakeContextCurrent(window: *GLFWwindow);
+pub extern fn glfwGetCurrentContext() -> *GLFWwindow;
+pub extern fn glfwSwapBuffers(window: *GLFWwindow);
+pub extern fn glfwSwapInterval(interval: i32);
+pub extern fn glfwExtensionSupported(extension: *i8) -> i32;
+pub extern fn glfwGetProcAddress(procname: *i8) -> GLFWglproc;
+pub extern fn glfwVulkanSupported() -> i32;
+pub extern fn glfwGetRequiredInstanceExtensions(count: *i32) -> **i8;
+pub extern fn glfwGetInstanceProcAddress(instance: i32, procname: *i8) -> GLFWvkproc;
+pub extern fn glfwGetPhysicalDevicePresentationSupport(instance: i32, device: i32, queuefamily: i32) -> i32;
+pub extern fn glfwCreateWindowSurface(instance: i32, window: *GLFWwindow, allocator: *i32, surface: *i32) -> i32;
+
