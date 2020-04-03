@@ -1127,12 +1127,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     switch (ast->type)
     {
     case AST_RETURN: {
-        Ast *proc = get_scope_procedure(*array_last(a->scope_stack));
+        Scope *scope = *array_last(a->scope_stack);
+
+        Ast *proc = get_scope_procedure(scope);
         if (!proc)
         {
             compile_error(
                 a->compiler, ast->loc, "return needs to be inside a procedure");
             break;
+        }
+
+        if (scope->ast && scope->ast->type == AST_PROC_DECL)
+        {
+            scope->ast->proc.returned = true;
         }
 
         assert(proc->proc.return_type->as_type);
@@ -2719,30 +2726,19 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
             array_push(a->scope_stack, ast->proc.scope);
             array_push(a->operand_scope_stack, ast->proc.scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
+            array_pop(a->operand_scope_stack);
+            array_pop(a->scope_stack);
 
-            // If the procedure has a void return type or doesn't have a
-            // body, say it has returned already
-            bool returned = ast->proc.return_type->as_type->kind == TYPE_VOID ||
-                            !(ast->proc.flags & PROC_FLAG_HAS_BODY);
-
-            if (!returned)
+            if (ast->proc.return_type->as_type->kind != TYPE_VOID &&
+                (ast->proc.flags & PROC_FLAG_HAS_BODY))
             {
-                for (Ast *stmt = ast->proc.stmts;
-                     stmt != ast->proc.stmts + array_size(ast->proc.stmts);
-                     ++stmt)
+                if (!ast->proc.returned)
                 {
-                    if (stmt->type == AST_RETURN) returned = true;
+                    compile_error(
+                        a->compiler, ast->loc, "procedure did not return");
                 }
             }
 
-            if (!returned)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "procedure did not return");
-            }
-
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
             break;
         }
 

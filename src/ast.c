@@ -129,6 +129,8 @@ typedef struct Ast
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
             AstValue value;
+
+            bool returned; // helper
         } proc;
         struct
         {

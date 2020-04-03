@@ -1,15 +1,33 @@
 import "core:c";
 import "core:thread";
 
+var my_val: i32 = 123;
+var mtx: Mutex;
+
 fn thread_start(arg: *void) *void {
+    mutex_lock(&mtx);
+    my_val = 321;
+    mutex_unlock(&mtx);
+
+    thread_exit();
+
     printf(c"Hello!\n");
 
     return null;
 }
 
 extern fn main() i32 {
-    var thread: Thread;
-    pthread_create(&thread, null, thread_start, null);
+    mutex_init(&mtx);
+
+    var thread = thread_create(thread_start, null);
+
+    thread_sleep(10);
+    mutex_lock(&mtx);
+    printf(c"my_val = %d\n", my_val);
+    mutex_unlock(&mtx);
+
+    thread_wait(thread);
+    mutex_destroy(&mtx);
 
     return 0;
 }

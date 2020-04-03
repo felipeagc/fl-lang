@@ -1,6 +1,141 @@
-version (linux) {
-    typedef Thread distinct *void;
-    typedef ThreadStart fn* (arg: *void) *void;
+typedef ThreadStart fn* (arg: *void) *void;
 
-    extern fn pthread_create(thrd: *Thread, attr: *void, start: ThreadStart, arg: *void) i32;
+version (posix) {
+    typedef Thread distinct *void;
+    typedef Mutex distinct [8]*void; // opaque
+    typedef Cond distinct [8]*void; // opaque
+}
+
+//
+// Threads
+//
+
+fn thread_create(start: ThreadStart, arg: *void) Thread {
+    version (posix) {
+        extern fn pthread_create(thrd: *Thread, attr: *void, start: ThreadStart, arg: *void) i32;
+
+        var thread: Thread;
+        pthread_create(&thread, null, start, arg);
+        return thread;
+    }
+}
+
+fn thread_wait(thread: Thread) void {
+    version (posix) {
+        extern fn pthread_join(thrd: Thread, retval: *void) i32; 
+
+        pthread_join(thread, null);
+    }
+}
+
+fn thread_sleep(milliseconds: u32) void {
+    version (posix) {
+        extern fn usleep(usec: u32) i32;
+
+        usleep(1000 * milliseconds);
+    }
+}
+
+fn thread_detach(thread: Thread) void {
+    version (posix) {
+        extern fn pthread_detach(thread: Thread) i32;
+
+        pthread_detach(thread);
+    }
+}
+
+fn thread_exit() void {
+    version (posix) {
+        extern fn pthread_exit(retval: *void) void;
+
+        pthread_exit(cast(*void)0);
+    }
+}
+
+//
+// Mutex
+//
+
+fn mutex_init(mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_mutex_init(mtx: *Mutex, attr: *void) i32;
+
+        pthread_mutex_init(mtx, null);
+    }
+}
+
+fn mutex_destroy(mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_mutex_destroy(mtx: *Mutex) i32;
+
+        pthread_mutex_destroy(mtx);
+    }
+}
+
+fn mutex_lock(mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_mutex_lock(mtx: *Mutex) i32;
+
+        pthread_mutex_lock(mtx);
+    }
+}
+
+fn mutex_trylock(mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_mutex_trylock(mtx: *Mutex) i32;
+
+        pthread_mutex_trylock(mtx);
+    }
+}
+
+fn mutex_unlock(mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_mutex_unlock(mtx: *Mutex) i32;
+
+        pthread_mutex_unlock(mtx);
+    }
+}
+
+//
+// Condition variable
+//
+
+fn cond_init(cond: *Cond) void {
+    version (posix) {
+        extern fn pthread_cond_init(cond: *Cond, attr: *void) i32;
+
+        pthread_cond_init(cond, null);
+    }
+}
+
+fn cond_destroy(cond: *Cond) void {
+    version (posix) {
+        extern fn pthread_cond_destroy(cond: *Cond) i32;
+
+        pthread_cond_destroy(cond);
+    }
+}
+
+fn cond_wake_one(cond: *Cond) void {
+    version (posix) {
+        extern fn pthread_cond_signal(cond: *Cond) i32;
+
+        pthread_cond_signal(cond);
+    }
+}
+
+fn cond_wake_all(cond: *Cond) void {
+    version (posix) {
+        extern fn pthread_cond_broadcast(cond: *Cond) i32;
+
+        pthread_cond_broadcast(cond);
+    }
+}
+
+fn cond_wait(cond: *Cond, mtx: *Mutex) void {
+    version (posix) {
+        extern fn pthread_cond_wait(cond: *Cond, mtx: *Mutex) i32;
+
+        pthread_cond_wait(cond, mtx);
+    }
 }
