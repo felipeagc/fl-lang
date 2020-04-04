@@ -274,12 +274,6 @@ void lex_token(Lexer *l)
         tok.type = TOKEN_SEMICOLON;
         break;
     }
-    case '_': {
-        tok.loc.length = 1;
-        lex_next(l, 1);
-        tok.type = TOKEN_UNDERSCORE;
-        break;
-    }
     case '.': {
         tok.loc.length = 1;
         lex_next(l, 1);
@@ -480,8 +474,16 @@ void lex_token(Lexer *l)
             break;
         }
 
-        if (is_letter(c))
+        if (is_letter(c) || c == '_')
         {
+            if (c == '_' && !is_alphanum(lex_peek(l, 1)))
+            {
+                tok.loc.length = 1;
+                lex_next(l, 1);
+                tok.type = TOKEN_UNDERSCORE;
+                break;
+            }
+
             l->col--;
             while (is_alphanum(tok.loc.buf[tok.loc.length]))
             {
