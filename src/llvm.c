@@ -77,6 +77,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
 
     case TYPE_STRUCT: {
+        type->ref = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
         size_t field_count = array_size(type->structure.fields);
         LLVMTypeRef *field_types =
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
@@ -84,7 +85,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         {
             field_types[i] = llvm_type(l, type->structure.fields[i]);
         }
-        type->ref = LLVMStructType(field_types, field_count, false);
+        LLVMStructSetBody(type->ref, field_types, field_count, false);
         break;
     }
 
@@ -448,8 +449,10 @@ void llvm_codegen_ast(
         }
 
         case TOKEN_IDENT: {
-            Ast *sym =
-                get_symbol(*array_last(l->scope_stack), ast->primary.tok->str, ast->loc.file);
+            Ast *sym = get_symbol(
+                *array_last(l->scope_stack),
+                ast->primary.tok->str,
+                ast->loc.file);
             assert(sym);
 
             switch (sym->type)
@@ -1275,8 +1278,10 @@ void llvm_codegen_ast(
                     values[index] = val.value;
                 }
 
-                result_value.value = LLVMConstStruct(
-                    values, array_size(ast->compound.values), false);
+                result_value.value = LLVMConstNamedStruct(
+                    llvm_type(l, ast->type_info),
+                    values,
+                    array_size(ast->compound.values));
 
                 break;
             }

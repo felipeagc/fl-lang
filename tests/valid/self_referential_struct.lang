@@ -1,0 +1,11 @@
+import "core:c";
+
+pub typedef Test struct {
+    test: *Test,
+};
+
+extern fn main() {
+    var a: Test;
+    a.test = malloc(@sizeof(Test));
+    free(a.test);
+}

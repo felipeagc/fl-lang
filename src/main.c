@@ -16,11 +16,6 @@
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
 
-#ifdef __unix__
-#include <limits.h>
-#include <unistd.h>
-#endif
-
 #ifdef __linux__
 #include <sys/types.h>
 #include <sys/wait.h>

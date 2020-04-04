@@ -487,6 +487,10 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         TypeInfo **fields = NULL;
         bool res = true;
 
+        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        memset(ty, 0, sizeof(*ty));
+        ast->as_type = ty;
+
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
@@ -501,12 +505,13 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
         if (res)
         {
-            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-            memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_STRUCT;
             ty->structure.fields = fields;
             ty->scope = ast->structure.scope;
-            ast->as_type = ty;
+        }
+        else
+        {
+            ast->as_type = NULL;
         }
         break;
     }
@@ -1396,13 +1401,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ty->proc.return_type = &VOID_TYPE;
         }
 
-        TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
-        memset(ptr_ty, 0, sizeof(*ptr_ty));
-        ptr_ty->kind = TYPE_POINTER;
-        ptr_ty->ptr.sub = ty;
+        if (!ty->proc.return_type)
+        {
+            valid_type = false;
+        }
 
         if (valid_type)
         {
+            TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
+            memset(ptr_ty, 0, sizeof(*ptr_ty));
+            ptr_ty->kind = TYPE_POINTER;
+            ptr_ty->ptr.sub = ty;
             ast->type_info = ptr_ty;
         }
         break;
@@ -1664,8 +1673,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_IDENT: {
-            Ast *sym =
-                get_symbol(*array_last(a->scope_stack), ast->primary.tok->str, ast->loc.file);
+            Ast *sym = get_symbol(
+                *array_last(a->scope_stack),
+                ast->primary.tok->str,
+                ast->loc.file);
 
             if (!sym)
             {

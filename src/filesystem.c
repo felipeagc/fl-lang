@@ -1,4 +1,9 @@
-char *get_absolute_path(char *relative_path)
+#ifdef __unix__
+#include <limits.h>
+#include <unistd.h>
+#endif
+
+char *get_absolute_path(const char *relative_path)
 {
 #ifdef __unix__
     return realpath(relative_path, NULL);
@@ -7,7 +12,7 @@ char *get_absolute_path(char *relative_path)
 #endif
 }
 
-char *get_file_dir(char *path)
+char *get_file_dir(const char *path)
 {
     char *abs = get_absolute_path(path);
     for (int i = strlen(abs) - 1; i >= 0; i--)
