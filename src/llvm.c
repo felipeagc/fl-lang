@@ -571,7 +571,8 @@ void llvm_codegen_ast(
                 params[i] = autocast_value(
                     l, mod, param_type, param_expected_type, params[i]);
             }
-            else if ((proc_ty->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS)
+            else if (
+                (proc_ty->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS)
             {
                 // Promote float to double when passed as variadic argument
                 // as per section 6.5.2.2 of the C standard
@@ -2671,13 +2672,21 @@ void llvm_init(LLContext *l, Compiler *compiler)
 
 void llvm_verify_module(LLContext *l)
 {
-    printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
+    if (l->compiler->args.print_llvm)
+    {
+        printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
+    }
 
     char *error = NULL;
     if (LLVMVerifyModule(l->mod.mod, LLVMReturnStatusAction, &error))
     {
-        printf("Failed to verify module:\n%s\n", error);
-        abort();
+        if (!l->compiler->args.print_llvm)
+        {
+            printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
+        }
+
+        fprintf(stderr, "Failed to verify module:\n%s\n", error);
+        exit(EXIT_FAILURE);
     }
 }
 
@@ -2692,7 +2701,7 @@ void llvm_run_module(LLContext *l)
     if (LLVMCreateExecutionEngineForModule(&engine, l->mod.mod, &error) != 0)
     {
         fprintf(stderr, "failed to create execution engine\n");
-        abort();
+        exit(EXIT_FAILURE);
     }
 
     if (error)

@@ -5,6 +5,7 @@ typedef struct Arguments
     char **link_libraries;
     char **library_paths;
     bool should_run;
+    bool print_llvm;
 } Arguments;
 
 static void parse_args(Arguments *args, int argc, char **argv)
@@ -35,6 +36,13 @@ static void parse_args(Arguments *args, int argc, char **argv)
                     if (argv[i][3] == '=')
                     {
                         array_push(args->library_paths, &argv[i][4]);
+                    }
+                    break;
+                }
+                case 'l': {
+                    if (argv[i][3] == '\0')
+                    {
+                        args->print_llvm = true;
                     }
                     break;
                 }

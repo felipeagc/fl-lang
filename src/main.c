@@ -435,6 +435,7 @@ static const char *COMPILER_USAGE[] = {
     "  -o=<output path>\t\tSets the output path.\n",
     "  -l=<library>\t\t\tLinks with library.\n",
     "  -lp=<path>\t\t\tAdds a library path.\n",
+    "  -ll\t\t\t\tPrints the generated LLVM IR.\n",
     NULL,
 };
 
