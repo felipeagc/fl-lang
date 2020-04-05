@@ -331,7 +331,7 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
         else if (string_equals(type_name, STR("size_t")))
             sb_append(sb, STR("uint"));
         else if (string_equals(type_name, STR("FILE")))
-            sb_append(sb, STR("i32"));
+            sb_append(sb, STR("void"));
         else
             sb_append(sb, type_name);
 

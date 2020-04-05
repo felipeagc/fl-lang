@@ -11,7 +11,7 @@ TESTS_PASSED=1
 
 for file in ./tests/valid/*; do
 	echo -e "${MAGENTA}Testing $file${NC}"
-	if ! $COMPILER run $file >& $OUTPUT_FILE; then
+	if ! $COMPILER -r $file >& $OUTPUT_FILE; then
 		echo -e "${RED}Test failed: ${file}${NC}"
 		TESTS_PASSED=0
 		cat $OUTPUT_FILE
@@ -20,7 +20,7 @@ done
 
 for file in ./tests/invalid/*; do
 	echo -e "${MAGENTA}Testing $file${NC}"
-	if $COMPILER run $file >& $OUTPUT_FILE; then
+	if $COMPILER -r $file >& $OUTPUT_FILE; then
 		echo -e "${RED}Test failed: ${file}${NC}"
 		TESTS_PASSED=0
 	fi

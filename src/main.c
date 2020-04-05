@@ -33,6 +33,7 @@
 #include "location.c"
 #include "token.c"
 #include "ast.c"
+#include "cli_args.c"
 
 typedef struct Compiler
 {
@@ -44,6 +45,8 @@ typedef struct Compiler
     String compiler_path;
     String compiler_dir;
     String corelib_dir;
+
+    Arguments args;
 
     Ast *builtin_module;
 } Compiler;
@@ -79,7 +82,8 @@ static void print_errors(Compiler *compiler)
              err != compiler->errors + array_size(compiler->errors);
              ++err)
         {
-            printf(
+            fprintf(
+                stderr,
                 "%.*s (%u:%u): %.*s\n",
                 (int)err->loc.file->path.length,
                 err->loc.file->path.buf,
@@ -179,7 +183,8 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
     FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
     if (!f)
     {
-        printf(
+        fprintf(
+            stderr,
             "Failed to open file: %.*s",
             (int)file->path.length,
             file->path.buf);
@@ -385,7 +390,28 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     pid_t pid = fork();
     if (pid == 0)
     {
-        execlp("clang", "clang", TMP_OBJECT_NAME, "-o", c_out_file_path, NULL);
+        char **args = NULL;
+        array_push(args, "clang");
+        array_push(args, TMP_OBJECT_NAME);
+        array_push(args, "-o");
+        array_push(args, c_out_file_path);
+
+        for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
+        {
+            char arg[256] = {0};
+            sprintf(arg, "-L%s", compiler->args.library_paths[i]);
+            array_push(args, strdup(arg));
+        }
+
+        for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
+        {
+            char arg[256] = {0};
+            sprintf(arg, "-l%s", compiler->args.link_libraries[i]);
+            array_push(args, strdup(arg));
+        }
+
+        array_push(args, NULL);
+        execvp("clang", args);
     }
 
     int status;
@@ -402,8 +428,13 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 
 static const char *COMPILER_USAGE[] = {
     "Usage:\n",
-    "  %s <filename>        Compiles file.\n",
-    "  %s run <filename>    Runs file.\n",
+    "  %s <inputs>\t\tRuns compiler on inputs.\n",
+    "\n",
+    "Options:\n",
+    "  -r\t\t\t\tRuns the input files without creating executable.\n",
+    "  -o=<output path>\t\tSets the output path.\n",
+    "  -l=<library>\t\t\tLinks with library.\n",
+    "  -lp=<path>\t\t\tAdds a library path.\n",
     NULL,
 };
 
@@ -421,34 +452,28 @@ int main(int argc, char **argv)
 {
     Compiler *compiler = malloc(sizeof(*compiler));
     compiler_init(compiler);
+    parse_args(&compiler->args, argc, argv);
 
-    if (argc <= 1)
+    if (array_size(compiler->args.in_paths) != 1)
     {
         print_usage(argc, argv);
         exit(EXIT_FAILURE);
     }
 
-    if (argc == 2)
+    char *in_path = compiler->args.in_paths[0];
+
+    char *absolute_path = get_absolute_path(in_path);
+    String filepath = CSTR(absolute_path);
+    compile_file(compiler, filepath);
+
+    if (!compiler->args.should_run)
     {
-        char *absolute_path = get_absolute_path(argv[1]);
-        String filepath = CSTR(absolute_path);
-        compile_file(compiler, filepath);
-        link_module(compiler, &compiler->backend->mod, STR("a.out"));
-    }
-    else if (argc == 3)
-    {
-        if (strcmp(argv[1], "run") == 0)
-        {
-            char *absolute_path = get_absolute_path(argv[2]);
-            String filepath = CSTR(absolute_path);
-            compile_file(compiler, filepath);
-            llvm_run_module(compiler->backend);
-        }
+        link_module(
+            compiler, &compiler->backend->mod, CSTR(compiler->args.out_path));
     }
     else
     {
-        print_usage(argc, argv);
-        exit(EXIT_FAILURE);
+        llvm_run_module(compiler->backend);
     }
 
     compiler_destroy(compiler);
