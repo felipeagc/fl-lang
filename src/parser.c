@@ -190,6 +190,18 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 ast->intrinsic_call.type = INTRINSIC_ALIGNOF;
             }
+            else if (string_equals(expr.primary.tok->str, STR("sqrt")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_SQRT;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("sin")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_SIN;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("cos")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_COS;
+            }
             else
             {
                 compile_error(

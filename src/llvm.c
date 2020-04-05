@@ -639,6 +639,75 @@ void llvm_codegen_ast(
 
             break;
         }
+
+        case INTRINSIC_SQRT: {
+            Ast *param = &ast->intrinsic_call.params[0];
+
+            AstValue param_val = {0};
+            llvm_codegen_ast(l, mod, param, is_const, &param_val);
+            LLVMValueRef param_ref = load_val(mod, &param_val);
+            LLVMTypeRef param_type = llvm_type(l, param->type_info);
+
+            String intrin_name = STR("llvm.sqrt");
+
+            LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
+                mod->mod,
+                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                &param_type,
+                1);
+
+            AstValue val = {0};
+            val.value =
+                LLVMBuildCall(mod->builder, intrinsic, &param_ref, 1, "");
+            if (out_value) *out_value = val;
+            break;
+        }
+
+        case INTRINSIC_COS: {
+            Ast *param = &ast->intrinsic_call.params[0];
+
+            AstValue param_val = {0};
+            llvm_codegen_ast(l, mod, param, is_const, &param_val);
+            LLVMValueRef param_ref = load_val(mod, &param_val);
+            LLVMTypeRef param_type = llvm_type(l, param->type_info);
+
+            String intrin_name = STR("llvm.cos");
+
+            LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
+                mod->mod,
+                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                &param_type,
+                1);
+
+            AstValue val = {0};
+            val.value =
+                LLVMBuildCall(mod->builder, intrinsic, &param_ref, 1, "");
+            if (out_value) *out_value = val;
+            break;
+        }
+
+        case INTRINSIC_SIN: {
+            Ast *param = &ast->intrinsic_call.params[0];
+
+            AstValue param_val = {0};
+            llvm_codegen_ast(l, mod, param, is_const, &param_val);
+            LLVMValueRef param_ref = load_val(mod, &param_val);
+            LLVMTypeRef param_type = llvm_type(l, param->type_info);
+
+            String intrin_name = STR("llvm.sin");
+
+            LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
+                mod->mod,
+                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                &param_type,
+                1);
+
+            AstValue val = {0};
+            val.value =
+                LLVMBuildCall(mod->builder, intrinsic, &param_ref, 1, "");
+            if (out_value) *out_value = val;
+            break;
+        }
         }
 
         break;

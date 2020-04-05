@@ -393,6 +393,7 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
         char **args = NULL;
         array_push(args, "clang");
         array_push(args, TMP_OBJECT_NAME);
+        array_push(args, "-lm");
         array_push(args, "-o");
         array_push(args, c_out_file_path);
 

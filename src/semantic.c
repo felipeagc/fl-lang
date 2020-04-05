@@ -63,6 +63,10 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         {
         case INTRINSIC_SIZEOF:
         case INTRINSIC_ALIGNOF: res = true; break;
+
+        case INTRINSIC_SQRT:
+        case INTRINSIC_COS:
+        case INTRINSIC_SIN: res = false; break;
         }
         break;
     }
@@ -1971,6 +1975,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             Ast *param = &ast->intrinsic_call.params[0];
             analyze_ast(a, param, NULL);
 
+            if (!param->type_info)
+            {
+                assert(array_size(a->compiler->errors) > 0);
+                break;
+            }
+
             if (param->type_info->kind == TYPE_VOID ||
                 param->type_info->kind == TYPE_NAMESPACE)
             {
@@ -1982,6 +1992,40 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             ast->type_info = &UINT_TYPE;
+
+            break;
+        }
+
+        case INTRINSIC_COS:
+        case INTRINSIC_SIN:
+        case INTRINSIC_SQRT: {
+            if (array_size(ast->intrinsic_call.params) != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes one parameter");
+
+                break;
+            }
+
+            Ast *param = &ast->intrinsic_call.params[0];
+            analyze_ast(a, param, NULL);
+
+            if (!param->type_info)
+            {
+                assert(array_size(a->compiler->errors) > 0);
+                break;
+            }
+
+            if (param->type_info->kind != TYPE_FLOAT)
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "intrinsic does not apply for this type");
+                break;
+            }
+
+            ast->type_info = param->type_info;
 
             break;
         }

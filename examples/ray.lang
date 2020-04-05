@@ -30,12 +30,16 @@ fn v3_dot(u: Vec3, v: Vec3) -> float {
     return u.x * v.x + u.y * v.y + u.z * v.z;
 }
 
-fn v3_cross(u: Vec3, v: Vec3) -> Vec3{
+fn v3_cross(u: Vec3, v: Vec3) -> Vec3 {
     return Vec3{
         u.y * v.z - u.z * v.y,
         u.z * v.x - u.x * v.z,
         u.x * v.y - u.y * v.x,
     };
+}
+
+fn v3_length(u: Vec3) -> float {
+    return @sqrt(v3_dot(u, u));
 }
 
 typedef Ray struct {
@@ -58,5 +62,6 @@ fn hit_sphere(center: Vec3, radius: float, ray: Ray) -> bool {
 
 extern fn main() -> i32 {
     printf(c"dot = %f\n", v3_dot(Vec3{1, 2, 3}, Vec3{3, 2, 1}));
+    printf(c"sin(0.5) = %lf\n", @sin(0.5));
     return 0;
 }

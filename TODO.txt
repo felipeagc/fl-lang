@@ -15,7 +15,7 @@ Attributes
 Import files as byte arrays
 
 TODO:
-- math intrinsics: sqrt
+- vector types
 - using statement
 - implement sizeof and alignof myself instead of letting LLVM handle it
 - templated functions
