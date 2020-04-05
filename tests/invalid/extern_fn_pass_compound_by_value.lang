@@ -1,0 +1,7 @@
+typedef Vec3 struct {
+    e: [3]float,
+};
+
+typedef SomeFunc extern fn* (a: Vec3);
+extern fn hello(a: Vec3);
+

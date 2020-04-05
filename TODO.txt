@@ -1,7 +1,6 @@
 Default struct member initialization
 Ternary
 Defer statement
-Using statement
 Unions
 Thread local variables
 
@@ -15,9 +14,10 @@ Attributes
 
 Import files as byte arrays
 
-Implement sizeof and alignof myself instead of letting LLVM handle it
-
 TODO:
+- math intrinsics: sqrt
+- using statement
+- implement sizeof and alignof myself instead of letting LLVM handle it
 - templated functions
 - typeinfo type
 - any type

@@ -66,13 +66,21 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
         for (size_t i = 0; i < param_count; i++)
         {
-            param_types[i] = llvm_type(l, &type->proc.params[i]);
+            TypeInfo *param_type = type->proc.params[i];
+            param_types[i] = llvm_type(l, param_type);
+            if (is_type_compound(param_type))
+            {
+                param_types[i] = LLVMPointerType(param_types[i], 0);
+            }
         }
 
         LLVMTypeRef return_type = llvm_type(l, type->proc.return_type);
 
         type->ref = LLVMFunctionType(
-            return_type, param_types, param_count, type->proc.is_c_vararg);
+            return_type,
+            param_types,
+            param_count,
+            (type->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS);
         break;
     }
 
@@ -300,6 +308,12 @@ void llvm_codegen_ast(
             {
                 Ast *param = &ast->proc.params[i];
                 param->proc_param.value.is_lvalue = false;
+
+                TypeInfo *param_type = param->proc_param.type_expr->as_type;
+                if (is_type_compound(param_type))
+                {
+                    param->proc_param.value.is_lvalue = true;
+                }
                 param->proc_param.value.value = LLVMGetParam(fun, i);
 
                 char *param_name =
@@ -530,28 +544,39 @@ void llvm_codegen_ast(
             TypeInfo *param_expected_type = NULL;
             if (i < array_size(proc_ty->proc.params))
             {
-                param_expected_type = &proc_ty->proc.params[i];
+                param_expected_type = proc_ty->proc.params[i];
             }
+
+            TypeInfo *param_type = ast->proc_call.params[i].type_info;
 
             AstValue param_value = {0};
             llvm_codegen_ast(
                 l, mod, &ast->proc_call.params[i], false, &param_value);
-            params[i] = load_val(mod, &param_value);
+            if (is_type_compound(param_type))
+            {
+                params[i] = param_value.value;
+                if (!param_value.is_lvalue)
+                {
+                    params[i] = build_alloca(mod, llvm_type(l, param_type));
+                    LLVMBuildStore(mod->builder, param_value.value, params[i]);
+                }
+            }
+            else
+            {
+                params[i] = load_val(mod, &param_value);
+            }
+
             if (param_expected_type)
             {
                 params[i] = autocast_value(
-                    l,
-                    mod,
-                    ast->proc_call.params[i].type_info,
-                    param_expected_type,
-                    params[i]);
+                    l, mod, param_type, param_expected_type, params[i]);
             }
-            else if (proc_ty->proc.is_c_vararg)
+            else if ((proc_ty->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS)
             {
                 // Promote float to double when passed as variadic argument
                 // as per section 6.5.2.2 of the C standard
-                if (ast->proc_call.params[i].type_info->kind == TYPE_FLOAT &&
-                    ast->proc_call.params[i].type_info->floating.num_bits == 32)
+                if (param_type->kind == TYPE_FLOAT &&
+                    param_type->floating.num_bits == 32)
                 {
                     params[i] = LLVMBuildFPExt(
                         mod->builder, params[i], LLVMDoubleType(), "");
@@ -1300,15 +1325,12 @@ void llvm_codegen_ast(
     case AST_STRUCT_FIELD: {
         AstValue struct_val = (*array_last(l->scope_stack))->value;
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
-            LLVMConstInt(LLVMInt32Type(), ast->struct_field.index, false),
-        };
-
         AstValue field_value = {0};
         field_value.is_lvalue = true;
-        field_value.value =
-            LLVMBuildGEP(mod->builder, struct_val.value, indices, 2, "");
+
+        field_value.value = LLVMBuildStructGEP(
+            mod->builder, struct_val.value, ast->struct_field.index, "");
+
         if (out_value) *out_value = field_value;
 
         break;

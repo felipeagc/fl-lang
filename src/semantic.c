@@ -539,8 +539,15 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
-        ty->proc.is_c_vararg =
-            (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
+        if (ast->proc.flags & PROC_FLAG_IS_C_VARARGS)
+        {
+            ty->flags |= TYPE_FLAG_C_VARARGS;
+        }
+
+        if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
+        {
+            ty->flags |= TYPE_FLAG_EXTERN;
+        }
 
         bool valid = true;
 
@@ -556,7 +563,14 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
                 break;
             }
 
-            array_push(ty->proc.params, *param_as_type);
+            if ((ty->flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
+                is_type_compound(param_as_type))
+            {
+                valid = false;
+                break;
+            }
+
+            array_push(ty->proc.params, param_as_type);
         }
 
         if (ast->proc.return_type)
@@ -1370,8 +1384,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
-        ty->proc.is_c_vararg =
-            (ast->proc.flags & PROC_FLAG_IS_C_VARARGS) ? true : false;
+        if (ast->proc.flags & PROC_FLAG_IS_C_VARARGS)
+        {
+            ty->flags |= TYPE_FLAG_C_VARARGS;
+        }
+
+        if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
+        {
+            ty->flags |= TYPE_FLAG_EXTERN;
+        }
 
         bool valid_type = true;
 
@@ -1385,7 +1406,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 valid_type = false;
                 break;
             }
-            array_push(ty->proc.params, *param->decl.type_expr->as_type);
+
+            if ((ty->flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
+                is_type_compound(param->decl.type_expr->as_type))
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "extern functions cannot have compound parameters");
+            }
+
+            array_push(ty->proc.params, param->decl.type_expr->as_type);
         }
 
         if (ast->proc.return_type)
@@ -1853,7 +1884,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         assert(proc_ty);
         ast->type_info = proc_ty->proc.return_type;
 
-        if (!proc_ty->proc.is_c_vararg)
+        if ((proc_ty->flags & TYPE_FLAG_C_VARARGS) != TYPE_FLAG_C_VARARGS)
         {
             if (array_size(ast->proc_call.params) !=
                 array_size(proc_ty->proc.params))
@@ -1886,7 +1917,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             TypeInfo *param_expected_type = NULL;
             if (i < array_size(proc_ty->proc.params))
             {
-                param_expected_type = &proc_ty->proc.params[i];
+                param_expected_type = proc_ty->proc.params[i];
             }
             analyze_ast(a, &ast->proc_call.params[i], param_expected_type);
         }
@@ -1960,6 +1991,27 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_TYPE: {
+        for (Ast *param = ast->proc.params;
+             param != ast->proc.params + array_size(ast->proc.params);
+             ++param)
+        {
+            analyze_ast(a, param, NULL);
+
+            if (param->decl.type_expr->as_type)
+            {
+                if ((ast->proc.flags & PROC_FLAG_IS_EXTERN) ==
+                        PROC_FLAG_IS_EXTERN &&
+                    is_type_compound(param->decl.type_expr->as_type))
+                {
+                    compile_error(
+                        a->compiler,
+                        param->loc,
+                        "extern functions cannot have compound parameters");
+                    break;
+                }
+            }
+        }
+
         if (!ast->as_type)
         {
             compile_error(
@@ -1967,13 +2019,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->loc,
                 "invalid procedure pointer type expression");
             break;
-        }
-
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
-             ++param)
-        {
-            analyze_ast(a, param, NULL);
         }
 
         if (ast->proc.return_type)

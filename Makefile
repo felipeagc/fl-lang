@@ -20,8 +20,12 @@ clean:
 test: compiler
 	@bash ./tests/run_tests.sh
 
-examples: compiler bindgen
+ray: compiler bindgen examples/ray.lang
+	./compiler -o=$@ examples/ray.lang
+
+examples: compiler bindgen ray
 	./bindgen examples/stb_image.h > examples/stb_image.lang
 	./compiler -r examples/stb_image.lang
 	./bindgen examples/glfw3.h > examples/glfw3.lang
 	./compiler -r examples/glfw3.lang
+

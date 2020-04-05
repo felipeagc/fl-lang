@@ -17,7 +17,9 @@ typedef enum TypeKind {
 
 typedef enum TypeFlags {
     TYPE_FLAG_DISTINCT = 1 << 0,
-    TYPE_FLAG_CAN_CHANGE = 1 << 7,
+    TYPE_FLAG_CAN_CHANGE = 1 << 1,
+    TYPE_FLAG_EXTERN = 1 << 2,
+    TYPE_FLAG_C_VARARGS = 1 << 3,
 } TypeFlags;
 
 typedef struct TypeInfo
@@ -49,9 +51,8 @@ typedef struct TypeInfo
         } array;
         struct
         {
-            bool is_c_vararg;
             struct TypeInfo *return_type;
-            /*array*/ struct TypeInfo *params;
+            /*array*/ struct TypeInfo **params;
         } proc;
         struct
         {
@@ -122,6 +123,15 @@ static TypeInfo BOOL_INT_TYPE = {
 static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
 
 static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
+
+// Type functions
+
+static inline bool is_type_compound(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_STRUCT || type->kind == TYPE_SLICE ||
+        type->kind == TYPE_ARRAY);
+}
 
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
@@ -207,7 +217,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         for (size_t i = 0; i < array_size(received->proc.params); ++i)
         {
             if (!exact_types(
-                    &received->proc.params[i], &expected->proc.params[i]))
+                    received->proc.params[i], expected->proc.params[i]))
                 return NULL;
         }
 
