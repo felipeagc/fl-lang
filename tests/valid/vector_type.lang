@@ -2,7 +2,7 @@ import "core:c";
 
 typedef Vec3 @vector_type(float, 3);
 
-const a = Vec3{1, 4, 2} + 5;
+const a = Vec3{50} + 5;
 
 extern fn main() -> i32 {
     var v = Vec3{1, 2, 3};
@@ -15,9 +15,17 @@ extern fn main() -> i32 {
     v += f;
     v += a;
 
+    v = v + f; 
+
+    var v2: Vec3 = Vec3{123};
+    if (v2.x != 123 || v2.y != 123 || v2.z != 123) abort();
+    printf(c"%f %f %f\n", v2.r, v2.g, v2.b);
+
     if (v.len != 3) abort();
 
     printf(c"%f %f %f\n", v[0], v[1], v[2]);
+    printf(c"%f %f %f\n", v.x, v.y, v.z);
+    printf(c"%f %f %f\n", v.r, v.g, v.b);
 
     return 0;
 }

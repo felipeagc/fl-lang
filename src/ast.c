@@ -84,10 +84,7 @@ typedef enum AstType {
     AST_BUILTIN_MAX,
     AST_BUILTIN_MIN,
 
-/*     AST_BUILTIN_VEC_X, */
-/*     AST_BUILTIN_VEC_Y, */
-/*     AST_BUILTIN_VEC_Z, */
-/*     AST_BUILTIN_VEC_W, */
+    AST_BUILTIN_VEC_ACCESS,
 } AstType;
 
 typedef struct AstValue
@@ -272,5 +269,9 @@ typedef struct Ast
         {
             struct Ast *sub;
         } distinct;
+        struct
+        {
+            size_t position;
+        } vec_access;
     };
 } Ast;

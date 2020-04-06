@@ -510,7 +510,8 @@ void llvm_codegen_ast(
             case AST_BUILTIN_MIN:
             case AST_BUILTIN_CAP:
             case AST_BUILTIN_PTR:
-            case AST_BUILTIN_LEN: {
+            case AST_BUILTIN_LEN:
+            case AST_BUILTIN_VEC_ACCESS: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
                 break;
             }
@@ -1275,6 +1276,8 @@ void llvm_codegen_ast(
     case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
+        TypeInfo *compound_type = ast->compound.type_expr->as_type;
+
         if (!is_const)
         {
             result_value.is_lvalue = true;
@@ -1292,23 +1295,47 @@ void llvm_codegen_ast(
             {
             case TYPE_VECTOR:
             case TYPE_ARRAY: {
-                for (Ast *value = ast->compound.values;
-                     value !=
-                     ast->compound.values + array_size(ast->compound.values);
-                     ++value)
+                if (array_size(ast->compound.values) !=
+                        compound_type->array.size &&
+                    array_size(ast->compound.values) == 1)
                 {
-                    size_t index = (size_t)(value - ast->compound.values);
+                    // Only got one value, replicate it
                     AstValue val = {0};
-                    llvm_codegen_ast(l, mod, value, is_const, &val);
+                    llvm_codegen_ast(
+                        l, mod, &ast->compound.values[0], is_const, &val);
 
-                    LLVMValueRef indices[2] = {
-                        LLVMConstInt(LLVMInt32Type(), 0, false),
-                        LLVMConstInt(LLVMInt32Type(), index, false),
-                    };
+                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    {
+                        LLVMValueRef indices[2] = {
+                            LLVMConstInt(LLVMInt32Type(), 0, false),
+                            LLVMConstInt(LLVMInt32Type(), i, false),
+                        };
 
-                    LLVMValueRef ptr = LLVMBuildGEP(
-                        mod->builder, result_value.value, indices, 2, "");
-                    LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
+                        LLVMValueRef ptr = LLVMBuildGEP(
+                            mod->builder, result_value.value, indices, 2, "");
+                        LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
+                    }
+                }
+                else
+                {
+                    for (Ast *value = ast->compound.values;
+                         value != ast->compound.values +
+                                      array_size(ast->compound.values);
+                         ++value)
+                    {
+                        size_t index = (size_t)(value - ast->compound.values);
+                        AstValue val = {0};
+                        llvm_codegen_ast(l, mod, value, is_const, &val);
+
+                        LLVMValueRef indices[2] = {
+                            LLVMConstInt(LLVMInt32Type(), 0, false),
+                            LLVMConstInt(LLVMInt32Type(), index, false),
+                        };
+
+                        LLVMValueRef ptr = LLVMBuildGEP(
+                            mod->builder, result_value.value, indices, 2, "");
+                        LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
+                    }
                 }
 
                 break;
@@ -1349,19 +1376,36 @@ void llvm_codegen_ast(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * array_size(ast->compound.values));
 
-                for (Ast *value = ast->compound.values;
-                     value !=
-                     ast->compound.values + array_size(ast->compound.values);
-                     ++value)
+                if (array_size(ast->compound.values) !=
+                        compound_type->array.size &&
+                    array_size(ast->compound.values) == 1)
                 {
-                    size_t index = (size_t)(value - ast->compound.values);
+                    // Only got one value, replicate it
                     AstValue val = {0};
-                    llvm_codegen_ast(l, mod, value, true, &val);
-                    values[index] = val.value;
+                    llvm_codegen_ast(
+                        l, mod, &ast->compound.values[0], is_const, &val);
+
+                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    {
+                        values[i] = val.value;
+                    }
+                }
+                else
+                {
+                    for (Ast *value = ast->compound.values;
+                         value != ast->compound.values +
+                                      array_size(ast->compound.values);
+                         ++value)
+                    {
+                        size_t index = (size_t)(value - ast->compound.values);
+                        AstValue val = {0};
+                        llvm_codegen_ast(l, mod, value, true, &val);
+                        values[index] = val.value;
+                    }
                 }
 
                 result_value.value =
-                    LLVMConstVector(values, array_size(ast->compound.values));
+                    LLVMConstVector(values, compound_type->array.size);
 
                 break;
             }
@@ -1371,21 +1415,38 @@ void llvm_codegen_ast(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * array_size(ast->compound.values));
 
-                for (Ast *value = ast->compound.values;
-                     value !=
-                     ast->compound.values + array_size(ast->compound.values);
-                     ++value)
+                if (array_size(ast->compound.values) !=
+                        compound_type->array.size &&
+                    array_size(ast->compound.values) == 1)
                 {
-                    size_t index = (size_t)(value - ast->compound.values);
+                    // Only got one value, replicate it
                     AstValue val = {0};
-                    llvm_codegen_ast(l, mod, value, true, &val);
-                    values[index] = val.value;
+                    llvm_codegen_ast(
+                        l, mod, &ast->compound.values[0], is_const, &val);
+
+                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    {
+                        values[i] = val.value;
+                    }
+                }
+                else
+                {
+                    for (Ast *value = ast->compound.values;
+                         value != ast->compound.values +
+                                      array_size(ast->compound.values);
+                         ++value)
+                    {
+                        size_t index = (size_t)(value - ast->compound.values);
+                        AstValue val = {0};
+                        llvm_codegen_ast(l, mod, value, true, &val);
+                        values[index] = val.value;
+                    }
                 }
 
                 result_value.value = LLVMConstArray(
                     llvm_type(l, ast->type_info->array.sub),
                     values,
-                    array_size(ast->compound.values));
+                    compound_type->array.size);
 
                 break;
             }
@@ -1448,6 +1509,28 @@ void llvm_codegen_ast(
         break;
     }
 
+    case AST_BUILTIN_VEC_ACCESS: {
+        Scope *scope = *array_last(l->scope_stack);
+        assert(scope->type_info);
+
+        AstValue vec_value = (*array_last(l->scope_stack))->value;
+
+        AstValue subscript_value = {0};
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            LLVMConstInt(LLVMInt32Type(), ast->vec_access.position, false),
+        };
+
+        subscript_value.is_lvalue = true;
+        subscript_value.value =
+            LLVMBuildGEP(mod->builder, vec_value.value, indices, 2, "");
+
+        if (out_value) *out_value = subscript_value;
+
+        break;
+    }
+
     case AST_BUILTIN_LEN: {
         Scope *scope = *array_last(l->scope_stack);
         assert(scope->type_info);
@@ -1505,6 +1588,11 @@ void llvm_codegen_ast(
         default: assert(0); break;
         }
 
+        break;
+    }
+
+    case AST_BUILTIN_CAP: {
+        assert(0);
         break;
     }
 

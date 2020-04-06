@@ -375,19 +375,44 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     ty->array.size = size;
 
     ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 16, NULL);
     ty->scope->type_info = ty;
-
-    // TODO: Add .x, .y, .z, .w
-    // TODO: Add .r, .g, .b, .a
-
-    /* Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast)); */
-    /* ptr_ast->type = AST_BUILTIN_PTR; */
-    /* ptr_ast->public = true; */
-    /* scope_set(ty->scope, STR("ptr"), ptr_ast); */
 
     static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
     scope_set(ty->scope, STR("len"), &len_ast);
+
+    if (ty->array.size >= 1)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .public = true,
+                          .vec_access.position = 0};
+        scope_set(ty->scope, STR("x"), &ast);
+        scope_set(ty->scope, STR("r"), &ast);
+    }
+    if (ty->array.size >= 2)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .public = true,
+                          .vec_access.position = 1};
+        scope_set(ty->scope, STR("y"), &ast);
+        scope_set(ty->scope, STR("g"), &ast);
+    }
+    if (ty->array.size >= 3)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .public = true,
+                          .vec_access.position = 2};
+        scope_set(ty->scope, STR("z"), &ast);
+        scope_set(ty->scope, STR("b"), &ast);
+    }
+    if (ty->array.size >= 4)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .public = true,
+                          .vec_access.position = 3};
+        scope_set(ty->scope, STR("w"), &ast);
+        scope_set(ty->scope, STR("a"), &ast);
+    }
 
     return ty;
 }

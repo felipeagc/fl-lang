@@ -1024,6 +1024,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_BUILTIN_CAP:
     case AST_BUILTIN_MAX:
     case AST_BUILTIN_MIN:
+    case AST_BUILTIN_VEC_ACCESS:
     case AST_UNINITIALIZED:
     case AST_BREAK:
     case AST_CONTINUE:
@@ -1815,7 +1816,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             case AST_BUILTIN_MIN:
             case AST_BUILTIN_CAP:
             case AST_BUILTIN_PTR:
-            case AST_BUILTIN_LEN: {
+            case AST_BUILTIN_LEN:
+            case AST_BUILTIN_VEC_ACCESS: {
                 analyze_ast(a, sym, NULL);
                 assert(sym->type_info);
                 ast->type_info = sym->type_info;
@@ -1833,6 +1835,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_BUILTIN_VEC_ACCESS: {
+        Scope *scope = *array_last(a->scope_stack);
+        TypeInfo *type = scope->type_info;
+
+        switch (type->kind)
+        {
+        case TYPE_VECTOR: ast->type_info = type->array.sub; break;
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
     case AST_BUILTIN_LEN: {
         Scope *scope = *array_last(a->scope_stack);
         TypeInfo *type = scope->type_info;
@@ -1846,6 +1862,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         default: assert(0); break;
         }
+
         break;
     }
 
@@ -2288,8 +2305,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_MUL:
         case BINOP_DIV:
         case BINOP_MOD: {
-            analyze_ast(a, ast->binop.left, expected_type);
-            analyze_ast(a, ast->binop.right, expected_type);
+            TypeInfo *operand_expected_type = expected_type;
+
+            if (expected_type && expected_type->kind == TYPE_VECTOR)
+            {
+                operand_expected_type = NULL;
+            }
+
+            analyze_ast(a, ast->binop.left, operand_expected_type);
+            analyze_ast(a, ast->binop.right, operand_expected_type);
+
             TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
             TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
 
@@ -2523,7 +2548,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
         case TYPE_VECTOR:
         case TYPE_ARRAY: {
-            if (array_size(ast->compound.values) != compound_type->array.size)
+            if (array_size(ast->compound.values) != compound_type->array.size &&
+                array_size(ast->compound.values) != 1)
             {
                 compile_error(
                     a->compiler,
@@ -2819,7 +2845,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 #if 0
     if (!ast->type_info)
     {
-        // TODO: remove this, only temporary for debugging
         printf(
             "undefined type: %u:%u (%u)\n",
             ast->loc.line,
