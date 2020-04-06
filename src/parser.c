@@ -87,9 +87,7 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     case TOKEN_LPAREN: {
         parser_next(p, 1);
 
-        ast->type = AST_PAREN_EXPR;
-        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->expr, parsing_type)) res = false;
+        if (!parse_expr(p, ast, parsing_type)) res = false;
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 

@@ -526,11 +526,6 @@ void llvm_codegen_ast(
         break;
     }
 
-    case AST_PAREN_EXPR: {
-        llvm_codegen_ast(l, mod, ast->expr, is_const, out_value);
-        break;
-    }
-
     case AST_PROC_CALL: {
         AstValue function_value = {0};
         llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);

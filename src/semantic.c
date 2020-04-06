@@ -11,17 +11,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type);
 
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
-static inline Ast *get_inner_expr(Ast *ast)
-{
-    switch (ast->type)
-    {
-    case AST_PAREN_EXPR: return get_inner_expr(ast->expr);
-    default: break;
-    }
-
-    return ast;
-}
-
 static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
 {
     bool res = false;
@@ -50,11 +39,6 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         }
         default: res = true; break;
         }
-        break;
-    }
-
-    case AST_PAREN_EXPR: {
-        res = is_expr_const(compiler, scope, ast->expr);
         break;
     }
 
@@ -184,11 +168,6 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
         break;
     }
 
-    case AST_PAREN_EXPR: {
-        res = is_expr_assignable(compiler, scope, ast->expr);
-        break;
-    }
-
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
         {
@@ -289,11 +268,6 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
         }
         default: break;
         }
-        break;
-    }
-
-    case AST_PAREN_EXPR: {
-        res = resolve_expr_int(compiler, scope, ast->expr, i64);
         break;
     }
 
@@ -424,11 +398,6 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         }
         default: break;
         }
-        break;
-    }
-
-    case AST_PAREN_EXPR: {
-        ast->as_type = ast_as_type(compiler, scope, ast->expr, false);
         break;
     }
 
@@ -686,11 +655,6 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
         break;
     }
 
-    case AST_PAREN_EXPR: {
-        ast->alias_to = get_aliased_expr(compiler, scope, ast->expr);
-        break;
-    }
-
     case AST_ACCESS: {
         Scope *accessed_scope =
             get_expr_scope(compiler, scope, ast->access.left);
@@ -906,11 +870,6 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         create_scopes_ast(a, ast->for_stmt.stmt);
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
-        break;
-    }
-
-    case AST_PAREN_EXPR: {
-        create_scopes_ast(a, ast->expr);
         break;
     }
 
@@ -1900,12 +1859,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         default: assert(0); break;
         }
 
-        break;
-    }
-
-    case AST_PAREN_EXPR: {
-        analyze_ast(a, ast->expr, expected_type);
-        ast->type_info = ast->expr->type_info;
         break;
     }
 

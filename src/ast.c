@@ -59,7 +59,6 @@ typedef enum AstType {
     AST_VAR_ASSIGN,
     AST_RETURN,
     AST_PRIMARY,
-    AST_PAREN_EXPR,
     AST_SUBSCRIPT,
     AST_SUBSCRIPT_SLICE,
     AST_ARRAY_TYPE,
