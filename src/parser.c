@@ -1038,6 +1038,83 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     Token *tok = parser_peek(p, 0);
     switch (tok->type)
     {
+    case TOKEN_HASH: {
+        parser_next(p, 1);
+
+        AstAttribute *attributes = NULL;
+        if (!parser_consume(p, TOKEN_LBRACK)) res = false;
+
+        while (parser_peek(p, 0)->type != TOKEN_RBRACK)
+        {
+            Token *name_tok = parser_next(p, 1);
+            if (name_tok->type == TOKEN_IDENT)
+            {
+                AstAttribute attr = {.name = name_tok->str};
+                array_push(attributes, attr);
+            }
+            else
+            {
+                res = false;
+            }
+
+            if (parser_peek(p, 0)->type != TOKEN_RBRACK)
+            {
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RBRACK)) res = false;
+
+        ast->attributes = attributes;
+
+        switch (parser_peek(p, 0)->type)
+        {
+        case TOKEN_FN: {
+            goto parse_fn_decl;
+            break;
+        }
+
+        case TOKEN_EXTERN: {
+            goto parse_extern_decl;
+            break;
+        }
+
+        case TOKEN_STATIC: {
+            goto parse_static_decl;
+            break;
+        }
+
+        case TOKEN_PUB: {
+            goto parse_pub_decl;
+            break;
+        }
+
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        case TOKEN_CONST: {
+            goto parse_const_decl;
+            break;
+        }
+
+        case TOKEN_TYPEDEF: {
+            goto parse_typedef_decl;
+            break;
+        }
+
+        case TOKEN_IMPORT: {
+            goto parse_import_decl;
+            break;
+        }
+
+        default: res = false; break;
+        }
+
+        break;
+    }
+
     case TOKEN_LCURLY: {
         parser_next(p, 1);
         need_semi = false;
@@ -1056,6 +1133,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    parse_pub_decl:
     case TOKEN_PUB: {
         parser_next(p, 1);
 

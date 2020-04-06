@@ -104,6 +104,11 @@ typedef enum AstFlags {
     AST_FLAG_PUBLIC = 1 << 2,
 } AstFlags;
 
+typedef struct AstAttribute
+{
+    String name;
+} AstAttribute;
+
 typedef struct Ast
 {
     AstType type;
@@ -113,6 +118,7 @@ typedef struct Ast
     struct TypeInfo *as_type;
     struct Scope *sym_scope;
     struct Ast *alias_to;
+    /*array*/ AstAttribute *attributes;
 
     union
     {

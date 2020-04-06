@@ -101,6 +101,12 @@ void lex_token(Lexer *l)
         tok.type = TOKEN_RCURLY;
         break;
     }
+    case '#': {
+        tok.loc.length = 1;
+        lex_next(l, 1);
+        tok.type = TOKEN_HASH;
+        break;
+    }
     case '*': {
         tok.loc.length = 1;
         lex_next(l, 1);

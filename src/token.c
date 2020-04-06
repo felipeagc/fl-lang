@@ -6,6 +6,7 @@ typedef enum TokenType {
     TOKEN_LCURLY,
     TOKEN_RCURLY,
 
+    TOKEN_HASH,
     TOKEN_SEMICOLON,
     TOKEN_COLON,
     TOKEN_UNDERSCORE,
@@ -120,6 +121,8 @@ static const char *token_strings[] = {
     [TOKEN_RBRACK] = "]",
     [TOKEN_LCURLY] = "{",
     [TOKEN_RCURLY] = "}",
+
+    [TOKEN_HASH] = "#",
 
     [TOKEN_SEMICOLON] = ";",
     [TOKEN_COLON] = ":",
