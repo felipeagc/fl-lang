@@ -598,7 +598,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         Ast value = {0};
-        if (parse_expr(p, &value, parsing_type))
+        value.loc = parser_peek(p, 0)->loc;
+        if (parse_unary_expr(p, &value, parsing_type))
         {
             ast->cast.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             *ast->cast.value_expr = value;
@@ -607,6 +608,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         {
             res = false;
         }
+        Location last_loc = parser_peek(p, -1)->loc;
+        value.loc.length = last_loc.buf + last_loc.length - value.loc.buf;
 
         break;
     }
