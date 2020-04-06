@@ -96,13 +96,18 @@ typedef struct AstValue
 enum {
     PROC_FLAG_HAS_BODY = 1 << 0,
     PROC_FLAG_IS_C_VARARGS = 1 << 1,
-    PROC_FLAG_IS_EXTERN = 1 << 2,
 };
+
+typedef enum AstFlags {
+    AST_FLAG_EXTERN = 1 << 0,
+    AST_FLAG_STATIC = 1 << 1,
+    AST_FLAG_PUBLIC = 1 << 2,
+} AstFlags;
 
 typedef struct Ast
 {
     AstType type;
-    bool public;
+    uint32_t flags;
     Location loc;
     struct TypeInfo *type_info;
     struct TypeInfo *as_type;

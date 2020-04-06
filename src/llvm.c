@@ -248,7 +248,7 @@ void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             ast->proc.value.value = fun;
 
             LLVMSetLinkage(fun, LLVMInternalLinkage);
-            if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
+            if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN)
             {
                 LLVMSetLinkage(fun, LLVMExternalLinkage);
             }
@@ -769,14 +769,62 @@ void llvm_codegen_ast(
     case AST_VAR_DECL: {
         Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
 
+        if (ast->flags & AST_FLAG_EXTERN)
+        {
+            char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
+
+            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
+            // Global variable
+            ast->decl.value.is_lvalue = true;
+            ast->decl.value.value =
+                LLVMAddGlobal(mod->mod, llvm_ty, global_name);
+            LLVMSetLinkage(ast->decl.value.value, LLVMExternalLinkage);
+            LLVMSetExternallyInitialized(ast->decl.value.value, false);
+
+            if (out_value) *out_value = ast->decl.value;
+            break;
+        }
+
+        if (ast->flags & AST_FLAG_STATIC)
+        {
+            char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
+
+            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
+            // Global variable
+            ast->decl.value.is_lvalue = true;
+            ast->decl.value.value =
+                LLVMAddGlobal(mod->mod, llvm_ty, global_name);
+            LLVMSetLinkage(ast->decl.value.value, LLVMInternalLinkage);
+            LLVMSetExternallyInitialized(ast->decl.value.value, false);
+
+            if (ast->decl.value_expr)
+            {
+                AstValue init_value = {0};
+                llvm_codegen_ast(
+                    l, mod, ast->decl.value_expr, false, &init_value);
+                LLVMSetInitializer(
+                    ast->decl.value.value, load_val(mod, &init_value));
+            }
+            else
+            {
+                LLVMSetInitializer(
+                    ast->decl.value.value, LLVMConstNull(llvm_ty));
+            }
+
+            if (out_value) *out_value = ast->decl.value;
+            break;
+        }
+
         if (!proc)
         {
+            char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
+
             assert(!ast->decl.value.value);
             LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
             // Global variable
             ast->decl.value.is_lvalue = true;
-            ast->decl.value.value = LLVMAddGlobal(mod->mod, llvm_ty, "");
-            LLVMSetLinkage(ast->decl.value.value, LLVMInternalLinkage);
+            ast->decl.value.value =
+                LLVMAddGlobal(mod->mod, llvm_ty, global_name);
             LLVMSetExternallyInitialized(ast->decl.value.value, false);
 
             if (ast->decl.value_expr)

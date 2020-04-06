@@ -45,7 +45,8 @@ struct Ast *scope_get_local(Scope *scope, String name)
 struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
 {
     struct Ast *sym = scope_get_local(scope, name);
-    if (sym && (sym->loc.file == from_file || sym->public))
+    if (sym && (sym->loc.file == from_file ||
+                ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
     {
         return sym;
     }
@@ -55,7 +56,9 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
          ++sibling)
     {
         sym = get_symbol(*sibling, name, from_file);
-        if (sym && (sym->loc.file == from_file || sym->public)) return sym;
+        if (sym && (sym->loc.file == from_file ||
+                    ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
+            return sym;
     }
 
     if (scope->parent) return get_symbol(scope->parent, name, from_file);

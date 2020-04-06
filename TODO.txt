@@ -23,9 +23,7 @@ TODO:
 - any type
 
 Essential things for writing applications:
-- static/extern variables
 - extern blocks
-- linker cli options
 - binding generator
 
 Standard library:
@@ -36,7 +34,7 @@ Standard library:
 
 Bugs:
 - I think struct fields don't have location information
-- Duplicate extern function declarations
+- Duplicate extern declarations
 - Segfault when import path is not found
 - Circular imports
 - Circular structs

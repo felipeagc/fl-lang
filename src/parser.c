@@ -481,7 +481,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
             field.type = AST_STRUCT_FIELD;
-            field.public = true;
+            field.flags |= AST_FLAG_PUBLIC;
 
             Token *name_tok = parser_consume(p, TOKEN_IDENT);
             if (!name_tok)
@@ -619,7 +619,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (parser_peek(p, 0)->type == TOKEN_FN)
         {
-            ast->proc.flags |= PROC_FLAG_IS_EXTERN;
+            ast->flags |= AST_FLAG_EXTERN;
             goto parse_fn_type;
         }
         else
@@ -1059,7 +1059,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     case TOKEN_PUB: {
         parser_next(p, 1);
 
-        ast->public = true;
+        ast->flags |= AST_FLAG_PUBLIC;
 
         switch (parser_peek(p, 0)->type)
         {
@@ -1088,12 +1088,17 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             break;
         }
 
+        case TOKEN_STATIC: {
+            goto parse_static_decl;
+            break;
+        }
+
         case TOKEN_IMPORT: {
             goto parse_import_decl;
             break;
         }
 
-        default: break;
+        default: res = false; break;
         }
 
         break;
@@ -1103,14 +1108,40 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     case TOKEN_EXTERN: {
         parser_next(p, 1);
 
-        if (parser_peek(p, 0)->type == TOKEN_FN)
+        ast->flags |= AST_FLAG_EXTERN;
+
+        switch (parser_peek(p, 0)->type)
         {
-            ast->proc.flags |= PROC_FLAG_IS_EXTERN;
+        case TOKEN_FN: {
             goto parse_fn_decl;
+            break;
         }
-        else
+
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        default: res = false; break;
+        }
+
+        break;
+    }
+
+    parse_static_decl:
+    case TOKEN_STATIC: {
+        parser_next(p, 1);
+
+        ast->flags |= AST_FLAG_STATIC;
+
+        switch (parser_peek(p, 0)->type)
         {
-            res = false;
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        default: res = false; break;
         }
 
         break;

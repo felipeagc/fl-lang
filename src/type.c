@@ -328,9 +328,9 @@ static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
     memset(min_ast, 0, sizeof(*min_ast));
     memset(max_ast, 0, sizeof(*max_ast));
     min_ast->type = AST_BUILTIN_MIN;
-    min_ast->public = true;
+    min_ast->flags = AST_FLAG_PUBLIC;
     max_ast->type = AST_BUILTIN_MAX;
-    max_ast->public = true;
+    max_ast->flags = AST_FLAG_PUBLIC;
 
     Scope *scope = bump_alloc(&compiler->bump, sizeof(Scope));
     scope_init(scope, compiler, SCOPE_DEFAULT, 2, NULL);
@@ -356,10 +356,10 @@ create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->public = true;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;
@@ -378,13 +378,13 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     scope_init(ty->scope, compiler, SCOPE_INSTANCED, 16, NULL);
     ty->scope->type_info = ty;
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     if (ty->array.size >= 1)
     {
         static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .public = true,
+                          .flags = AST_FLAG_PUBLIC,
                           .vec_access.position = 0};
         scope_set(ty->scope, STR("x"), &ast);
         scope_set(ty->scope, STR("r"), &ast);
@@ -392,7 +392,7 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     if (ty->array.size >= 2)
     {
         static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .public = true,
+                          .flags = AST_FLAG_PUBLIC,
                           .vec_access.position = 1};
         scope_set(ty->scope, STR("y"), &ast);
         scope_set(ty->scope, STR("g"), &ast);
@@ -400,7 +400,7 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     if (ty->array.size >= 3)
     {
         static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .public = true,
+                          .flags = AST_FLAG_PUBLIC,
                           .vec_access.position = 2};
         scope_set(ty->scope, STR("z"), &ast);
         scope_set(ty->scope, STR("b"), &ast);
@@ -408,7 +408,7 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     if (ty->array.size >= 4)
     {
         static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .public = true,
+                          .flags = AST_FLAG_PUBLIC,
                           .vec_access.position = 3};
         scope_set(ty->scope, STR("w"), &ast);
         scope_set(ty->scope, STR("a"), &ast);
@@ -429,11 +429,12 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
     ty->scope->type_info = ty;
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
     ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->public = true;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
 
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;

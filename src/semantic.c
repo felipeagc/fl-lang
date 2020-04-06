@@ -550,7 +550,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             ty->flags |= TYPE_FLAG_C_VARARGS;
         }
 
-        if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
+        if (ast->flags & AST_FLAG_EXTERN)
         {
             ty->flags |= TYPE_FLAG_EXTERN;
         }
@@ -1426,7 +1426,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ty->flags |= TYPE_FLAG_C_VARARGS;
         }
 
-        if (ast->proc.flags & PROC_FLAG_IS_EXTERN)
+        if (ast->flags & AST_FLAG_EXTERN)
         {
             ty->flags |= TYPE_FLAG_EXTERN;
         }
@@ -2133,8 +2133,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (param->decl.type_expr->as_type)
             {
-                if ((ast->proc.flags & PROC_FLAG_IS_EXTERN) ==
-                        PROC_FLAG_IS_EXTERN &&
+                if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN &&
                     is_type_compound(param->decl.type_expr->as_type))
                 {
                     compile_error(

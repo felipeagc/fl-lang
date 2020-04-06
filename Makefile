@@ -20,10 +20,10 @@ clean:
 test: compiler
 	@bash ./tests/run_tests.sh
 
-ray: compiler bindgen examples/ray.lang
+examples/ray: compiler bindgen examples/ray.lang
 	./compiler -o=$@ examples/ray.lang
 
-examples: ray
+examples: examples/ray
 
 bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang

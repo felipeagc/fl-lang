@@ -65,7 +65,7 @@ extern fn main() -> i32 {
     const width = 400;
     const height = 200;
 
-    printf(c"P3\n%d %d\n255\n", cast(i32)width, cast(i32)height);
+    fprintf(stdout, c"P3\n%d %d\n255\n", cast(i32)width, cast(i32)height);
 
     var lower_left_corner = Vec3{-2.0, -1.0, -1.0};
     var horizontal = Vec3{4.0, 0.0, 0.0};
@@ -80,7 +80,7 @@ extern fn main() -> i32 {
             var ray = Ray{origin, lower_left_corner + (u * horizontal) + (v * vertical)};
             var col = ray_color(ray);
 
-            printf(c"%d %d %d\n",
+            fprintf(stdout, c"%d %d %d\n",
                 cast(i32)(255.999 * col.r),
                 cast(i32)(255.999 * col.g),
                 cast(i32)(255.999 * col.b));
