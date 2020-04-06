@@ -84,7 +84,7 @@ static void print_errors(Compiler *compiler)
         {
             fprintf(
                 stderr,
-                "%.*s (%u:%u): %.*s\n",
+                "%.*s:%u:%u: error: %.*s\n",
                 (int)err->loc.file->path.length,
                 err->loc.file->path.buf,
                 err->loc.line,
