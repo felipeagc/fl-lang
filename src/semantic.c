@@ -67,6 +67,8 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         case INTRINSIC_SQRT:
         case INTRINSIC_COS:
         case INTRINSIC_SIN: res = false; break;
+
+        case INTRINSIC_VECTOR_TYPE: res = true; break;
         }
         break;
     }
@@ -604,6 +606,35 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
+    case AST_INTRINSIC_CALL: {
+
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_VECTOR_TYPE: {
+            if (array_size(ast->intrinsic_call.params) != 2) break;
+
+            Ast *elem_type = &ast->intrinsic_call.params[0];
+            Ast *vec_width = &ast->intrinsic_call.params[1];
+
+            ast_as_type(compiler, scope, elem_type, false);
+            if (!elem_type->as_type) break;
+
+            int64_t width;
+            if (!resolve_expr_int(compiler, scope, vec_width, &width)) break;
+            if (width <= 0) break;
+
+            ast->as_type =
+                create_vector_type(compiler, elem_type->as_type, (size_t)width);
+
+            break;
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
     case AST_ACCESS: {
         Scope *accessed_scope =
             get_expr_scope(compiler, scope, ast->access.left);
@@ -715,6 +746,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 
         case TYPE_SLICE:
         case TYPE_ARRAY:
+        case TYPE_VECTOR:
         case TYPE_STRUCT:
             accessed_scope = ast->type_info->scope;
             assert(accessed_scope);
@@ -1809,7 +1841,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (type->kind)
         {
         case TYPE_SLICE:
-        case TYPE_ARRAY: ast->type_info = &UINT_TYPE; break;
+        case TYPE_ARRAY:
+        case TYPE_VECTOR: ast->type_info = &UINT_TYPE; break;
 
         default: assert(0); break;
         }
@@ -2029,6 +2062,46 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             break;
         }
+
+        case INTRINSIC_VECTOR_TYPE: {
+            if (array_size(ast->intrinsic_call.params) != 2)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
+
+                break;
+            }
+
+            Ast *elem_type = &ast->intrinsic_call.params[0];
+            Ast *vec_width = &ast->intrinsic_call.params[1];
+            analyze_ast(a, elem_type, &TYPE_OF_TYPE);
+            analyze_ast(a, vec_width, &UINT_TYPE);
+
+            if (!elem_type->type_info || !vec_width->type_info)
+            {
+                assert(array_size(a->compiler->errors) > 0);
+                break;
+            }
+
+            if (!elem_type->as_type)
+            {
+                assert(array_size(a->compiler->errors) > 0);
+                break;
+            }
+
+            if (elem_type->as_type->kind != TYPE_FLOAT)
+            {
+                compile_error(
+                    a->compiler,
+                    elem_type->loc,
+                    "intrinsic does not apply for this type");
+                break;
+            }
+
+            ast->type_info = &TYPE_OF_TYPE;
+
+            break;
+        }
         }
 
         break;
@@ -2171,7 +2244,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case UNOP_NEG: {
             if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT)
+                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
+                ast->unop.sub->type_info->kind != TYPE_VECTOR)
             {
                 compile_error(
                     a->compiler,
@@ -2219,20 +2293,59 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
             TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
 
-            if (!ast->binop.left->type_info || !ast->binop.right->type_info)
+            if (!left_type || !right_type)
             {
                 assert(array_size(a->compiler->errors) > 0);
                 break;
             }
 
-            if (expected_type == NULL)
+            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_FLOAT &&
+                left_type->kind != TYPE_VECTOR)
             {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "can only do arithmetic on numeric types");
+                break;
+            }
+
+            TypeInfo *result_type = left_type;
+
+            if (left_type->kind == TYPE_VECTOR &&
+                right_type->kind != TYPE_VECTOR)
+            {
+                result_type = left_type;
+                left_type = left_type->array.sub;
+
+                TypeInfo *common_type =
+                    common_numeric_type(left_type, right_type);
+                analyze_ast(a, ast->binop.right, common_type);
+                right_type = get_inner_type(ast->binop.right->type_info);
+            }
+            else if (
+                right_type->kind == TYPE_VECTOR &&
+                left_type->kind != TYPE_VECTOR && !ast->binop.assign)
+            {
+                result_type = right_type;
+                right_type = right_type->array.sub;
+
                 TypeInfo *common_type =
                     common_numeric_type(left_type, right_type);
                 analyze_ast(a, ast->binop.left, common_type);
-                analyze_ast(a, ast->binop.right, common_type);
                 left_type = get_inner_type(ast->binop.left->type_info);
-                right_type = get_inner_type(ast->binop.right->type_info);
+            }
+            else
+            {
+                if (expected_type == NULL)
+                {
+                    TypeInfo *common_type =
+                        common_numeric_type(left_type, right_type);
+                    analyze_ast(a, ast->binop.left, common_type);
+                    analyze_ast(a, ast->binop.right, common_type);
+                    left_type = get_inner_type(ast->binop.left->type_info);
+                    right_type = get_inner_type(ast->binop.right->type_info);
+                    result_type = left_type;
+                }
             }
 
             if (!exact_types(left_type, right_type))
@@ -2244,16 +2357,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_FLOAT)
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "can only do arithmetic on numeric types");
-                break;
-            }
-
-            ast->type_info = left_type;
+            ast->type_info = result_type;
 
             break;
         }
@@ -2417,6 +2521,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (compound_type->kind)
         {
+        case TYPE_VECTOR:
         case TYPE_ARRAY: {
             if (array_size(ast->compound.values) != compound_type->array.size)
             {
@@ -2488,6 +2593,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
             ast->subscript.left->type_info->kind != TYPE_ARRAY &&
+            ast->subscript.left->type_info->kind != TYPE_VECTOR &&
             ast->subscript.left->type_info->kind != TYPE_SLICE)
         {
             compile_error(
@@ -2500,6 +2606,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (ast->subscript.left->type_info->kind)
         {
         case TYPE_SLICE:
+        case TYPE_VECTOR:
         case TYPE_ARRAY: {
             ast->type_info = ast->subscript.left->type_info->array.sub;
             break;
@@ -2554,8 +2661,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "slice subscript lower and upper bounds need to be of "
-                    "same "
+                    "slice subscript lower and upper bounds need to be of same "
                     "type");
                 break;
             }

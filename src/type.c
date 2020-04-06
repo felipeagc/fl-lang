@@ -7,6 +7,7 @@ typedef enum TypeKind {
     TYPE_ENUM,
     TYPE_POINTER,
     TYPE_ARRAY,
+    TYPE_VECTOR,
     TYPE_SLICE,
     TYPE_INT,
     TYPE_FLOAT,
@@ -130,7 +131,7 @@ static inline bool is_type_compound(TypeInfo *type)
 {
     return (
         type->kind == TYPE_STRUCT || type->kind == TYPE_SLICE ||
-        type->kind == TYPE_ARRAY);
+        type->kind == TYPE_ARRAY || type->kind == TYPE_VECTOR);
 }
 
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
@@ -172,6 +173,12 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     }
 
     case TYPE_ARRAY: {
+        if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
+        if (received->array.size != expected->array.size) return NULL;
+        break;
+    }
+
+    case TYPE_VECTOR: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         if (received->array.size != expected->array.size) return NULL;
         break;
@@ -351,6 +358,33 @@ create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     ptr_ast->type = AST_BUILTIN_PTR;
     ptr_ast->public = true;
     scope_set(ty->scope, STR("ptr"), ptr_ast);
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    return ty;
+}
+
+static inline TypeInfo *
+create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_VECTOR;
+    ty->array.sub = subtype;
+    ty->array.size = size;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    ty->scope->type_info = ty;
+
+    // TODO: Add .x, .y, .z, .w
+    // TODO: Add .r, .g, .b, .a
+
+    /* Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast)); */
+    /* ptr_ast->type = AST_BUILTIN_PTR; */
+    /* ptr_ast->public = true; */
+    /* scope_set(ty->scope, STR("ptr"), ptr_ast); */
 
     static Ast len_ast = {.type = AST_BUILTIN_LEN, .public = true};
     scope_set(ty->scope, STR("len"), &len_ast);

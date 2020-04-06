@@ -1,0 +1,23 @@
+import "core:c";
+
+typedef Vec3 @vector_type(float, 3);
+
+const a = Vec3{1, 4, 2} + 5;
+
+extern fn main() -> i32 {
+    var v = Vec3{1, 2, 3};
+    v[0] = 123;
+
+    v += Vec3{3, 2, 1};
+    v += 5.0;
+
+    var f: float = 123;
+    v += f;
+    v += a;
+
+    if (v.len != 3) abort();
+
+    printf(c"%f %f %f\n", v[0], v[1], v[2]);
+
+    return 0;
+}

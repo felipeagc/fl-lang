@@ -202,6 +202,10 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 ast->intrinsic_call.type = INTRINSIC_COS;
             }
+            else if (string_equals(expr.primary.tok->str, STR("vector_type")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
+            }
             else
             {
                 compile_error(

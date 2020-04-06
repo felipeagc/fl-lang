@@ -50,6 +50,12 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_VECTOR: {
+        type->ref =
+            LLVMVectorType(llvm_type(l, type->array.sub), type->array.size);
+        break;
+    }
+
     case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
             LLVMInt64Type(),
@@ -708,6 +714,8 @@ void llvm_codegen_ast(
             if (out_value) *out_value = val;
             break;
         }
+
+        case INTRINSIC_VECTOR_TYPE: break;
         }
 
         break;
@@ -725,7 +733,8 @@ void llvm_codegen_ast(
         {
         case TYPE_SLICE:
         case TYPE_STRUCT:
-        case TYPE_ARRAY: {
+        case TYPE_ARRAY:
+        case TYPE_VECTOR: {
             LLVMValueRef glob =
                 LLVMAddGlobal(mod->mod, llvm_type(l, const_type), "");
             LLVMSetLinkage(glob, LLVMInternalLinkage);
@@ -1060,6 +1069,7 @@ void llvm_codegen_ast(
             break;
         }
 
+        case TYPE_VECTOR:
         case TYPE_ARRAY: {
             AstValue subscript_value = {0};
 
@@ -1280,6 +1290,7 @@ void llvm_codegen_ast(
 
             switch (ast->type_info->kind)
             {
+            case TYPE_VECTOR:
             case TYPE_ARRAY: {
                 for (Ast *value = ast->compound.values;
                      value !=
@@ -1333,6 +1344,28 @@ void llvm_codegen_ast(
         {
             switch (ast->type_info->kind)
             {
+            case TYPE_VECTOR: {
+                LLVMValueRef *values = bump_alloc(
+                    &l->compiler->bump,
+                    sizeof(LLVMValueRef) * array_size(ast->compound.values));
+
+                for (Ast *value = ast->compound.values;
+                     value !=
+                     ast->compound.values + array_size(ast->compound.values);
+                     ++value)
+                {
+                    size_t index = (size_t)(value - ast->compound.values);
+                    AstValue val = {0};
+                    llvm_codegen_ast(l, mod, value, true, &val);
+                    values[index] = val.value;
+                }
+
+                result_value.value =
+                    LLVMConstVector(values, array_size(ast->compound.values));
+
+                break;
+            }
+
             case TYPE_ARRAY: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
@@ -1458,6 +1491,7 @@ void llvm_codegen_ast(
             break;
         }
 
+        case TYPE_VECTOR:
         case TYPE_ARRAY: {
             AstValue result_value = {0};
             result_value.is_lvalue = false;
@@ -1718,6 +1752,16 @@ void llvm_codegen_ast(
         LLVMValueRef lhs = NULL;
         LLVMValueRef rhs = NULL;
 
+        TypeInfo *op_type = lhs_type;
+        if (lhs_type->kind == TYPE_VECTOR)
+        {
+            op_type = lhs_type->array.sub;
+        }
+        else if (rhs_type->kind == TYPE_VECTOR)
+        {
+            op_type = rhs_type->array.sub;
+        }
+
         switch (ast->binop.type)
         {
         case BINOP_AND:
@@ -1730,13 +1774,78 @@ void llvm_codegen_ast(
 
         if (!is_const)
         {
+            if (lhs_type->kind == TYPE_VECTOR && rhs_type->kind != TYPE_VECTOR)
+            {
+                LLVMValueRef vector = build_alloca(mod, llvm_type(l, lhs_type));
+                for (unsigned i = 0; i < lhs_type->array.size; ++i)
+                {
+                    LLVMValueRef indices[2] = {
+                        LLVMConstInt(LLVMInt32Type(), 0, false),
+                        LLVMConstInt(LLVMInt32Type(), i, false),
+                    };
+
+                    LLVMValueRef ptr =
+                        LLVMBuildGEP(mod->builder, vector, indices, 2, "");
+                    LLVMBuildStore(mod->builder, rhs, ptr);
+                }
+                rhs = LLVMBuildLoad(mod->builder, vector, "");
+            }
+
+            if (rhs_type->kind == TYPE_VECTOR && lhs_type->kind != TYPE_VECTOR)
+            {
+                LLVMValueRef vector = build_alloca(mod, llvm_type(l, rhs_type));
+                for (unsigned i = 0; i < rhs_type->array.size; ++i)
+                {
+                    LLVMValueRef indices[2] = {
+                        LLVMConstInt(LLVMInt32Type(), 0, false),
+                        LLVMConstInt(LLVMInt32Type(), i, false),
+                    };
+
+                    LLVMValueRef ptr =
+                        LLVMBuildGEP(mod->builder, vector, indices, 2, "");
+                    LLVMBuildStore(mod->builder, lhs, ptr);
+                }
+                lhs = LLVMBuildLoad(mod->builder, vector, "");
+            }
+        }
+        else
+        {
+            // Constant vectors
+
+            if (lhs_type->kind == TYPE_VECTOR && rhs_type->kind != TYPE_VECTOR)
+            {
+                LLVMValueRef *vals = bump_alloc(
+                    &l->compiler->bump,
+                    sizeof(LLVMValueRef) * lhs_type->array.size);
+                for (unsigned i = 0; i < lhs_type->array.size; ++i)
+                {
+                    vals[i] = rhs;
+                }
+                rhs = LLVMConstVector(vals, (unsigned)lhs_type->array.size);
+            }
+
+            if (rhs_type->kind == TYPE_VECTOR && lhs_type->kind != TYPE_VECTOR)
+            {
+                LLVMValueRef *vals = bump_alloc(
+                    &l->compiler->bump,
+                    sizeof(LLVMValueRef) * rhs_type->array.size);
+                for (unsigned i = 0; i < rhs_type->array.size; ++i)
+                {
+                    vals[i] = lhs;
+                }
+                lhs = LLVMConstVector(vals, (unsigned)rhs_type->array.size);
+            }
+        }
+
+        if (!is_const)
+        {
             switch (ast->binop.type)
             {
             case BINOP_ADD: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWAdd(mod->builder, lhs, rhs, "");
                     else
@@ -1754,10 +1863,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_SUB: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWSub(mod->builder, lhs, rhs, "");
                     else
@@ -1775,10 +1884,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_MUL: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWMul(mod->builder, lhs, rhs, "");
                     else
@@ -1796,10 +1905,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_DIV: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildSDiv(mod->builder, lhs, rhs, "");
                     else
@@ -1817,10 +1926,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_MOD: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildSRem(mod->builder, lhs, rhs, "");
                     else
@@ -1839,7 +1948,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITAND: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {
@@ -1852,7 +1961,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITOR: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {
@@ -1865,7 +1974,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITXOR: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {
@@ -1894,7 +2003,7 @@ void llvm_codegen_ast(
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT: {
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildAShr(mod->builder, lhs, rhs, "");
                     else
@@ -1960,7 +2069,7 @@ void llvm_codegen_ast(
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntSGT, lhs, rhs, "");
                     else
@@ -1987,7 +2096,7 @@ void llvm_codegen_ast(
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntSGE, lhs, rhs, "");
                     else
@@ -2014,7 +2123,7 @@ void llvm_codegen_ast(
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntSLT, lhs, rhs, "");
                     else
@@ -2041,7 +2150,7 @@ void llvm_codegen_ast(
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMBuildICmp(
                             mod->builder, LLVMIntSLE, lhs, rhs, "");
                     else
@@ -2143,10 +2252,10 @@ void llvm_codegen_ast(
             switch (ast->binop.type)
             {
             case BINOP_ADD: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWAdd(lhs, rhs);
                     else
                         result_value.value = LLVMConstAdd(lhs, rhs);
@@ -2159,10 +2268,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_SUB: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWSub(lhs, rhs);
                     else
                         result_value.value = LLVMConstSub(lhs, rhs);
@@ -2176,10 +2285,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_MUL: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMConstNSWMul(lhs, rhs);
                     else
                         result_value.value = LLVMConstMul(lhs, rhs);
@@ -2192,10 +2301,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_DIV: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMConstSDiv(lhs, rhs);
                     else
                         result_value.value = LLVMConstUDiv(lhs, rhs);
@@ -2208,10 +2317,10 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_MOD: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_INT:
-                    if (lhs_type->integer.is_signed)
+                    if (op_type->integer.is_signed)
                         result_value.value = LLVMConstSRem(lhs, rhs);
                     else
                         result_value.value = LLVMConstURem(lhs, rhs);
@@ -2224,7 +2333,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITAND: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {
@@ -2236,7 +2345,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITOR: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {
@@ -2248,7 +2357,7 @@ void llvm_codegen_ast(
                 break;
             }
             case BINOP_BITXOR: {
-                switch (lhs_type->kind)
+                switch (op_type->kind)
                 {
                 case TYPE_BOOL:
                 case TYPE_INT: {

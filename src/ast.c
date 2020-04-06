@@ -36,6 +36,7 @@ typedef enum IntrinsicType {
     INTRINSIC_SQRT,
     INTRINSIC_SIN,
     INTRINSIC_COS,
+    INTRINSIC_VECTOR_TYPE,
 } IntrinsicType;
 
 typedef enum AstType {
@@ -82,6 +83,11 @@ typedef enum AstType {
     AST_BUILTIN_CAP,
     AST_BUILTIN_MAX,
     AST_BUILTIN_MIN,
+
+/*     AST_BUILTIN_VEC_X, */
+/*     AST_BUILTIN_VEC_Y, */
+/*     AST_BUILTIN_VEC_Z, */
+/*     AST_BUILTIN_VEC_W, */
 } AstType;
 
 typedef struct AstValue

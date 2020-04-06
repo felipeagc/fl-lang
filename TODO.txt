@@ -4,7 +4,6 @@ Defer statement
 Unions
 Thread local variables
 
-Inline procedures
 Macros (?)
 
 Offsetof
@@ -15,8 +14,9 @@ Attributes
 Import files as byte arrays
 
 TODO:
-- vector types
+- parse attributes
 - using statement
+- inline procedures
 - implement sizeof and alignof myself instead of letting LLVM handle it
 - templated functions
 - typeinfo type
