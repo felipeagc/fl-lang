@@ -18,26 +18,74 @@ fn v3_length(u: Vec3) -> float {
     return @sqrt(v3_dot(u, u));
 }
 
+fn unit_v3(u: Vec3) -> Vec3 {
+    return u / v3_length(u);
+}
+
 typedef Ray struct {
     origin: Vec3,
     dir: Vec3,
 };
 
+typedef HitRecord struct {
+    p: Vec3,
+    normal: Vec3,
+};
+
 fn ray_at(ray: Ray, t: float) -> Vec3 {
-    return ray.origin + (ray.dir * t);
+    return ray.origin + ray.dir * t;
 }
 
-fn hit_sphere(center: Vec3, radius: float, ray: Ray) -> bool {
+fn hit_sphere(center: Vec3, radius: float, ray: Ray) -> float {
     var oc = ray.origin - center;
     var a = v3_dot(ray.dir, ray.dir);
-    var b = 2.0 * v3_dot(oc, ray.dir);
+    var half_b = v3_dot(oc, ray.dir);
     var c = v3_dot(oc, oc) - radius * radius;
-    var discriminant = b * b - 4 * a * c;
-    return discriminant > 0;
+    var discriminant = half_b * half_b - a * c;
+    if (discriminant < 0) {
+        return -1;
+    }
+
+    return (-half_b - @sqrt(discriminant)) / a;
+}
+
+fn ray_color(ray: Ray) -> Vec3 {
+    var t = hit_sphere(Vec3{0, 0, -1}, 0.5, ray);
+    if (t > 0) {
+        var n = unit_v3(ray_at(ray, t) - Vec3{0, 0, -1});
+        return 0.5 * (n+1);
+    }
+
+    var unit_direction = unit_v3(ray.dir);
+    t = 0.5 * (unit_direction.y + 1.0);
+    return (1.0-t) * Vec3{1.0} + t * Vec3{0.5, 0.7, 1.0};
 }
 
 extern fn main() -> i32 {
-    printf(c"dot = %f\n", v3_dot(Vec3{1, 2, 3}, Vec3{3, 2, 1}));
-    printf(c"sin(0.5) = %lf\n", @sin(0.5));
+    const width = 400;
+    const height = 200;
+
+    printf(c"P3\n%d %d\n255\n", cast(i32)width, cast(i32)height);
+
+    var lower_left_corner = Vec3{-2.0, -1.0, -1.0};
+    var horizontal = Vec3{4.0, 0.0, 0.0};
+    var vertical = Vec3{0.0, 2.0, 0.0};
+    var origin = Vec3{0.0};
+
+    for (var j = height-1; j >= 0; j -= 1) {
+        for (var i = 0; i < width; i += 1) {
+            var u = cast(float)i / cast(float)width;
+            var v = cast(float)j / cast(float)height;
+
+            var ray = Ray{origin, lower_left_corner + (u * horizontal) + (v * vertical)};
+            var col = ray_color(ray);
+
+            printf(c"%d %d %d\n",
+                cast(i32)(255.999 * col.r),
+                cast(i32)(255.999 * col.g),
+                cast(i32)(255.999 * col.b));
+        }
+    }
+
     return 0;
 }

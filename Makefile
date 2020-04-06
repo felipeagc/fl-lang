@@ -3,7 +3,7 @@ LLVM_CFLAGS=$(shell llvm-config-10 --cflags)
 LLVM_LDFLAGS=$(shell llvm-config-10 --ldflags)
 CFLAGS=-Wall -g
 
-all: compiler bindgen
+all: compiler bindgen examples
 
 compiler: $(wildcard src/*.c)
 	$(CC) $(LLVM_LDFLAGS) $(CFLAGS) $(LLVM_CFLAGS) -lLLVM-10 -o $@ src/main.c
@@ -23,9 +23,12 @@ test: compiler
 ray: compiler bindgen examples/ray.lang
 	./compiler -o=$@ examples/ray.lang
 
-examples: compiler bindgen ray
+examples: ray
+
+bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang
 	./compiler -r examples/stb_image.lang
 	./bindgen examples/glfw3.h > examples/glfw3.lang
 	./compiler -r examples/glfw3.lang
+
 
