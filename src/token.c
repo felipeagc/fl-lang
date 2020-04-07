@@ -85,6 +85,7 @@ typedef enum TokenType {
     TOKEN_STATIC,
     TOKEN_VERSION,
     TOKEN_PUB,
+    TOKEN_USING,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -145,7 +146,7 @@ static const char *token_strings[] = {
     [TOKEN_DOTDOT] = "..",
     [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
-    
+
     [TOKEN_ARROW] = "->",
 
     [TOKEN_NOT] = "!",
@@ -202,6 +203,7 @@ static const char *token_strings[] = {
     [TOKEN_STATIC] = "static",
     [TOKEN_VERSION] = "version",
     [TOKEN_PUB] = "pub",
+    [TOKEN_USING] = "using",
 
     [TOKEN_INT_LIT] = "integer literal",
     [TOKEN_FLOAT_LIT] = "float literal",

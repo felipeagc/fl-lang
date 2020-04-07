@@ -15,7 +15,7 @@ typedef struct Scope
     struct TypeInfo *type_info;
 } Scope;
 
-void scope_init(
+static void scope_init(
     Scope *scope,
     Compiler *compiler,
     ScopeType type,
@@ -29,10 +29,59 @@ void scope_init(
     scope->ast = ast;
 }
 
-void scope_set(Scope *scope, String name, struct Ast *decl)
+static void scope_set(Scope *scope, String name, struct Ast *decl)
 {
     decl->sym_scope = scope;
     hash_set(scope->map, name, decl);
+}
+
+static Scope *scope_clone(Compiler *compiler, Scope *scope, Ast *owning_ast)
+{
+    Scope *new_scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    *new_scope = *scope;
+
+    HashMap *new_map = bump_alloc(&compiler->bump, sizeof(HashMap));
+
+    // TODO: Maybe just making a function to clone the hashmap is a better idea
+    new_map->size = scope->map->size;
+    new_map->keys =
+        bump_alloc(&compiler->bump, sizeof(*new_map->keys) * scope->map->size);
+    memcpy(
+        new_map->keys,
+        scope->map->keys,
+        sizeof(*new_map->keys) * scope->map->size);
+
+    new_map->hashes = bump_alloc(
+        &compiler->bump, sizeof(*new_map->hashes) * scope->map->size);
+    memcpy(
+        new_map->hashes,
+        scope->map->hashes,
+        sizeof(*new_map->hashes) * scope->map->size);
+
+    new_map->values = bump_alloc(
+        &compiler->bump, sizeof(*new_map->values) * scope->map->size);
+    memcpy(
+        new_map->values,
+        scope->map->values,
+        sizeof(*new_map->values) * scope->map->size);
+
+    for (size_t i = 0; i < scope->map->size; ++i)
+    {
+        Ast *sym = new_map->values[i];
+        if (new_map->hashes[i] != 0)
+        {
+            Ast *new_sym = bump_alloc(&compiler->bump, sizeof(Ast));
+            *new_sym = *sym;
+            new_sym->sym_scope = new_scope;
+            new_map->values[i] = new_sym;
+        }
+    }
+
+    new_scope->map = new_map;
+
+    new_scope->ast = owning_ast;
+
+    return new_scope;
 }
 
 struct Ast *scope_get_local(Scope *scope, String name)

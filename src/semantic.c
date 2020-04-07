@@ -482,7 +482,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         {
             ty->kind = TYPE_STRUCT;
             ty->structure.fields = fields;
-            ty->scope = ast->structure.scope;
+            ty->scope = ast->scope;
         }
         else
         {
@@ -500,7 +500,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
             memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_ENUM;
-            ty->scope = ast->enumeration.scope;
+            ty->scope = ast->scope;
             ty->enumeration.underlying_type = underlying_type;
 
             ast->as_type = ty;
@@ -675,6 +675,8 @@ static Ast *get_aliased_expr(Compiler *compiler, Scope *scope, Ast *ast)
 // Returns the scope represented by the expression
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
 {
+    if (ast->scope) return ast->scope;
+
     Scope *accessed_scope = NULL;
 
     Ast *aliased = get_aliased_expr(compiler, scope, ast);
@@ -688,7 +690,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
                     &compiler->files, aliased->import.abs_path, (void **)&file))
             {
                 assert(file);
-                accessed_scope = file->root->block.scope;
+                accessed_scope = file->root->scope;
             }
             break;
         }
@@ -724,6 +726,13 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
         }
     }
 
+    if (accessed_scope && accessed_scope->type == SCOPE_INSTANCED)
+    {
+        accessed_scope = scope_clone(compiler, accessed_scope, ast);
+    }
+
+    ast->scope = accessed_scope;
+
     return accessed_scope;
 }
 
@@ -733,22 +742,22 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     {
     case AST_BLOCK:
     case AST_ROOT: {
-        assert(!ast->block.scope);
-        ast->block.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
-        memset(ast->block.scope, 0, sizeof(*ast->block.scope));
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->block.scope,
+            ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
             array_size(ast->block.stmts),
             ast);
         if (array_size(a->scope_stack) > 0)
         {
-            ast->block.scope->parent = *array_last(a->scope_stack);
+            ast->scope->parent = *array_last(a->scope_stack);
         }
 
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *stmt = ast->block.stmts;
              stmt != ast->block.stmts + array_size(ast->block.stmts);
              ++stmt)
@@ -761,20 +770,25 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_USING: {
+        create_scopes_ast(a, ast->expr);
+        break;
+    }
+
     case AST_PROC_DECL: {
-        assert(!ast->proc.scope);
-        ast->proc.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
-        memset(ast->proc.scope, 0, sizeof(*ast->proc.scope));
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->proc.scope,
+            ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
             array_size(ast->proc.stmts) + array_size(ast->proc.params),
             ast);
-        ast->proc.scope->parent = *array_last(a->scope_stack);
+        ast->scope->parent = *array_last(a->scope_stack);
 
-        array_push(a->scope_stack, ast->proc.scope);
-        array_push(a->operand_scope_stack, ast->proc.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *stmt = ast->proc.stmts;
              stmt != ast->proc.stmts + array_size(ast->proc.stmts);
              ++stmt)
@@ -847,11 +861,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_FOR: {
-        assert(!ast->for_stmt.scope);
-        ast->for_stmt.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
-        memset(ast->for_stmt.scope, 0, sizeof(*ast->for_stmt.scope));
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->for_stmt.scope,
+            ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
             5, // Small number, because there's only gonna be 2 declarations
@@ -859,11 +873,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             ast);
         if (array_size(a->scope_stack) > 0)
         {
-            ast->for_stmt.scope->parent = *array_last(a->scope_stack);
+            ast->scope->parent = *array_last(a->scope_stack);
         }
 
-        array_push(a->scope_stack, ast->for_stmt.scope);
-        array_push(a->operand_scope_stack, ast->for_stmt.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         if (ast->for_stmt.init) create_scopes_ast(a, ast->for_stmt.init);
         if (ast->for_stmt.cond) create_scopes_ast(a, ast->for_stmt.cond);
         if (ast->for_stmt.inc) create_scopes_ast(a, ast->for_stmt.inc);
@@ -915,11 +929,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_STRUCT: {
-        assert(!ast->structure.scope);
-        ast->structure.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
-        memset(ast->structure.scope, 0, sizeof(*ast->structure.scope));
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->structure.scope,
+            ast->scope,
             a->compiler,
             SCOPE_INSTANCED,
             array_size(ast->structure.fields),
@@ -929,11 +943,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            scope_set(ast->structure.scope, field->struct_field.name, field);
+            scope_set(ast->scope, field->struct_field.name, field);
         }
 
-        array_push(a->scope_stack, ast->structure.scope);
-        array_push(a->operand_scope_stack, ast->structure.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *field = ast->structure.fields;
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
@@ -946,11 +960,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_ENUM: {
-        assert(!ast->enumeration.scope);
-        ast->enumeration.scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
-        memset(ast->enumeration.scope, 0, sizeof(*ast->enumeration.scope));
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->enumeration.scope,
+            ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
             array_size(ast->enumeration.fields),
@@ -961,11 +975,11 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
              ast->enumeration.fields + array_size(ast->enumeration.fields);
              ++field)
         {
-            scope_set(ast->enumeration.scope, field->enum_field.name, field);
+            scope_set(ast->scope, field->enum_field.name, field);
         }
 
-        array_push(a->scope_stack, ast->enumeration.scope);
-        array_push(a->operand_scope_stack, ast->enumeration.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *field = ast->enumeration.fields;
              field !=
              ast->enumeration.fields + array_size(ast->enumeration.fields);
@@ -1016,8 +1030,8 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     switch (ast->type)
     {
     case AST_ROOT: {
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
@@ -1025,8 +1039,8 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_BLOCK: {
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
@@ -1076,6 +1090,11 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_USING: {
+        register_symbol_ast(a, ast->expr);
+        break;
+    }
+
     case AST_IF: {
         register_symbol_ast(a, ast->if_stmt.cond_stmt);
         if (ast->if_stmt.else_stmt)
@@ -1092,8 +1111,8 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_FOR: {
-        array_push(a->scope_stack, ast->for_stmt.scope);
-        array_push(a->operand_scope_stack, ast->for_stmt.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         if (ast->for_stmt.init) register_symbol_ast(a, ast->for_stmt.init);
         if (ast->for_stmt.cond) register_symbol_ast(a, ast->for_stmt.cond);
         if (ast->for_stmt.inc) register_symbol_ast(a, ast->for_stmt.inc);
@@ -1106,8 +1125,8 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     case AST_PROC_DECL: {
         sym_name = ast->proc.name;
 
-        array_push(a->scope_stack, ast->proc.scope);
-        array_push(a->operand_scope_stack, ast->proc.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *param = ast->proc.params;
              param != ast->proc.params + array_size(ast->proc.params);
              ++param)
@@ -1193,8 +1212,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_ROOT: {
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
@@ -1202,8 +1221,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BLOCK: {
-        array_push(a->scope_stack, ast->block.scope);
-        array_push(a->operand_scope_stack, ast->block.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
@@ -1212,6 +1231,27 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_TYPEDEF: {
         analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
+        break;
+    }
+
+    case AST_USING: {
+        analyze_ast(a, ast->expr, NULL);
+
+        Scope *expr_scope =
+            get_expr_scope(a->compiler, *array_last(a->scope_stack), ast->expr);
+
+        if (!expr_scope)
+        {
+            compile_error(
+                a->compiler,
+                ast->expr->loc,
+                "expression does not represent a scope to be used");
+            break;
+        }
+
+        Scope *current_scope = *array_last(a->scope_stack);
+        array_push(current_scope->siblings, expr_scope);
+
         break;
     }
 
@@ -1520,8 +1560,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_FOR: {
-        array_push(a->scope_stack, ast->for_stmt.scope);
-        array_push(a->operand_scope_stack, ast->for_stmt.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
 
         if (ast->for_stmt.init) analyze_ast(a, ast->for_stmt.init, NULL);
         if (ast->for_stmt.cond) analyze_ast(a, ast->for_stmt.cond, NULL);
@@ -2744,8 +2784,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         analyze_ast(a, ast->enumeration.type_expr, &TYPE_OF_TYPE);
 
-        array_push(a->scope_stack, ast->enumeration.scope);
-        array_push(a->operand_scope_stack, ast->enumeration.scope);
+        array_push(a->scope_stack, ast->scope);
+        array_push(a->operand_scope_stack, ast->scope);
         for (Ast *field = ast->enumeration.fields;
              field !=
              ast->enumeration.fields + array_size(ast->enumeration.fields);
@@ -2774,20 +2814,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         Scope *accessed_scope = get_expr_scope(
             a->compiler, *array_last(a->scope_stack), ast->access.left);
 
-        if (accessed_scope)
+        if (!accessed_scope)
         {
-            array_push(a->scope_stack, accessed_scope);
-            analyze_ast(a, ast->access.right, NULL);
-            array_pop(a->scope_stack);
-
-            ast->type_info = ast->access.right->type_info;
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "invalid access: could not get scope for left expression");
             break;
         }
 
-        compile_error(
-            a->compiler,
-            ast->loc,
-            "invalid access: could not get scope for left expression");
+        array_push(a->scope_stack, ast->access.left->scope);
+        analyze_ast(a, ast->access.right, NULL);
+        array_pop(a->scope_stack);
+
+        ast->type_info = ast->access.right->type_info;
 
         break;
     }
@@ -2874,8 +2914,8 @@ static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
-            array_push(a->scope_stack, ast->proc.scope);
-            array_push(a->operand_scope_stack, ast->proc.scope);
+            array_push(a->scope_stack, ast->scope);
+            array_push(a->operand_scope_stack, ast->scope);
             register_symbol_asts(
                 a, ast->proc.stmts, array_size(ast->proc.stmts));
             array_pop(a->operand_scope_stack);
@@ -2928,8 +2968,8 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
-            array_push(a->scope_stack, ast->proc.scope);
-            array_push(a->operand_scope_stack, ast->proc.scope);
+            array_push(a->scope_stack, ast->scope);
+            array_push(a->operand_scope_stack, ast->scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
             array_pop(a->operand_scope_stack);
             array_pop(a->scope_stack);

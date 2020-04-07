@@ -6,7 +6,7 @@ typedef struct BumpBlock
     struct BumpBlock *next;
 } BumpBlock;
 
-void block_init(BumpBlock *block, size_t size)
+static void block_init(BumpBlock *block, size_t size)
 {
     block->data = malloc(size);
     block->size = size;
@@ -14,7 +14,7 @@ void block_init(BumpBlock *block, size_t size)
     block->next = NULL;
 }
 
-void block_destroy(BumpBlock *block)
+static void block_destroy(BumpBlock *block)
 {
     if (block->next != NULL)
     {
@@ -26,7 +26,7 @@ void block_destroy(BumpBlock *block)
     free(block->data);
 }
 
-void *block_alloc(BumpBlock *block, size_t size)
+static void *block_alloc(BumpBlock *block, size_t size)
 {
     assert((block->size - block->pos) >= size);
     void *data = block->data + block->pos;
@@ -42,7 +42,7 @@ typedef struct BumpAlloc
     BumpBlock *last_block;
 } BumpAlloc;
 
-void bump_init(BumpAlloc *alloc, size_t block_size)
+static void bump_init(BumpAlloc *alloc, size_t block_size)
 {
     alloc->block_size = block_size;
     alloc->last_block_size = alloc->block_size;
@@ -50,7 +50,7 @@ void bump_init(BumpAlloc *alloc, size_t block_size)
     alloc->last_block = &alloc->base_block;
 }
 
-void *bump_alloc(BumpAlloc *alloc, size_t size)
+static void *bump_alloc(BumpAlloc *alloc, size_t size)
 {
     if (size == 0)
     {
@@ -71,7 +71,7 @@ void *bump_alloc(BumpAlloc *alloc, size_t size)
     return block_alloc(alloc->last_block, size);
 }
 
-String bump_strdup(BumpAlloc *alloc, String str)
+static String bump_strdup(BumpAlloc *alloc, String str)
 {
     String s;
     s.length = str.length;
@@ -80,7 +80,7 @@ String bump_strdup(BumpAlloc *alloc, String str)
     return s;
 }
 
-String bump_str_join(BumpAlloc *alloc, String a, String b)
+static String bump_str_join(BumpAlloc *alloc, String a, String b)
 {
     String s;
     s.length = a.length + b.length;
@@ -90,7 +90,7 @@ String bump_str_join(BumpAlloc *alloc, String a, String b)
     return s;
 }
 
-char *bump_c_str(BumpAlloc *alloc, String str)
+static char *bump_c_str(BumpAlloc *alloc, String str)
 {
     char *s;
     s = bump_alloc(alloc, str.length + 1);
@@ -102,7 +102,8 @@ char *bump_c_str(BumpAlloc *alloc, String str)
     return s;
 }
 
-size_t bump_usage(BumpAlloc *alloc)
+#if 0
+static size_t bump_usage(BumpAlloc *alloc)
 {
     size_t usage = 0;
 
@@ -115,8 +116,9 @@ size_t bump_usage(BumpAlloc *alloc)
 
     return usage;
 }
+#endif
 
-void bump_destroy(BumpAlloc *alloc)
+static void bump_destroy(BumpAlloc *alloc)
 {
     block_destroy(&alloc->base_block);
 }

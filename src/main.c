@@ -303,7 +303,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 
         if (ast->import.name.buf == NULL)
         {
-            array_push(scope->siblings, imported_file->root->block.scope);
+            array_push(scope->siblings, imported_file->root->scope);
         }
 
         break;
@@ -320,7 +320,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
              stmt != ast->block.stmts + array_size(ast->block.stmts);
              ++stmt)
         {
-            process_imports(compiler, file, ast->block.scope, stmt);
+            process_imports(compiler, file, ast->scope, stmt);
         }
         break;
     }
@@ -329,7 +329,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
              stmt != ast->proc.stmts + array_size(ast->proc.stmts);
              ++stmt)
         {
-            process_imports(compiler, file, ast->proc.scope, stmt);
+            process_imports(compiler, file, ast->scope, stmt);
         }
         break;
     }

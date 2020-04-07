@@ -1,0 +1,11 @@
+import "core:c";
+
+typedef Hello struct { a: i32 };
+
+extern fn main() -> i32 {
+    var h = Hello{123};
+    using h;
+
+    printf(c"%d\n", a);
+    return 0;
+}

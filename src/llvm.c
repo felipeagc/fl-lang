@@ -285,8 +285,8 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 
         case AST_BLOCK:
         case AST_ROOT: {
-            array_push(l->scope_stack, ast->block.scope);
-            array_push(l->operand_scope_stack, ast->block.scope);
+            array_push(l->scope_stack, ast->scope);
+            array_push(l->operand_scope_stack, ast->scope);
             llvm_add_proc(
                 l, mod, ast->block.stmts, array_size(ast->block.stmts));
             array_pop(l->operand_scope_stack);
@@ -319,8 +319,8 @@ static void llvm_codegen_ast(
     {
     case AST_BLOCK:
     case AST_ROOT: {
-        array_push(l->scope_stack, ast->block.scope);
-        array_push(l->operand_scope_stack, ast->block.scope);
+        array_push(l->scope_stack, ast->scope);
+        array_push(l->operand_scope_stack, ast->scope);
         llvm_codegen_ast_children(
             l, mod, ast->block.stmts, array_size(ast->block.stmts), is_const);
         array_pop(l->operand_scope_stack);
@@ -1557,7 +1557,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_STRUCT_FIELD: {
-        AstValue struct_val = (*array_last(l->scope_stack))->value;
+        AstValue struct_val = ast->sym_scope->value;
 
         AstValue field_value = {0};
         field_value.is_lvalue = true;
@@ -1855,24 +1855,25 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_USING: {
+        AstValue value = {0};
+        llvm_codegen_ast(l, mod, ast->expr, is_const, &value);
+
+        Scope *expr_scope =
+            get_expr_scope(l->compiler, *array_last(l->scope_stack), ast->expr);
+
+        expr_scope->value = value;
+        break;
+    }
+
     case AST_ACCESS: {
         assert(array_size(l->scope_stack) > 0);
 
         Scope *accessed_scope = get_expr_scope(
             l->compiler, *array_last(l->scope_stack), ast->access.left);
 
-        switch (accessed_scope->type)
+        if (accessed_scope->type == SCOPE_INSTANCED)
         {
-        case SCOPE_DEFAULT: {
-            array_push(l->scope_stack, accessed_scope);
-            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-            array_pop(l->scope_stack);
-            break;
-        }
-        case SCOPE_INSTANCED: {
-            // Create a copy of the scope for this instance of the struct
-            Scope instance_scope = *accessed_scope;
-
             AstValue accessed_value = {0};
             llvm_codegen_ast(
                 l, mod, ast->access.left, is_const, &accessed_value);
@@ -1882,14 +1883,12 @@ static void llvm_codegen_ast(
                 accessed_value.value = load_val(mod, &accessed_value);
             }
 
-            instance_scope.value = accessed_value;
+            accessed_scope->value = accessed_value;
+        }
 
-            array_push(l->scope_stack, &instance_scope);
-            llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-            array_pop(l->scope_stack);
-            break;
-        }
-        }
+        array_push(l->scope_stack, accessed_scope);
+        llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
+        array_pop(l->scope_stack);
 
         break;
     }
@@ -2811,8 +2810,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_FOR: {
-        array_push(l->scope_stack, ast->for_stmt.scope);
-        array_push(l->operand_scope_stack, ast->for_stmt.scope);
+        array_push(l->scope_stack, ast->scope);
+        array_push(l->operand_scope_stack, ast->scope);
 
         LLVMValueRef fun =
             LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
@@ -2969,8 +2968,8 @@ static void llvm_codegen_ast_children(
 
                 LLVMPositionBuilderAtEnd(mod->builder, entry);
 
-                array_push(l->scope_stack, ast->proc.scope);
-                array_push(l->operand_scope_stack, ast->proc.scope);
+                array_push(l->scope_stack, ast->scope);
+                array_push(l->operand_scope_stack, ast->scope);
                 llvm_codegen_ast_children(
                     l,
                     mod,

@@ -76,6 +76,7 @@ typedef enum AstType {
     AST_CONTINUE,
     AST_COMPOUND_LIT,
     AST_DISTINCT_TYPE,
+    AST_USING,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -115,7 +116,8 @@ typedef struct Ast
     Location loc;
     struct TypeInfo *type_info;
     struct TypeInfo *as_type;
-    struct Scope *sym_scope;
+    struct Scope *scope;     // Scope this symbol owns
+    struct Scope *sym_scope; // Scope this symbol belongs to
     struct Ast *alias_to;
     /*array*/ AstAttribute *attributes;
 
@@ -134,12 +136,10 @@ typedef struct Ast
         } import;
         struct
         {
-            struct Scope *scope;
             /*array*/ struct Ast *stmts;
         } block;
         struct
         {
-            struct Scope *scope;
             String name;
             uint32_t flags;
             struct Ast *return_type;
@@ -167,8 +167,6 @@ typedef struct Ast
         } while_stmt;
         struct
         {
-            struct Scope *scope;
-
             struct Ast *init;
             struct Ast *cond;
             struct Ast *inc;
@@ -177,12 +175,10 @@ typedef struct Ast
         } for_stmt;
         struct
         {
-            struct Scope *scope;
             /*array*/ struct Ast *fields;
         } structure;
         struct
         {
-            struct Scope *scope;
             struct Ast *type_expr;
             /*array*/ struct Ast *fields;
         } enumeration;

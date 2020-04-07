@@ -14,9 +14,8 @@ Attributes
 Import files as byte arrays
 
 TODO:
-- parse attributes
-- using statement
-- inline procedures
+- using in function parameters
+- using in structs
 - implement sizeof and alignof myself instead of letting LLVM handle it
 - templated functions
 - typeinfo type

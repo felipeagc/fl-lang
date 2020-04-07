@@ -28,6 +28,17 @@ static inline Token *parser_next(Parser *p, size_t count)
 
 static inline Token *parser_consume(Parser *p, TokenType tok_type)
 {
+    if (parser_is_at_end(p))
+    {
+        Token *tok = &p->lexer->tokens[array_size(p->lexer->tokens)-1];
+        compile_error(
+            p->compiler,
+            tok->loc,
+            "expected: '%s', reached end of input",
+            token_strings[tok_type]);
+        return NULL;
+    }
+
     Token *tok = parser_peek(p, 0);
     if (tok->type != tok_type)
     {
@@ -1109,6 +1120,16 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         default: res = false; break;
         }
+
+        break;
+    }
+
+    case TOKEN_USING: {
+        parser_next(p, 1);
+        ast->type = AST_USING;
+
+        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->expr, false)) res = false;
 
         break;
     }
