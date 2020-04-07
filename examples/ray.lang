@@ -2,10 +2,12 @@ import "core:c";
 
 typedef Vec3 @vector_type(float, 3);
 
+#[inline]
 fn v3_dot(u: Vec3, v: Vec3) -> float {
     return u.x * v.x + u.y * v.y + u.z * v.z;
 }
 
+#[inline]
 fn v3_cross(u: Vec3, v: Vec3) -> Vec3 {
     return Vec3{
         u.y * v.z - u.z * v.y,
@@ -14,10 +16,12 @@ fn v3_cross(u: Vec3, v: Vec3) -> Vec3 {
     };
 }
 
+#[inline]
 fn v3_length(u: Vec3) -> float {
     return @sqrt(v3_dot(u, u));
 }
 
+#[inline]
 fn unit_v3(u: Vec3) -> Vec3 {
     return u / v3_length(u);
 }
@@ -32,6 +36,7 @@ typedef HitRecord struct {
     normal: Vec3,
 };
 
+#[inline]
 fn ray_at(ray: Ray, t: float) -> Vec3 {
     return ray.origin + ray.dir * t;
 }
@@ -77,7 +82,10 @@ extern fn main() -> i32 {
             var u = cast(float)i / cast(float)width;
             var v = cast(float)j / cast(float)height;
 
-            var ray = Ray{origin, lower_left_corner + (u * horizontal) + (v * vertical)};
+            var ray = Ray{
+                origin,
+                lower_left_corner + (u * horizontal) + (v * vertical),
+            };
             var col = ray_color(ray);
 
             fprintf(stdout, c"%d %d %d\n",

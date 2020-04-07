@@ -231,10 +231,10 @@ static inline LLVMValueRef build_alloca(LLModule *mod, LLVMTypeRef type)
     return alloca;
 }
 
-void llvm_codegen_ast_children(
+static void llvm_codegen_ast_children(
     LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
 
-void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
+static void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
@@ -251,6 +251,32 @@ void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN)
             {
                 LLVMSetLinkage(fun, LLVMExternalLinkage);
+            }
+
+            bool is_inline = false;
+            for (AstAttribute *attrib = ast->attributes;
+                 attrib != ast->attributes + array_size(ast->attributes);
+                 ++attrib)
+            {
+                if (string_equals(attrib->name, STR("inline")))
+                {
+                    is_inline = true;
+                    break;
+                }
+            }
+
+            if (is_inline)
+            {
+                String attrib = STR("alwaysinline");
+                // Add alwaysinline attribute
+                LLVMAddAttributeAtIndex(
+                    fun,
+                    LLVMAttributeFunctionIndex,
+                    LLVMCreateEnumAttribute(
+                        LLVMGetGlobalContext(),
+                        LLVMGetEnumAttributeKindForName(
+                            attrib.buf, attrib.length),
+                        0));
             }
 
             break;
@@ -285,7 +311,7 @@ void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
     }
 }
 
-void llvm_codegen_ast(
+static void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
     switch (ast->type)
@@ -2880,7 +2906,7 @@ void llvm_codegen_ast(
     }
 }
 
-void llvm_codegen_ast_children(
+static void llvm_codegen_ast_children(
     LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const)
 {
     llvm_add_proc(l, mod, asts, ast_count);
@@ -2969,7 +2995,7 @@ void llvm_codegen_ast_children(
     }
 }
 
-void llvm_init(LLContext *l, Compiler *compiler)
+static void llvm_init(LLContext *l, Compiler *compiler)
 {
     l->compiler = compiler;
 
@@ -2979,7 +3005,7 @@ void llvm_init(LLContext *l, Compiler *compiler)
     l->mod.data = LLVMGetModuleDataLayout(l->mod.mod);
 }
 
-void llvm_verify_module(LLContext *l)
+static void llvm_verify_module(LLContext *l)
 {
     if (l->compiler->args.print_llvm)
     {
@@ -2999,7 +3025,7 @@ void llvm_verify_module(LLContext *l)
     }
 }
 
-void llvm_run_module(LLContext *l)
+static void llvm_run_module(LLContext *l)
 {
     LLVMExecutionEngineRef engine;
     char *error = NULL;
