@@ -6,6 +6,7 @@ typedef struct Arguments
     char **library_paths;
     bool should_run;
     bool print_llvm;
+    uint32_t opt_level;
 } Arguments;
 
 static void parse_args(Arguments *args, int argc, char **argv)
@@ -21,9 +22,17 @@ static void parse_args(Arguments *args, int argc, char **argv)
             switch (argv[i][1])
             {
             case 'o': {
-                if (argv[i][2] == '=')
+                switch (argv[i][2])
                 {
-                    args->out_path = &argv[i][3];
+                case '=': args->out_path = &argv[i][3]; break;
+                default: {
+                    if (strncmp(&argv[i][1], "opt", 3) == 0)
+                    {
+                        char level = argv[i][5] - '0';
+                        args->opt_level = (uint32_t)level;
+                    }
+                    break;
+                }
                 }
                 break;
             }

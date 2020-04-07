@@ -234,7 +234,8 @@ static inline LLVMValueRef build_alloca(LLModule *mod, LLVMTypeRef type)
 static void llvm_codegen_ast_children(
     LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
 
-static void llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
+static void
+llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
@@ -3007,17 +3008,12 @@ static void llvm_init(LLContext *l, Compiler *compiler)
 
 static void llvm_verify_module(LLContext *l)
 {
-    if (l->compiler->args.print_llvm)
-    {
-        printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
-    }
-
     char *error = NULL;
     if (LLVMVerifyModule(l->mod.mod, LLVMReturnStatusAction, &error))
     {
         if (!l->compiler->args.print_llvm)
         {
-            printf("%s\n", LLVMPrintModuleToString(l->mod.mod));
+            fprintf(stderr, "%s\n", LLVMPrintModuleToString(l->mod.mod));
         }
 
         fprintf(stderr, "Failed to verify module:\n%s\n", error);
@@ -3050,5 +3046,32 @@ static void llvm_run_module(LLContext *l)
     if (main_func)
     {
         main_func();
+    }
+}
+
+static void llvm_optimize_module(LLContext *l)
+{
+    if (l->compiler->args.opt_level > 0)
+    {
+        LLVMPassManagerRef pm = LLVMCreatePassManager();
+
+        LLVMPassManagerBuilderRef pmb = LLVMPassManagerBuilderCreate();
+        LLVMPassManagerBuilderSetOptLevel(pmb, l->compiler->args.opt_level);
+        LLVMPassManagerBuilderSetDisableSimplifyLibCalls(pmb, false);
+        LLVMPassManagerBuilderSetDisableUnrollLoops(pmb, false);
+
+        switch (l->compiler->args.opt_level)
+        {
+        case 3: {
+            LLVMPassManagerBuilderUseInlinerWithThreshold(pmb, 250);
+            break;
+        }
+
+        default: break;
+        }
+
+        LLVMPassManagerBuilderPopulateModulePassManager(pmb, pm);
+
+        LLVMRunPassManager(pm, l->mod.mod);
     }
 }

@@ -15,6 +15,7 @@
 #include <llvm-c/ExecutionEngine.h>
 #include <llvm-c/Target.h>
 #include <llvm-c/TargetMachine.h>
+#include <llvm-c/Transforms/PassManagerBuilder.h>
 
 #ifdef __linux__
 #include <sys/types.h>
@@ -340,6 +341,15 @@ static void compile_file(Compiler *compiler, String filepath)
 {
     process_file(compiler, filepath);
     llvm_verify_module(compiler->backend);
+    llvm_optimize_module(compiler->backend);
+
+    if (compiler->args.print_llvm)
+    {
+        fprintf(
+            stderr,
+            "%s\n",
+            LLVMPrintModuleToString(compiler->backend->mod.mod));
+    }
 }
 
 static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
@@ -437,6 +447,7 @@ static const char *COMPILER_USAGE[] = {
     "  -l=<library>\t\t\tLinks with library.\n",
     "  -lp=<path>\t\t\tAdds a library path.\n",
     "  -ll\t\t\t\tPrints the generated LLVM IR.\n",
+    "  -opt=<level>\t\t\tAdds optimization (level = 0..3).\n",
     NULL,
 };
 
