@@ -1,11 +1,31 @@
-import "core:c";
+import c "core:c";
 
-typedef Hello struct { a: i32 };
+typedef Hello struct { 
+    a: i32,
+    b: struct {
+        c: *char,
+    },
+};
 
 extern fn main() -> i32 {
-    var h = Hello{123};
-    using h;
+    using c;
 
-    printf(c"%d\n", a);
+    var h: Hello;
+    h.a = 123;
+
+    using h;
+    using h.b;
+    a = 321;
+
+    b.c = c"Yo";
+
+    printf(c"a = %d\n", a);
+    printf(c"h.a = %d\n", h.a);
+
+    printf(c"b.c = %s\n", b.c);
+    printf(c"h.b.c = %s\n", h.b.c);
+
+    printf(c"c = %s\n", c);
+
     return 0;
 }

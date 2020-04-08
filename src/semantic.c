@@ -939,13 +939,6 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             array_size(ast->structure.fields),
             ast);
 
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
-             ++field)
-        {
-            scope_set(ast->scope, field->struct_field.name, field);
-        }
-
         array_push(a->scope_stack, ast->scope);
         array_push(a->operand_scope_stack, ast->scope);
         for (Ast *field = ast->structure.fields;
@@ -969,14 +962,6 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
             SCOPE_DEFAULT,
             array_size(ast->enumeration.fields),
             ast);
-
-        for (Ast *field = ast->enumeration.fields;
-             field !=
-             ast->enumeration.fields + array_size(ast->enumeration.fields);
-             ++field)
-        {
-            scope_set(ast->scope, field->enum_field.name, field);
-        }
 
         array_push(a->scope_stack, ast->scope);
         array_push(a->operand_scope_stack, ast->scope);
@@ -1021,11 +1006,74 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
 
 static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count);
 
-static void register_symbol_ast(Analyzer *a, Ast *ast)
+static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 {
     Scope *scope = *array_last(a->scope_stack);
     assert(scope);
     String sym_name = {0};
+
+    switch (ast->type)
+    {
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        sym_name = ast->decl.name;
+        break;
+    }
+
+    case AST_PROC_PARAM: {
+        sym_name = ast->proc_param.name;
+        break;
+    }
+
+    case AST_STRUCT_FIELD: {
+        sym_name = ast->struct_field.name;
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        sym_name = ast->enum_field.name;
+        break;
+    }
+
+    case AST_TYPEDEF: {
+        sym_name = ast->type_def.name;
+        break;
+    }
+
+    case AST_IMPORT: {
+        sym_name = ast->import.name;
+        break;
+    }
+
+    case AST_PROC_DECL: {
+        sym_name = ast->proc.name;
+        break;
+    }
+
+    default: return;
+    }
+
+    if (sym_name.length > 0)
+    {
+        if (scope_get_local(*array_last(a->scope_stack), sym_name))
+        {
+            compile_error(
+                a->compiler,
+                *error_loc,
+                "duplicate declaration: '%.*s'",
+                (int)sym_name.length,
+                sym_name.buf);
+            return;
+        }
+
+        scope_set(scope, sym_name, ast);
+    }
+}
+
+static void register_symbol_ast(Analyzer *a, Ast *ast)
+{
+    Scope *scope = *array_last(a->scope_stack);
+    assert(scope);
 
     switch (ast->type)
     {
@@ -1061,32 +1109,83 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
-        sym_name = ast->decl.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        if (ast->decl.type_expr)
+        {
+            register_symbol_ast(a, ast->decl.type_expr);
+        }
+        if (ast->decl.value_expr)
+        {
+            register_symbol_ast(a, ast->decl.value_expr);
+        }
         break;
     }
 
     case AST_PROC_PARAM: {
-        sym_name = ast->proc_param.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast(a, ast->proc_param.type_expr);
+        if (ast->proc_param.value_expr)
+        {
+            register_symbol_ast(a, ast->proc_param.value_expr);
+        }
         break;
     }
 
     case AST_STRUCT_FIELD: {
-        sym_name = ast->struct_field.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast(a, ast->struct_field.type_expr);
+        if (ast->struct_field.value_expr)
+        {
+            register_symbol_ast(a, ast->struct_field.value_expr);
+        }
         break;
     }
 
     case AST_ENUM_FIELD: {
-        sym_name = ast->enum_field.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
         break;
     }
 
     case AST_TYPEDEF: {
-        sym_name = ast->type_def.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast(a, ast->type_def.type_expr);
         break;
     }
 
     case AST_IMPORT: {
-        sym_name = ast->import.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        register_symbol_ast(a, ast->distinct.sub);
+        break;
+    }
+
+    case AST_STRUCT: {
+        array_push(a->scope_stack, ast->scope);
+        for (Ast *field = ast->structure.fields;
+             field != ast->structure.fields + array_size(ast->structure.fields);
+             ++field)
+        {
+            register_symbol_ast(a, field);
+        }
+        array_pop(a->scope_stack);
+
+        break;
+    }
+
+    case AST_ENUM: {
+        array_push(a->scope_stack, ast->scope);
+        for (Ast *field = ast->enumeration.fields;
+             field !=
+             ast->enumeration.fields + array_size(ast->enumeration.fields);
+             ++field)
+        {
+            register_symbol_ast(a, field);
+        }
+        array_pop(a->scope_stack);
+
         break;
     }
 
@@ -1123,7 +1222,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_DECL: {
-        sym_name = ast->proc.name;
+        register_symbol_ast_leaf(a, ast, &ast->loc);
 
         array_push(a->scope_stack, ast->scope);
         array_push(a->operand_scope_stack, ast->scope);
@@ -1139,22 +1238,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     default: return;
-    }
-
-    if (sym_name.length > 0)
-    {
-        if (scope_get_local(*array_last(a->scope_stack), sym_name))
-        {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "duplicate declaration: '%.*s'",
-                (int)sym_name.length,
-                sym_name.buf);
-            return;
-        }
-
-        scope_set(scope, sym_name, ast);
     }
 }
 
@@ -1249,8 +1332,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        Scope *current_scope = *array_last(a->scope_stack);
-        array_push(current_scope->siblings, expr_scope);
+        for (size_t i = 0; i < expr_scope->map->size; ++i)
+        {
+            Ast *sym = expr_scope->map->values[i];
+            if (expr_scope->map->hashes[i] != 0)
+            {
+                Scope *old_scope = sym->sym_scope;
+                assert(old_scope);
+
+                register_symbol_ast_leaf(a, sym, &ast->loc);
+
+                sym->sym_scope = old_scope;
+            }
+        }
 
         break;
     }
@@ -1366,6 +1460,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 a->compiler,
                 ast->enum_field.value_expr->loc,
                 "expression is not constant");
+            break;
+        }
+
+        if (!ast->sym_scope)
+        {
             break;
         }
 
@@ -2725,6 +2824,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->array_type.size, NULL);
 
         TypeInfo *size_type = get_inner_type(ast->array_type.size->type_info);
+        if (!size_type)
+        {
+            assert(array_size(a->compiler->errors) > 0);
+            break;
+        }
+
         if (size_type->kind != TYPE_INT)
         {
             compile_error(

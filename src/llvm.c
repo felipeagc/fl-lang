@@ -543,6 +543,8 @@ static void llvm_codegen_ast(
                 break;
             }
 
+            case AST_IMPORT: break;
+
             default: assert(0); break;
             }
 
@@ -1558,6 +1560,7 @@ static void llvm_codegen_ast(
 
     case AST_STRUCT_FIELD: {
         AstValue struct_val = ast->sym_scope->value;
+        assert(struct_val.value);
 
         AstValue field_value = {0};
         field_value.is_lvalue = true;
@@ -1856,13 +1859,17 @@ static void llvm_codegen_ast(
     }
 
     case AST_USING: {
-        AstValue value = {0};
-        llvm_codegen_ast(l, mod, ast->expr, is_const, &value);
+        if (ast->expr->type_info->kind != TYPE_NAMESPACE)
+        {
+            AstValue value = {0};
+            llvm_codegen_ast(l, mod, ast->expr, is_const, &value);
 
-        Scope *expr_scope =
-            get_expr_scope(l->compiler, *array_last(l->scope_stack), ast->expr);
+            Scope *expr_scope = get_expr_scope(
+                l->compiler, *array_last(l->scope_stack), ast->expr);
 
-        expr_scope->value = value;
+            assert(value.value);
+            expr_scope->value = value;
+        }
         break;
     }
 
