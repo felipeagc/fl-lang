@@ -1121,8 +1121,11 @@ static void llvm_codegen_ast(
     case AST_SUBSCRIPT: {
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript.left, false, &left_value);
+
+        array_push(l->scope_stack, *array_last(l->operand_scope_stack));
         AstValue right_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript.right, false, &right_value);
+        array_pop(l->scope_stack);
 
         assert(left_value.value);
         assert(right_value.value);
@@ -1210,6 +1213,7 @@ static void llvm_codegen_ast(
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript_slice.left, false, &left_value);
 
+        array_push(l->scope_stack, *array_last(l->operand_scope_stack));
         AstValue lower_value = {0};
         AstValue upper_value = {0};
         if (ast->subscript_slice.lower && ast->subscript_slice.upper)
@@ -1219,6 +1223,7 @@ static void llvm_codegen_ast(
             llvm_codegen_ast(
                 l, mod, ast->subscript_slice.upper, false, &upper_value);
         }
+        array_pop(l->scope_stack);
 
         assert(left_value.value);
 

@@ -2694,7 +2694,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_SUBSCRIPT: {
         analyze_ast(a, ast->subscript.left, NULL);
+
+        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
         analyze_ast(a, ast->subscript.right, NULL);
+        array_pop(a->scope_stack);
 
         if (!ast->subscript.left->type_info)
         {
@@ -2747,6 +2750,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_SUBSCRIPT_SLICE: {
         analyze_ast(a, ast->subscript_slice.left, NULL);
+        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
         if (ast->subscript_slice.lower)
         {
             analyze_ast(a, ast->subscript_slice.lower, &UINT_TYPE);
@@ -2755,6 +2759,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             analyze_ast(a, ast->subscript_slice.upper, &UINT_TYPE);
         }
+        array_pop(a->scope_stack);
 
         if (!ast->subscript_slice.left->type_info)
         {
