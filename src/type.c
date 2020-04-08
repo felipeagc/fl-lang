@@ -243,30 +243,10 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 }
 
 static TypeInfo *
-compatible_pointer_types_aux(TypeInfo *received, TypeInfo *expected)
-{
-    if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
-    {
-        return compatible_pointer_types_aux(
-            received->ptr.sub, expected->ptr.sub);
-    }
-    else if (received->kind != TYPE_POINTER && expected->kind != TYPE_POINTER)
-    {
-        if (received->kind == TYPE_VOID) return expected;
-        if (expected->kind == TYPE_VOID) return received;
-    }
-
-    return NULL;
-}
-
-static TypeInfo *
 compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 {
-    if (received->kind == TYPE_POINTER && expected->kind == TYPE_POINTER)
-    {
-        return compatible_pointer_types_aux(
-            received->ptr.sub, expected->ptr.sub);
-    }
+    if (received->kind == TYPE_POINTER && received->ptr.sub->kind == TYPE_VOID) return expected;
+    if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID) return received;
 
     return NULL;
 }

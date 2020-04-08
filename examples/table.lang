@@ -1,0 +1,146 @@
+import "core:c";
+
+typedef Value *void;
+const DEFAULT_TABLE_SIZE: u64 = 32;
+
+fn hash_str(str: [_]char) -> u64 {
+    var hash: u64 = 5381;
+
+    for (var i: u64 = 0; i < str.len; i += 1) {
+        hash = ((hash << 5) + hash) + cast(u64)str[i];
+    }
+
+    return hash;
+}
+
+#[inline]
+fn str_equal(a: [_]char, b: [_]char) -> bool {
+    if (a.len != b.len) return false;
+    for (var i: uint = 0; i < a.len; i += 1) {
+        if (a[i] != b[i]) return false;
+    }
+    return true;
+}
+
+pub typedef Table struct {
+    size: u64,
+    keys: *[_]char,
+    hashes: *u64,
+    values: *Value,
+};
+
+pub fn init(table: *Table, size: u64) {
+    table.size = size;
+
+    // Round up to nearnest power of two
+    table.size -= 1;
+    table.size |= table.size >> 1;
+    table.size |= table.size >> 2;
+    table.size |= table.size >> 4;
+    table.size |= table.size >> 8;
+    table.size |= table.size >> 16;
+    table.size |= table.size >> 32;
+    table.size += 1;
+
+    if (table.size == 0) {
+        table.size = DEFAULT_TABLE_SIZE;
+    }
+
+    // Init memory
+    table.hashes = calloc(table.size, @sizeof(table.hashes[0]));
+    table.values = calloc(table.size, @sizeof(table.values[0]));
+    table.keys = calloc(table.size, @sizeof(table.keys[0]));
+}
+
+pub fn deinit(table: *Table) {
+    free(table.keys);
+    free(table.hashes);
+    free(table.values);
+}
+
+pub fn set(table: *Table, key: [_]char, value: Value) -> Value {
+    var hash: u64 = hash_str(key);
+    var i: u64 = hash & (table.size - 1);
+    var iters: u64 = 0;
+
+    while ((table.hashes[i] != hash || !str_equal(table.keys[i], key))
+            && table.hashes[i] != 0 && iters < table.size)
+    {
+        i = (i + 1) & (table.size - 1);
+        iters += 1;
+    }
+
+    if (iters >= table.size) {
+        grow(table);
+        return set(table, key, value);
+    }
+
+    table.keys[i] = key;
+    table.hashes[i] = hash;
+    table.values[i] = value;
+
+    return value;
+}
+
+pub fn get(table: *Table, key: [_]char, result: *Value) -> bool {
+    var hash: u64 = hash_str(key);
+    var i: u64 = hash & (table.size - 1);
+    var iters: u64 = 0;
+
+    while ((table.hashes[i] != hash || !str_equal(table.keys[i], key))
+            && table.hashes[i] != 0 && iters < table.size)
+    {
+        i = (i + 1) & (table.size - 1);
+        iters += 1;
+    }
+
+    if (iters >= table.size) {
+        return false;
+    }
+
+    if (table.hashes[i] != 0) {
+        if (result) *result = table.values[i];
+        return true;
+    }
+
+    return false;
+}
+
+fn grow(table: *Table) {
+    var old_size = table.size;
+    var old_keys = table.keys;
+    var old_hashes = table.hashes;
+    var old_values = table.values;
+
+    table.size *= 2;
+    table.hashes = calloc(table.size, @sizeof(table.hashes[0]));
+    table.values = calloc(table.size, @sizeof(table.values[0]));
+    table.keys = calloc(table.size, @sizeof(table.keys[0]));
+
+    for (var i: u64 = 0; i < old_size; i += 1) {
+        if (old_hashes[i] != 0) {
+            set(table, old_keys[i], old_values[i]);
+        }
+    }
+
+    free(old_keys);
+    free(old_hashes);
+    free(old_values);
+}
+
+extern fn main() -> i32 {
+    var table: Table;
+    init(&table, 5);
+
+    set(&table, "hello", cast(Value)5);
+
+    {
+        var result: int;
+        if (!get(&table, "hello", cast(*Value)&result)) abort();
+        printf(c"table[\"hello\"] = %ld\n", result);
+    }
+
+    deinit(&table);
+
+    return 0;
+}

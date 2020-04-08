@@ -16,6 +16,8 @@ bindgen: $(wildcard src/*.c) $(wildcard src/bindgen/*.c)
 clean:
 	rm compiler
 	rm bindgen
+	rm examples/ray
+	rm examples/table
 
 test: compiler
 	@bash ./tests/run_tests.sh
@@ -23,7 +25,10 @@ test: compiler
 examples/ray: compiler bindgen examples/ray.lang
 	./compiler -o=$@ examples/ray.lang
 
-examples: examples/ray
+examples/table: compiler bindgen examples/table.lang
+	./compiler -o=$@ examples/table.lang
+
+examples: examples/ray examples/table
 
 bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang

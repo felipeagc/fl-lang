@@ -171,9 +171,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
         {
-        case UNOP_DEREFERENCE:
-            res = is_expr_assignable(compiler, scope, ast->unop.sub);
-            break;
+        case UNOP_DEREFERENCE: res = true; break;
 
         default: break;
         }

@@ -20,6 +20,7 @@ pub extern fn exit(code: c_int);
 pub extern fn abort();
 
 pub extern fn malloc(size: c_size) -> *void;
+pub extern fn calloc(nmemb: c_size, size: c_size) -> *void;
 pub extern fn realloc(ptr: *void, size: c_size) -> *void;
 pub extern fn free(ptr: *void);
 
