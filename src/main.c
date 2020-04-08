@@ -117,7 +117,7 @@ static void compiler_init(Compiler *compiler)
 {
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
-    hash_init(&compiler->files, 521);
+    hash_init(&compiler->files, 512);
     hash_init(&compiler->versions, 16);
 
     compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));

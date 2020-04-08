@@ -6,6 +6,8 @@ extern fn main() {
     var a: i32 = hello.some_const;
     var b: i32 = hello.some_var;
 
+    var c: [hello.array_size]i32;
+
     // Assignment to imported global variable
     hello.some_var = 123;
 

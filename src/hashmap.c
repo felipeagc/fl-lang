@@ -1,9 +1,11 @@
+#define DEFAULT_HASHMAP_SIZE 32
+
 typedef struct HashMap
 {
     String *keys;
     uint64_t *hashes;
     void **values;
-    uint32_t size;
+    uint64_t size;
 } HashMap;
 
 static void hash_grow(HashMap *map);
@@ -12,7 +14,7 @@ static uint64_t hash_str(String str)
 {
     uint64_t hash = 5381;
 
-    for (uint32_t i = 0; i < str.length; ++i)
+    for (uint64_t i = 0; i < str.length; ++i)
     {
         hash = ((hash << 5) + hash) + str.buf[i]; /* hash * 33 + c */
     }
@@ -20,12 +22,27 @@ static uint64_t hash_str(String str)
     return hash;
 }
 
-static void hash_init(HashMap *map, uint32_t size)
+static void hash_init(HashMap *map, uint64_t size)
 {
     memset(map, 0, sizeof(*map));
 
     map->size = size;
+    if (map->size == 0)
+    {
+        map->size = DEFAULT_HASHMAP_SIZE;
+    }
 
+    // Round up to nearnest power of two
+    map->size -= 1;
+    map->size |= map->size >> 1;
+    map->size |= map->size >> 2;
+    map->size |= map->size >> 4;
+    map->size |= map->size >> 8;
+    map->size |= map->size >> 16;
+    map->size |= map->size >> 32;
+    map->size += 1;
+
+    // Init memory
     map->keys = malloc(sizeof(*map->keys) * map->size);
     map->hashes = malloc(sizeof(*map->hashes) * map->size);
     map->values = malloc(sizeof(*map->values) * map->size);
@@ -45,12 +62,12 @@ static void hash_clear(HashMap *map)
 static void *hash_set(HashMap *map, String key, void *value)
 {
     uint64_t hash = hash_str(key);
-    uint32_t i = hash % map->size;
-    uint32_t iters = 0;
+    uint64_t i = hash & (map->size - 1);
+    uint64_t iters = 0;
     while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
            map->hashes[i] != 0 && iters < map->size)
     {
-        i = (i + 1) % map->size;
+        i = (i + 1) & (map->size - 1);
         iters++;
     }
 
@@ -70,12 +87,12 @@ static void *hash_set(HashMap *map, String key, void *value)
 static bool hash_get(HashMap *map, String key, void **result)
 {
     uint64_t hash = hash_str(key);
-    uint32_t i = hash % map->size;
-    uint32_t iters = 0;
+    uint64_t i = hash & (map->size - 1);
+    uint64_t iters = 0;
     while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
            map->hashes[i] != 0 && iters < map->size)
     {
-        i = (i + 1) % map->size;
+        i = (i + 1) & (map->size - 1);
         iters++;
     }
     if (iters >= map->size)
@@ -96,12 +113,12 @@ static bool hash_get(HashMap *map, String key, void **result)
 static void hash_remove(HashMap *map, String key)
 {
     uint64_t hash = hash_str(key);
-    uint64_t i = hash % map->size;
+    uint64_t i = hash & (map->size - 1);
     uint64_t iters = 0;
     while ((map->hashes[i] != hash || !string_equals(map->keys[i], key)) &&
            map->hashes[i] != 0 && iters < map->size)
     {
-        i = (i + 1) % map->size;
+        i = (i + 1) & (map->size - 1);
         iters++;
     }
 

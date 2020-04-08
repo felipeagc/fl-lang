@@ -31,6 +31,9 @@ pub typedef Table struct {
 
 pub fn init(table: *Table, size: u64) {
     table.size = size;
+    if (table.size == 0) {
+        table.size = DEFAULT_TABLE_SIZE;
+    }
 
     // Round up to nearnest power of two
     table.size -= 1;
@@ -41,10 +44,6 @@ pub fn init(table: *Table, size: u64) {
     table.size |= table.size >> 16;
     table.size |= table.size >> 32;
     table.size += 1;
-
-    if (table.size == 0) {
-        table.size = DEFAULT_TABLE_SIZE;
-    }
 
     // Init memory
     table.hashes = calloc(table.size, @sizeof(table.hashes[0]));

@@ -1,5 +1,6 @@
 pub import c "core:c";
 
+pub const array_size = 5;
 pub const some_const: i32 = 512;
 pub var some_var: i32 = 123;
 
