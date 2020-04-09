@@ -17,7 +17,6 @@ Multiline string literal
 Multiple return values
 
 TODO:
-- using in function parameters
 - using in structs
 - @memset, @memcmp
 - implement sizeof and alignof myself instead of letting LLVM handle it

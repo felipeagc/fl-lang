@@ -268,8 +268,8 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 
             if (is_inline)
             {
-                String attrib = STR("alwaysinline");
                 // Add alwaysinline attribute
+                String attrib = STR("alwaysinline");
                 LLVMAddAttributeAtIndex(
                     fun,
                     LLVMAttributeFunctionIndex,
@@ -352,6 +352,15 @@ static void llvm_codegen_ast(
                 char *param_name =
                     bump_c_str(&l->compiler->bump, param->proc_param.name);
                 LLVMSetValueName(param->proc_param.value.value, param_name);
+
+                if (param->flags & AST_FLAG_USING)
+                {
+                    Scope *expr_scope = get_expr_scope(
+                        l->compiler, *array_last(l->scope_stack), param);
+                    assert(expr_scope);
+
+                    expr_scope->value = param->proc_param.value;
+                }
             }
         }
 

@@ -102,6 +102,7 @@ typedef enum AstFlags {
     AST_FLAG_EXTERN = 1 << 0,
     AST_FLAG_STATIC = 1 << 1,
     AST_FLAG_PUBLIC = 1 << 2,
+    AST_FLAG_USING = 1 << 3,
 } AstFlags;
 
 typedef struct AstAttribute

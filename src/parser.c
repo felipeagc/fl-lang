@@ -30,7 +30,7 @@ static inline Token *parser_consume(Parser *p, TokenType tok_type)
 {
     if (parser_is_at_end(p))
     {
-        Token *tok = &p->lexer->tokens[array_size(p->lexer->tokens)-1];
+        Token *tok = &p->lexer->tokens[array_size(p->lexer->tokens) - 1];
         compile_error(
             p->compiler,
             tok->loc,
@@ -491,6 +491,12 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             field.loc = parser_peek(p, 0)->loc;
             field.type = AST_STRUCT_FIELD;
             field.flags |= AST_FLAG_PUBLIC;
+
+            if (parser_peek(p, 0)->type == TOKEN_USING)
+            {
+                parser_next(p, 1);
+                field.flags |= AST_FLAG_USING;
+            }
 
             Token *name_tok = parser_consume(p, TOKEN_IDENT);
             if (!name_tok)
@@ -1261,15 +1267,20 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
         {
+            Ast param = {0};
+            param.type = AST_PROC_PARAM;
+
             if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
             {
                 parser_next(p, 1);
                 ast->proc.flags |= PROC_FLAG_IS_C_VARARGS;
                 break;
             }
-
-            Ast param = {0};
-            param.type = AST_PROC_PARAM;
+            else if (parser_peek(p, 0)->type == TOKEN_USING)
+            {
+                parser_next(p, 1);
+                param.flags |= AST_FLAG_USING;
+            }
 
             Token *ident_tok = parser_peek(p, 0);
             param.loc = ident_tok->loc;

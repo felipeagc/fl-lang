@@ -1433,6 +1433,38 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->proc_param.value_expr,
                 ast->proc_param.type_expr->as_type);
         }
+
+        ast->type_info = ast->proc_param.type_expr->as_type;
+
+        if (ast->flags & AST_FLAG_USING)
+        {
+            Scope *expr_scope =
+                get_expr_scope(a->compiler, *array_last(a->scope_stack), ast);
+
+            if (!expr_scope)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "expression does not represent a scope to be used");
+                break;
+            }
+
+            for (size_t i = 0; i < expr_scope->map->size; ++i)
+            {
+                Ast *sym = expr_scope->map->values[i];
+                if (expr_scope->map->hashes[i] != 0)
+                {
+                    Scope *old_scope = sym->sym_scope;
+                    assert(old_scope);
+
+                    register_symbol_ast_leaf(a, sym, &ast->loc);
+
+                    sym->sym_scope = old_scope;
+                }
+            }
+        }
+
         break;
     }
 
@@ -1445,6 +1477,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->struct_field.value_expr,
                 ast->struct_field.type_expr->as_type);
         }
+
+        ast->type_info = ast->struct_field.type_expr->as_type;
         break;
     }
 
@@ -1484,6 +1518,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             a,
             ast->enum_field.value_expr,
             enum_type->enumeration.underlying_type);
+
+        ast->type_info = enum_ast->as_type;
 
         break;
     }
@@ -1855,45 +1891,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             switch (sym->type)
             {
+            case AST_PROC_DECL:
+            case AST_ENUM_FIELD:
+            case AST_STRUCT_FIELD:
+            case AST_PROC_PARAM:
             case AST_VAR_DECL:
             case AST_CONST_DECL: {
-                if (sym->type_info)
-                {
-                    ast->type_info = sym->type_info;
-                }
-                break;
-            }
-
-            case AST_PROC_PARAM: {
-                ast->type_info = ast_as_type(
-                    a->compiler,
-                    sym->sym_scope,
-                    sym->proc_param.type_expr,
-                    false);
-                break;
-            }
-
-            case AST_STRUCT_FIELD: {
-                ast->type_info = ast_as_type(
-                    a->compiler,
-                    sym->sym_scope,
-                    sym->struct_field.type_expr,
-                    false);
-                break;
-            }
-
-            case AST_ENUM_FIELD: {
-                Ast *enum_ast = sym->sym_scope->ast;
-                assert(enum_ast);
-                assert(enum_ast->type == AST_ENUM);
-
-                ast->type_info =
-                    ast_as_type(a->compiler, sym->sym_scope, enum_ast, false);
-                break;
-            }
-
-            case AST_PROC_DECL: {
-                assert(sym->type_info);
                 ast->type_info = sym->type_info;
                 break;
             }
