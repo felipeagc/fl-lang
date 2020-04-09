@@ -16,8 +16,10 @@ Multiline string literal
 
 Multiple return values
 
+Key/val struct literal
+Empty compound literals
+
 TODO:
-- using in structs
 - @memset, @memcmp
 - implement sizeof and alignof myself instead of letting LLVM handle it
 - templated functions

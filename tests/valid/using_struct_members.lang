@@ -1,0 +1,31 @@
+import "core:c";
+
+typedef SubSub struct {
+    ss: i32,
+};
+
+typedef Sub struct {
+    hello: i32,
+    subsub: SubSub,
+};
+
+typedef Struct struct {
+    using sub: Sub,
+    using vec: @vector_type(float, 3),
+    field: i32,
+};
+
+extern fn main() -> i32 {
+    var str: Struct;
+    str.hello = 123;
+    printf(c"str.hello = %d\n", str.hello);
+    str.field = 123;
+    str.sub.hello = 321;
+    printf(c"str.hello = %d\n", str.hello);
+    if (&str.sub.hello != &str.hello) abort();
+
+    str.vec.x = 123.4;
+    printf(c"str.x = %f\n", str.x);
+
+    return 0;
+}

@@ -1892,6 +1892,7 @@ static void llvm_codegen_ast(
 
         Scope *accessed_scope = get_expr_scope(
             l->compiler, *array_last(l->scope_stack), ast->access.left);
+        assert(accessed_scope);
 
         if (accessed_scope->type == SCOPE_INSTANCED)
         {

@@ -153,11 +153,23 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
             {
                 switch (sym->type)
                 {
+                case AST_BUILTIN_VEC_ACCESS:
                 case AST_STRUCT_FIELD:
                 case AST_VAR_DECL: {
                     res = true;
                     break;
                 }
+
+                case AST_BUILTIN_LEN:
+                case AST_BUILTIN_PTR:
+                case AST_BUILTIN_CAP: {
+                    if (sym->sym_scope->ast->type_info->kind != TYPE_ARRAY)
+                    {
+                        res = true;
+                    }
+                    break;
+                }
+
                 default: break;
                 }
             }
@@ -975,6 +987,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_STRUCT_FIELD_ALIAS:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
     case AST_BUILTIN_CAP:
@@ -1025,6 +1038,11 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 
     case AST_STRUCT_FIELD: {
         sym_name = ast->struct_field.name;
+        break;
+    }
+
+    case AST_STRUCT_FIELD_ALIAS: {
+        sym_name = ast->struct_field_alias.right_name;
         break;
     }
 
@@ -1479,6 +1497,44 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         ast->type_info = ast->struct_field.type_expr->as_type;
+
+        if (ast->flags & AST_FLAG_USING)
+        {
+            Scope *expr_scope =
+                get_expr_scope(a->compiler, *array_last(a->scope_stack), ast);
+
+            if (!expr_scope)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->expr->loc,
+                    "expression does not represent a scope to be used");
+                break;
+            }
+
+            array_push(a->scope_stack, ast->sym_scope);
+            for (size_t i = 0; i < expr_scope->map->size; ++i)
+            {
+                if (expr_scope->map->hashes[i] != 0)
+                {
+                    Ast *field_alias =
+                        bump_alloc(&a->compiler->bump, sizeof(Ast));
+                    memset(field_alias, 0, sizeof(*field_alias));
+                    field_alias->loc = ast->loc;
+                    field_alias->type = AST_STRUCT_FIELD_ALIAS;
+                    field_alias->struct_field_alias.right_name =
+                        expr_scope->map->keys[i];
+                    field_alias->struct_field_alias.left_name =
+                        ast->struct_field.name;
+
+                    analyze_ast(a, field_alias, NULL);
+
+                    register_symbol_ast_leaf(a, field_alias, &ast->loc);
+                }
+            }
+            array_pop(a->scope_stack);
+        }
+
         break;
     }
 
@@ -1899,6 +1955,40 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             case AST_CONST_DECL: {
                 ast->type_info = sym->type_info;
                 break;
+            }
+
+            case AST_STRUCT_FIELD_ALIAS: {
+                ast->type = AST_ACCESS;
+
+                ast->access.left = bump_alloc(&a->compiler->bump, sizeof(Ast));
+                memset(ast->access.left, 0, sizeof(*ast->access.left));
+                ast->access.left->loc = ast->loc;
+                ast->access.left->type = AST_PRIMARY;
+                ast->access.left->primary.tok =
+                    bump_alloc(&a->compiler->bump, sizeof(Token));
+                memset(
+                    ast->access.left->primary.tok,
+                    0,
+                    sizeof(*ast->access.left->primary.tok));
+                ast->access.left->primary.tok->type = TOKEN_IDENT;
+                ast->access.left->primary.tok->str =
+                    sym->struct_field_alias.left_name;
+
+                ast->access.right = bump_alloc(&a->compiler->bump, sizeof(Ast));
+                memset(ast->access.right, 0, sizeof(*ast->access.right));
+                ast->access.right->loc = ast->loc;
+                ast->access.right->type = AST_PRIMARY;
+                ast->access.right->primary.tok =
+                    bump_alloc(&a->compiler->bump, sizeof(Token));
+                memset(
+                    ast->access.right->primary.tok,
+                    0,
+                    sizeof(*ast->access.right->primary.tok));
+                ast->access.right->primary.tok->type = TOKEN_IDENT;
+                ast->access.right->primary.tok->str =
+                    sym->struct_field_alias.right_name;
+
+                return analyze_ast(a, ast, expected_type);
             }
 
             case AST_IMPORT: {
@@ -2934,7 +3024,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        array_push(a->scope_stack, ast->access.left->scope);
+        array_push(a->scope_stack, accessed_scope);
         analyze_ast(a, ast->access.right, NULL);
         array_pop(a->scope_stack);
 

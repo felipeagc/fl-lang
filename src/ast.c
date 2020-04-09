@@ -66,6 +66,7 @@ typedef enum AstType {
     AST_EXPR_STMT,
     AST_ACCESS,
     AST_STRUCT_FIELD,
+    AST_STRUCT_FIELD_ALIAS,
     AST_ENUM_FIELD,
     AST_PROC_PARAM,
     AST_CAST,
@@ -229,6 +230,11 @@ typedef struct Ast
             struct Ast *type_expr;
             struct Ast *value_expr;
         } struct_field;
+        struct
+        {
+            String left_name;
+            String right_name;
+        } struct_field_alias;
         struct
         {
             struct Ast *value_expr;

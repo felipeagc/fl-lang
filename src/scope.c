@@ -70,9 +70,15 @@ static Scope *scope_clone(Compiler *compiler, Scope *scope, Ast *owning_ast)
         Ast *sym = new_map->values[i];
         if (new_map->hashes[i] != 0)
         {
+            Scope* new_subscope = new_scope;
+            if (sym->sym_scope != scope)
+            {
+                new_subscope = scope_clone(compiler, sym->sym_scope, sym->sym_scope->ast);
+            }
+
             Ast *new_sym = bump_alloc(&compiler->bump, sizeof(Ast));
             *new_sym = *sym;
-            new_sym->sym_scope = new_scope;
+            new_sym->sym_scope = new_subscope;
             new_map->values[i] = new_sym;
         }
     }
