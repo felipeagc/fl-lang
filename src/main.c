@@ -30,6 +30,7 @@
 #include "array.c"
 #include "hashmap.c"
 #include "bump_alloc.c"
+#include "string_builder.c"
 
 #include "location.c"
 #include "token.c"
@@ -39,6 +40,8 @@
 typedef struct Compiler
 {
     BumpAlloc bump;
+    StringBuilder sb;
+
     /*array*/ Error *errors;
     HashMap files;
     HashMap versions;
@@ -99,10 +102,10 @@ static void print_errors(Compiler *compiler)
 
 #include "ast_builder.c"
 
-#include "printing.c"
 #include "lexer.c"
 #include "scope.c"
 #include "type.c"
+#include "printing.c"
 
 #include "parser.c"
 #include "semantic.c"
@@ -117,6 +120,7 @@ static void compiler_init(Compiler *compiler)
 {
     memset(compiler, 0, sizeof(*compiler));
     bump_init(&compiler->bump, 1 << 16);
+    sb_init(&compiler->sb);
     hash_init(&compiler->files, 512);
     hash_init(&compiler->versions, 16);
 
@@ -172,6 +176,7 @@ static void compiler_destroy(Compiler *compiler)
 {
     hash_destroy(&compiler->versions);
     hash_destroy(&compiler->files);
+    sb_destroy(&compiler->sb);
     bump_destroy(&compiler->bump);
 }
 

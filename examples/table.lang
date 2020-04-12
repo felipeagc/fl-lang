@@ -22,14 +22,14 @@ fn str_equal(a: [_]char, b: [_]char) -> bool {
     return true;
 }
 
-pub typedef Table struct {
+pub typedef Table!(V) struct {
     size: u64,
     keys: *[_]char,
     hashes: *u64,
-    values: *Value,
+    values: *V,
 };
 
-pub fn table_init(table: *Table, size: u64) {
+pub fn table_init(table: *Table!(Value), size: u64) {
     table.size = size;
     if (table.size == 0) {
         table.size = DEFAULT_TABLE_SIZE;
@@ -51,13 +51,13 @@ pub fn table_init(table: *Table, size: u64) {
     table.keys = calloc(table.size, @sizeof(table.keys[0]));
 }
 
-pub fn table_deinit(table: *Table) {
+pub fn table_deinit(table: *Table!(Value)) {
     free(table.keys);
     free(table.hashes);
     free(table.values);
 }
 
-pub fn table_set(table: *Table, key: [_]char, value: Value) -> Value {
+pub fn table_set(table: *Table!(Value), key: [_]char, value: Value) -> Value {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -81,7 +81,7 @@ pub fn table_set(table: *Table, key: [_]char, value: Value) -> Value {
     return value;
 }
 
-pub fn table_get(table: *Table, key: [_]char, result: *Value) -> bool {
+pub fn table_get(table: *Table!(Value), key: [_]char, result: *Value) -> bool {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -105,7 +105,7 @@ pub fn table_get(table: *Table, key: [_]char, result: *Value) -> bool {
     return false;
 }
 
-fn table_grow(table: *Table) {
+fn table_grow(table: *Table!(Value)) {
     var old_size = table.size;
     var old_keys = table.keys;
     var old_hashes = table.hashes;
@@ -128,7 +128,7 @@ fn table_grow(table: *Table) {
 }
 
 extern fn main() -> i32 {
-    var table: Table;
+    var table: Table!(Value);
     table_init(&table, 5);
 
     table_set(&table, "hello", cast(Value)5);
@@ -136,6 +136,7 @@ extern fn main() -> i32 {
     {
         var result: int;
         if (!table_get(&table, "hello", cast(*Value)&result)) abort();
+        if (result != 5) abort();
         printf(c"table[\"hello\"] = %ld\n", result);
     }
 

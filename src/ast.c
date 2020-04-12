@@ -205,6 +205,7 @@ typedef struct Ast
             String name;
             struct Ast *type_expr;
             /*array*/ String *template_params;
+            HashMap *template_cache;
         } type_def;
         struct
         {

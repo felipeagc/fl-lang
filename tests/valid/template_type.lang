@@ -2,14 +2,20 @@ typedef Hello!(T) struct {
     t: T 
 };
 
+typedef Yo!(T) T;
+
 typedef HelloInt Hello!(i32);
 
 extern fn main() -> i32 {
-    var h: HelloInt;
+    var h: Hello!(i32);
+    h = Hello!(i32) {123};
     h = HelloInt {123};
     var a: i32 = h.t;
 
-    var b: Hello!([_]char);
+    var b = Hello!([_]char) { "hello" };
     b.t = "yo";
+
+    var c: Yo!(i32) = 123;
+    var d: i32 = c;
     return 0;
 }

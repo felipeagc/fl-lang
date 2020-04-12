@@ -9,7 +9,7 @@ compiler: $(wildcard src/*.c)
 	$(CC) $(LLVM_LDFLAGS) $(CFLAGS) $(LLVM_CFLAGS) -lLLVM-10 -o $@ src/main.c
 
 bindgen: $(wildcard src/*.c) $(wildcard src/bindgen/*.c)
-	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -lclang -o $@ src/bindgen/main.c
+	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -Wno-unused-function -lclang -o $@ src/bindgen/main.c
 
 .PHONY: clean test examples
 

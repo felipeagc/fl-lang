@@ -577,6 +577,30 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 array_size(ast->template_inst.params))
                 break;
 
+            assert(sym->type_def.template_cache);
+
+            sb_reset(&a->compiler->sb);
+            for (size_t i = 0; i < array_size(ast->template_inst.params); ++i)
+            {
+                Ast *param = &ast->template_inst.params[i];
+                sb_append(&a->compiler->sb, STR("$"));
+                print_mangled_type(
+                    &a->compiler->sb, ast_as_type(a, scope, param, false));
+            }
+            String mangled_type =
+                sb_build(&a->compiler->sb, &a->compiler->bump);
+
+            TypeInfo *cached_type = NULL;
+            if (hash_get(
+                    sym->type_def.template_cache,
+                    mangled_type,
+                    (void **)&cached_type))
+            {
+                assert(cached_type);
+                ast->as_type = cached_type;
+                break;
+            }
+
             Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
             memset(cloned_ast, 0, sizeof(Ast));
             instantiate_template(
@@ -591,6 +615,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             analyze_ast(a, cloned_ast, &TYPE_OF_TYPE);
 
             ast->as_type = ast_as_type(a, sym->sym_scope, cloned_ast, false);
+
+            hash_set(sym->type_def.template_cache, mangled_type, ast->as_type);
         }
 
         break;
@@ -1087,6 +1113,13 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         {
             create_scopes_ast(a, ast->type_def.type_expr);
         }
+        else
+        {
+            // Create template cache
+            ast->type_def.template_cache =
+                bump_alloc(&a->compiler->bump, sizeof(HashMap));
+            hash_init(ast->type_def.template_cache, 8);
+        }
         break;
     }
 
@@ -1487,7 +1520,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     compile_error(
                         a->compiler,
                         ast->loc,
-                        "procedure does not return void, 'return' must contain "
+                        "procedure does not return void, 'return' must "
+                        "contain "
                         "a value");
                     break;
                 }
@@ -2248,7 +2282,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             compile_error(
                 a->compiler,
                 ast->template_inst.sub->loc,
-                "template instantiation subexpression is not an identifier");
+                "template instantiation subexpression is not an "
+                "identifier");
             break;
         }
 
@@ -3166,7 +3201,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "slice subscript lower and upper bounds need to be of same "
+                    "slice subscript lower and upper bounds need to be of "
+                    "same "
                     "type");
                 break;
             }

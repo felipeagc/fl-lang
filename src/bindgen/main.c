@@ -8,6 +8,8 @@
 #include "../string.c"
 #include "../hashmap.c"
 #include "../array.c"
+#include "../bump_alloc.c"
+#include "../string_builder.c"
 #include "../filesystem.c"
 
 static size_t g_indent = 0;
@@ -20,57 +22,6 @@ static char *g_dir;
     {                                                                          \
         sb_append(sb, STR(" "));                                               \
     }
-
-typedef struct StringBuilder
-{
-    char *buf;
-    char *scratch;
-    size_t len;
-    size_t cap;
-} StringBuilder;
-
-static void sb_init(StringBuilder *sb)
-{
-    sb->len = 0;
-    sb->cap = 1 << 16;
-    sb->buf = malloc(sb->cap);     // 64k
-    sb->scratch = malloc(sb->cap); // 64k
-}
-
-static void sb_grow(StringBuilder *sb)
-{
-    sb->cap *= 2;
-    sb->buf = realloc(sb->buf, sb->cap);
-    sb->scratch = realloc(sb->scratch, sb->cap);
-}
-
-static void sb_append(StringBuilder *sb, String str)
-{
-    if (str.length + sb->len >= sb->cap)
-    {
-        sb_grow(sb);
-    }
-    strncpy(&sb->buf[sb->len], str.buf, str.length);
-    sb->len += str.length;
-}
-
-static void sb_sprintf(StringBuilder *sb, const char *fmt, ...)
-{
-    va_list vl;
-    va_start(vl, fmt);
-    size_t len = vsnprintf(sb->scratch, sb->cap, fmt, vl);
-    va_end(vl);
-    sb_append(sb, (String){.length = len, .buf = sb->scratch});
-}
-
-static String sb_build(StringBuilder *sb)
-{
-    String result = {0};
-    result.length = sb->len;
-    result.buf = malloc(result.length);
-    strncpy(result.buf, sb->buf, result.length);
-    return result;
-}
 
 static const char *USAGE[] = {
     "Usage:\n",
@@ -532,6 +483,8 @@ int main(int argc, char **argv)
         {
             const char *path = *array_pop(g_to_parse);
 
+            BumpAlloc bump;
+            bump_init(&bump, 1 << 16);
             StringBuilder sb;
             sb_init(&sb);
             hash_init(&g_symbol_map, 64);
@@ -557,7 +510,7 @@ int main(int argc, char **argv)
                 CXCursor cursor = clang_getTranslationUnitCursor(unit);
                 clang_visitChildren(cursor, visitor, &sb);
 
-                String output = sb_build(&sb);
+                String output = sb_build(&sb, &bump);
                 fprintf(stdout, "%.*s\n", (int)output.length, output.buf);
 
                 clang_disposeTranslationUnit(unit);
@@ -566,6 +519,8 @@ int main(int argc, char **argv)
             clang_disposeIndex(index);
 
             hash_destroy(&g_symbol_map);
+            sb_destroy(&sb);
+            bump_destroy(&bump);
         }
     }
 

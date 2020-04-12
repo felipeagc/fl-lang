@@ -246,8 +246,10 @@ static TypeInfo *
 compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 {
     if (!expected || !received) return NULL;
-    if (received->kind == TYPE_POINTER && received->ptr.sub->kind == TYPE_VOID) return expected;
-    if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID) return received;
+    if (received->kind == TYPE_POINTER && received->ptr.sub->kind == TYPE_VOID)
+        return expected;
+    if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID)
+        return received;
 
     return NULL;
 }
@@ -419,4 +421,110 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
     scope_set(ty->scope, STR("len"), &len_ast);
 
     return ty;
+}
+
+static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
+{
+    switch (type->kind)
+    {
+    case TYPE_TYPE: {
+        sb_append(sb, STR("t"));
+        break;
+    }
+    case TYPE_VOID: {
+        sb_append(sb, STR("v"));
+        break;
+    }
+    case TYPE_BOOL: {
+        sb_append(sb, STR("b"));
+        break;
+    }
+    case TYPE_NAMESPACE: {
+        sb_append(sb, STR("n"));
+        break;
+    }
+    case TYPE_INT: {
+        if (type->integer.is_signed)
+        {
+            switch (type->integer.num_bits)
+            {
+            case 8: sb_append(sb, STR("c")); break;
+            case 16: sb_append(sb, STR("s")); break;
+            case 32: sb_append(sb, STR("i")); break;
+            case 64: sb_append(sb, STR("l")); break;
+            default: assert(0); break;
+            }
+        }
+        else
+        {
+            switch (type->integer.num_bits)
+            {
+            case 8: sb_append(sb, STR("uc")); break;
+            case 16: sb_append(sb, STR("us")); break;
+            case 32: sb_append(sb, STR("ui")); break;
+            case 64: sb_append(sb, STR("ul")); break;
+            default: assert(0); break;
+            }
+        }
+
+        break;
+    }
+    case TYPE_FLOAT: {
+        switch (type->integer.num_bits)
+        {
+        case 32: sb_append(sb, STR("f")); break;
+        case 64: sb_append(sb, STR("d")); break;
+        default: assert(0); break;
+        }
+
+        break;
+    }
+    case TYPE_ENUM: {
+        sb_append(sb, STR("e"));
+        print_mangled_type(sb, type->enumeration.underlying_type);
+        break;
+    }
+    case TYPE_PROC: {
+        sb_append(sb, STR("F"));
+        print_mangled_type(sb, type->proc.return_type);
+        for (size_t i = 0; i < array_size(type->proc.params); ++i)
+        {
+            print_mangled_type(sb, type->proc.params[i]);
+        }
+        sb_append(sb, STR("E"));
+        break;
+    }
+    case TYPE_POINTER: {
+        sb_append(sb, STR("P"));
+        print_mangled_type(sb, type->ptr.sub);
+        break;
+    }
+    case TYPE_ARRAY: {
+        sb_sprintf(sb, "A%zu", type->array.size);
+        print_mangled_type(sb, type->array.sub);
+        break;
+    }
+    case TYPE_VECTOR: {
+        sb_sprintf(sb, "V%zu", type->array.size);
+        print_mangled_type(sb, type->array.sub);
+        break;
+    }
+    case TYPE_SLICE: {
+        sb_append(sb, STR("S"));
+        print_mangled_type(sb, type->array.sub);
+        break;
+    }
+    case TYPE_STRUCT: {
+        sb_append(sb, STR("C"));
+        for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+        {
+            print_mangled_type(sb, type->structure.fields[i]);
+        }
+        sb_append(sb, STR("E"));
+        break;
+    }
+
+    case TYPE_UNINITIALIZED:
+    case TYPE_NONE: assert(0); break;
+    }
 }
