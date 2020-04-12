@@ -242,10 +242,14 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
-            LLVMTypeRef fun_type = llvm_type(l, ast->type_info->ptr.sub);
+            TypeInfo *fun_type = ast->type_info->ptr.sub;
+            LLVMTypeRef llvm_fun_type = llvm_type(l, fun_type);
 
-            char *fun_name = bump_c_str(&l->compiler->bump, ast->proc.name);
-            LLVMValueRef fun = LLVMAddFunction(mod->mod, fun_name, fun_type);
+            String fun_name = ast->proc.mangled_name;
+
+            char *fun_name_c = bump_c_str(&l->compiler->bump, fun_name);
+            LLVMValueRef fun =
+                LLVMAddFunction(mod->mod, fun_name_c, llvm_fun_type);
             ast->proc.value.value = fun;
 
             LLVMSetLinkage(fun, LLVMInternalLinkage);

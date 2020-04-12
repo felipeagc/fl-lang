@@ -144,12 +144,16 @@ typedef struct Ast
         struct
         {
             String name;
+            String mangled_name;
             uint32_t flags;
             struct Ast *return_type;
             /*array*/ struct Ast *params;
             /*array*/ struct Ast *stmts;
-            AstValue value;
 
+            /*array*/ String *template_params;
+            HashMap *template_cache;
+
+            AstValue value;
             bool returned; // helper
         } proc;
         struct

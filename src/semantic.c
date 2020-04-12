@@ -13,6 +13,34 @@ static void create_scopes_ast(Analyzer *a, Ast *ast);
 
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
+#define INSTANTIATE_AST(ELEM)                                                  \
+    do                                                                         \
+    {                                                                          \
+        clone_into->ELEM = bump_alloc(&compiler->bump, sizeof(Ast));           \
+        instantiate_template(                                                  \
+            compiler,                                                          \
+            clone_into->ELEM,                                                  \
+            ast->ELEM,                                                         \
+            names_to_replace,                                                  \
+            replacements);                                                     \
+    } while (0)
+
+#define INSTANTIATE_ARRAY(ARRAY)                                               \
+    do                                                                         \
+    {                                                                          \
+        clone_into->ARRAY = NULL;                                              \
+        array_add(clone_into->ARRAY, array_size(ast->ARRAY));                  \
+        for (size_t i = 0; i < array_size(ast->ARRAY); ++i)                    \
+        {                                                                      \
+            instantiate_template(                                              \
+                compiler,                                                      \
+                &clone_into->ARRAY[i],                                         \
+                &ast->ARRAY[i],                                                \
+                names_to_replace,                                              \
+                replacements);                                                 \
+        }                                                                      \
+    } while (0)
+
 static void instantiate_template(
     Compiler *compiler,
     Ast *clone_into,
@@ -50,120 +78,194 @@ static void instantiate_template(
         break;
     }
 
+    case AST_VERSION_BLOCK: {
+        INSTANTIATE_ARRAY(version_block.stmts);
+        break;
+    }
+
+    case AST_ENUM: {
+        INSTANTIATE_AST(enumeration.type_expr);
+        INSTANTIATE_ARRAY(enumeration.fields);
+        break;
+    }
+
+    case AST_PROC_TYPE:
+    case AST_PROC_DECL: {
+        INSTANTIATE_AST(proc.return_type);
+        INSTANTIATE_ARRAY(proc.params);
+        INSTANTIATE_ARRAY(proc.stmts);
+        break;
+    }
+
+    case AST_PROC_PARAM: {
+        INSTANTIATE_AST(proc_param.type_expr);
+        if (ast->proc_param.value_expr) INSTANTIATE_AST(proc_param.value_expr);
+        break;
+    }
+
+    case AST_BLOCK: {
+        INSTANTIATE_ARRAY(block.stmts);
+        break;
+    }
+
+    case AST_INTRINSIC_CALL: {
+        INSTANTIATE_ARRAY(intrinsic_call.params);
+        break;
+    }
+
+    case AST_PROC_CALL: {
+        INSTANTIATE_AST(proc_call.expr);
+        INSTANTIATE_ARRAY(proc_call.params);
+        break;
+    }
+
+    case AST_TYPEDEF: {
+        INSTANTIATE_AST(type_def.type_expr);
+        break;
+    }
+
+    case AST_CAST: {
+        INSTANTIATE_AST(cast.type_expr);
+        INSTANTIATE_AST(cast.value_expr);
+        break;
+    }
+
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        if (ast->decl.type_expr) INSTANTIATE_AST(decl.type_expr);
+        if (ast->decl.value_expr) INSTANTIATE_AST(decl.value_expr);
+        break;
+    }
+
+    case AST_VAR_ASSIGN: {
+        INSTANTIATE_AST(assign.assigned_expr);
+        INSTANTIATE_AST(assign.value_expr);
+        break;
+    }
+
+    case AST_USING:
+    case AST_EXPR_STMT:
+    case AST_RETURN: {
+        INSTANTIATE_AST(expr);
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        INSTANTIATE_AST(distinct.sub);
+        break;
+    }
+
+    case AST_SUBSCRIPT: {
+        INSTANTIATE_AST(subscript.left);
+        INSTANTIATE_AST(subscript.right);
+        break;
+    }
+
+    case AST_SUBSCRIPT_SLICE: {
+        INSTANTIATE_AST(subscript_slice.left);
+        if (ast->subscript_slice.lower) INSTANTIATE_AST(subscript_slice.lower);
+        if (ast->subscript_slice.upper) INSTANTIATE_AST(subscript_slice.upper);
+        break;
+    }
+
+    case AST_SLICE_TYPE:
     case AST_ARRAY_TYPE: {
         if (ast->array_type.size)
         {
-            clone_into->array_type.size =
-                bump_alloc(&compiler->bump, sizeof(Ast));
-            instantiate_template(
-                compiler,
-                clone_into->array_type.size,
-                ast->array_type.size,
-                names_to_replace,
-                replacements);
+            INSTANTIATE_AST(array_type.size);
         }
 
-        clone_into->array_type.sub = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->array_type.sub,
-            ast->array_type.sub,
-            names_to_replace,
-            replacements);
+        INSTANTIATE_AST(array_type.sub);
         break;
     }
 
     case AST_ACCESS: {
-        clone_into->access.left = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->access.left,
-            ast->access.left,
-            names_to_replace,
-            replacements);
-
-        clone_into->access.right = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->access.right,
-            ast->access.right,
-            names_to_replace,
-            replacements);
+        INSTANTIATE_AST(access.left);
+        INSTANTIATE_AST(access.right);
         break;
     }
 
     case AST_UNARY_EXPR: {
-        clone_into->unop.sub = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->unop.sub,
-            ast->unop.sub,
-            names_to_replace,
-            replacements);
+        INSTANTIATE_AST(unop.sub);
         break;
     }
 
     case AST_BINARY_EXPR: {
-        clone_into->binop.left = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->binop.left,
-            ast->binop.left,
-            names_to_replace,
-            replacements);
+        INSTANTIATE_AST(binop.left);
+        INSTANTIATE_AST(binop.right);
+        break;
+    }
 
-        clone_into->binop.right = bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->binop.right,
-            ast->binop.right,
-            names_to_replace,
-            replacements);
+    case AST_ENUM_FIELD: {
+        INSTANTIATE_AST(enum_field.value_expr);
         break;
     }
 
     case AST_STRUCT_FIELD: {
-        clone_into->struct_field.type_expr =
-            bump_alloc(&compiler->bump, sizeof(Ast));
-        instantiate_template(
-            compiler,
-            clone_into->struct_field.type_expr,
-            ast->struct_field.type_expr,
-            names_to_replace,
-            replacements);
+        INSTANTIATE_AST(struct_field.type_expr);
 
         if (ast->struct_field.value_expr)
         {
-            clone_into->struct_field.value_expr =
-                bump_alloc(&compiler->bump, sizeof(Ast));
-            instantiate_template(
-                compiler,
-                clone_into->struct_field.value_expr,
-                ast->struct_field.value_expr,
-                names_to_replace,
-                replacements);
+            INSTANTIATE_AST(struct_field.value_expr);
         }
+
         break;
     }
 
     case AST_STRUCT: {
-        clone_into->structure.fields = NULL;
-        array_add(
-            clone_into->structure.fields, array_size(ast->structure.fields));
-        for (size_t i = 0; i < array_size(ast->structure.fields); ++i)
-        {
-            instantiate_template(
-                compiler,
-                &clone_into->structure.fields[i],
-                &ast->structure.fields[i],
-                names_to_replace,
-                replacements);
-        }
-
+        INSTANTIATE_ARRAY(structure.fields);
         break;
     }
 
-    default: break;
+    case AST_IF: {
+        INSTANTIATE_AST(if_stmt.cond_expr);
+        INSTANTIATE_AST(if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt) INSTANTIATE_AST(if_stmt.else_stmt);
+        break;
+    }
+
+    case AST_WHILE: {
+        INSTANTIATE_AST(while_stmt.cond);
+        INSTANTIATE_AST(while_stmt.stmt);
+        break;
+    }
+
+    case AST_FOR: {
+        if (ast->for_stmt.init) INSTANTIATE_AST(for_stmt.init);
+        if (ast->for_stmt.cond) INSTANTIATE_AST(for_stmt.cond);
+        if (ast->for_stmt.inc) INSTANTIATE_AST(for_stmt.inc);
+        INSTANTIATE_AST(for_stmt.stmt);
+        break;
+    }
+
+    case AST_COMPOUND_LIT: {
+        INSTANTIATE_AST(compound.type_expr);
+        INSTANTIATE_ARRAY(compound.values);
+        break;
+    }
+
+    case AST_TEMPLATE_INST: {
+        INSTANTIATE_AST(template_inst.sub);
+        INSTANTIATE_ARRAY(template_inst.params);
+        break;
+    }
+
+    case AST_BUILTIN_LEN:
+    case AST_BUILTIN_PTR:
+    case AST_BUILTIN_CAP:
+    case AST_BUILTIN_MAX:
+    case AST_BUILTIN_MIN:
+    case AST_BUILTIN_VEC_ACCESS:
+    case AST_CONTINUE:
+    case AST_BREAK:
+    case AST_STRUCT_FIELD_ALIAS:
+    case AST_IMPORT: break;
+
+    case AST_ROOT:
+    case AST_UNINITIALIZED: {
+        assert(0);
+        break;
+    }
     }
 }
 
@@ -1854,6 +1956,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_DECL: {
+        ast->proc.mangled_name = ast->proc.name;
+
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
@@ -1918,6 +2022,24 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ptr_ty->kind = TYPE_POINTER;
             ptr_ty->ptr.sub = ty;
             ast->type_info = ptr_ty;
+
+            if (array_size(ast->proc.template_params) > 0)
+            {
+                assert((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN);
+
+                TypeInfo *proc_type = ast->type_info->ptr.sub;
+
+                sb_reset(&a->compiler->sb);
+                sb_append(&a->compiler->sb, ast->proc.name);
+                for (size_t i = 0; i < array_size(proc_type->proc.params); ++i)
+                {
+                    TypeInfo *param_type = proc_type->proc.params[i];
+                    sb_append(&a->compiler->sb, STR("$"));
+                    print_mangled_type(&a->compiler->sb, param_type);
+                }
+                ast->proc.mangled_name =
+                    sb_build(&a->compiler->sb, &a->compiler->bump);
+            }
         }
         break;
     }
