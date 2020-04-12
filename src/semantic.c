@@ -8,8 +8,164 @@ typedef struct Analyzer
 } Analyzer;
 
 static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type);
+static void register_symbol_ast(Analyzer *a, Ast *ast);
+static void create_scopes_ast(Analyzer *a, Ast *ast);
 
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
+
+static void instantiate_template(
+    Compiler *compiler,
+    Ast *clone_into,
+    Ast *ast,
+    /*array*/ String *names_to_replace,
+    /*array*/ Ast *replacements)
+{
+    if (ast == NULL) return;
+
+    assert(array_size(names_to_replace) == array_size(replacements));
+
+    *clone_into = *ast;
+
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_IDENT: {
+            for (size_t i = 0; i < array_size(names_to_replace); ++i)
+            {
+                if (string_equals(ast->primary.tok->str, names_to_replace[i]))
+                {
+                    *clone_into = replacements[i];
+                    break;
+                }
+            }
+
+            break;
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
+    case AST_ARRAY_TYPE: {
+        if (ast->array_type.size)
+        {
+            clone_into->array_type.size =
+                bump_alloc(&compiler->bump, sizeof(Ast));
+            instantiate_template(
+                compiler,
+                clone_into->array_type.size,
+                ast->array_type.size,
+                names_to_replace,
+                replacements);
+        }
+
+        clone_into->array_type.sub = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->array_type.sub,
+            ast->array_type.sub,
+            names_to_replace,
+            replacements);
+        break;
+    }
+
+    case AST_ACCESS: {
+        clone_into->access.left = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->access.left,
+            ast->access.left,
+            names_to_replace,
+            replacements);
+
+        clone_into->access.right = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->access.right,
+            ast->access.right,
+            names_to_replace,
+            replacements);
+        break;
+    }
+
+    case AST_UNARY_EXPR: {
+        clone_into->unop.sub = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->unop.sub,
+            ast->unop.sub,
+            names_to_replace,
+            replacements);
+        break;
+    }
+
+    case AST_BINARY_EXPR: {
+        clone_into->binop.left = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->binop.left,
+            ast->binop.left,
+            names_to_replace,
+            replacements);
+
+        clone_into->binop.right = bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->binop.right,
+            ast->binop.right,
+            names_to_replace,
+            replacements);
+        break;
+    }
+
+    case AST_STRUCT_FIELD: {
+        clone_into->struct_field.type_expr =
+            bump_alloc(&compiler->bump, sizeof(Ast));
+        instantiate_template(
+            compiler,
+            clone_into->struct_field.type_expr,
+            ast->struct_field.type_expr,
+            names_to_replace,
+            replacements);
+
+        if (ast->struct_field.value_expr)
+        {
+            clone_into->struct_field.value_expr =
+                bump_alloc(&compiler->bump, sizeof(Ast));
+            instantiate_template(
+                compiler,
+                clone_into->struct_field.value_expr,
+                ast->struct_field.value_expr,
+                names_to_replace,
+                replacements);
+        }
+        break;
+    }
+
+    case AST_STRUCT: {
+        clone_into->structure.fields = NULL;
+        array_add(
+            clone_into->structure.fields, array_size(ast->structure.fields));
+        for (size_t i = 0; i < array_size(ast->structure.fields); ++i)
+        {
+            instantiate_template(
+                compiler,
+                &clone_into->structure.fields[i],
+                &ast->structure.fields[i],
+                names_to_replace,
+                replacements);
+        }
+
+        break;
+    }
+
+    default: break;
+    }
+}
 
 static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
 {
@@ -351,7 +507,7 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
 }
 
 static TypeInfo *
-ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
+ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 {
     if (ast->as_type) return ast->as_type;
 
@@ -391,19 +547,10 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
-            if (sym && sym->type == AST_TYPEDEF)
+            if (sym)
             {
-                assert(sym->sym_scope);
-                if (ast_as_type(
-                        compiler,
-                        sym->sym_scope,
-                        sym->type_def.type_expr,
-                        false))
-                {
-                    ast->as_type = sym->type_def.type_expr->as_type;
-                }
+                ast->as_type = ast_as_type(a, sym->sym_scope, sym, false);
             }
-
             break;
         }
         default: break;
@@ -411,8 +558,46 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
+    case AST_TYPEDEF: {
+        ast->as_type = ast_as_type(a, scope, ast->type_def.type_expr, false);
+        break;
+    }
+
+    case AST_TEMPLATE_INST: {
+        if (ast->template_inst.sub->type != AST_PRIMARY ||
+            ast->template_inst.sub->primary.tok->type != TOKEN_IDENT)
+            break;
+
+        String name = ast->template_inst.sub->primary.tok->str;
+        Ast *sym = get_symbol(scope, name, ast->loc.file);
+
+        if (sym && sym->type == AST_TYPEDEF)
+        {
+            if (array_size(sym->type_def.template_params) !=
+                array_size(ast->template_inst.params))
+                break;
+
+            Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
+            memset(cloned_ast, 0, sizeof(Ast));
+            instantiate_template(
+                a->compiler,
+                cloned_ast,
+                sym->type_def.type_expr,
+                sym->type_def.template_params,
+                ast->template_inst.params);
+
+            create_scopes_ast(a, cloned_ast);
+            register_symbol_ast(a, cloned_ast);
+            analyze_ast(a, cloned_ast, &TYPE_OF_TYPE);
+
+            ast->as_type = ast_as_type(a, sym->sym_scope, cloned_ast, false);
+        }
+
+        break;
+    }
+
     case AST_DISTINCT_TYPE: {
-        ast->as_type = ast_as_type(compiler, scope, ast->distinct.sub, true);
+        ast->as_type = ast_as_type(a, scope, ast->distinct.sub, true);
         break;
     }
 
@@ -420,9 +605,9 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            if (ast_as_type(compiler, scope, ast->unop.sub, false))
+            if (ast_as_type(a, scope, ast->unop.sub, false))
             {
-                TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+                TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
                 memset(ty, 0, sizeof(*ty));
                 ty->kind = TYPE_POINTER;
                 ty->ptr.sub = ast->unop.sub->as_type;
@@ -438,9 +623,9 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
     case AST_ARRAY_TYPE: {
         int64_t size = 0;
         bool resolves =
-            resolve_expr_int(compiler, scope, ast->array_type.size, &size);
+            resolve_expr_int(a->compiler, scope, ast->array_type.size, &size);
 
-        if (!ast_as_type(compiler, scope, ast->array_type.sub, false)) break;
+        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
 
         if (!resolves)
         {
@@ -453,16 +638,16 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         }
 
         ast->as_type =
-            create_array_type(compiler, ast->array_type.sub->as_type, size);
+            create_array_type(a->compiler, ast->array_type.sub->as_type, size);
 
         break;
     }
 
     case AST_SLICE_TYPE: {
-        if (!ast_as_type(compiler, scope, ast->array_type.sub, false)) break;
+        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
 
         TypeInfo *ty =
-            create_slice_type(compiler, ast->array_type.sub->as_type);
+            create_slice_type(a->compiler, ast->array_type.sub->as_type);
 
         ast->as_type = ty;
         break;
@@ -472,7 +657,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         TypeInfo **fields = NULL;
         bool res = true;
 
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
         memset(ty, 0, sizeof(*ty));
         ast->as_type = ty;
 
@@ -480,8 +665,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
              field != ast->structure.fields + array_size(ast->structure.fields);
              ++field)
         {
-            if (!ast_as_type(
-                    compiler, scope, field->struct_field.type_expr, false))
+            if (!ast_as_type(a, scope, field->struct_field.type_expr, false))
             {
                 res = false;
             }
@@ -503,11 +687,11 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_ENUM: {
         TypeInfo *underlying_type =
-            ast_as_type(compiler, scope, ast->enumeration.type_expr, false);
+            ast_as_type(a, scope, ast->enumeration.type_expr, false);
 
         if (underlying_type)
         {
-            TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
             memset(ty, 0, sizeof(*ty));
             ty->kind = TYPE_ENUM;
             ty->scope = ast->scope;
@@ -520,7 +704,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_PROC_TYPE: {
-        TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(*ty));
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
@@ -541,7 +725,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
              ++param)
         {
             TypeInfo *param_as_type =
-                ast_as_type(compiler, scope, param->decl.type_expr, false);
+                ast_as_type(a, scope, param->decl.type_expr, false);
             if (!param_as_type)
             {
                 valid = false;
@@ -561,7 +745,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
         if (ast->proc.return_type)
         {
             ty->proc.return_type =
-                ast_as_type(compiler, scope, ast->proc.return_type, false);
+                ast_as_type(a, scope, ast->proc.return_type, false);
         }
         else
         {
@@ -575,7 +759,7 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
         if (valid)
         {
-            TypeInfo *ptr_ty = bump_alloc(&compiler->bump, sizeof(*ptr_ty));
+            TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
             memset(ptr_ty, 0, sizeof(*ptr_ty));
             ptr_ty->kind = TYPE_POINTER;
             ptr_ty->ptr.sub = ty;
@@ -595,15 +779,15 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
             Ast *elem_type = &ast->intrinsic_call.params[0];
             Ast *vec_width = &ast->intrinsic_call.params[1];
 
-            ast_as_type(compiler, scope, elem_type, false);
+            ast_as_type(a, scope, elem_type, false);
             if (!elem_type->as_type) break;
 
             int64_t width;
-            if (!resolve_expr_int(compiler, scope, vec_width, &width)) break;
+            if (!resolve_expr_int(a->compiler, scope, vec_width, &width)) break;
             if (width <= 0) break;
 
-            ast->as_type =
-                create_vector_type(compiler, elem_type->as_type, (size_t)width);
+            ast->as_type = create_vector_type(
+                a->compiler, elem_type->as_type, (size_t)width);
 
             break;
         }
@@ -616,11 +800,11 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_ACCESS: {
         Scope *accessed_scope =
-            get_expr_scope(compiler, scope, ast->access.left);
+            get_expr_scope(a->compiler, scope, ast->access.left);
         if (accessed_scope)
         {
             ast->as_type =
-                ast_as_type(compiler, accessed_scope, ast->access.right, false);
+                ast_as_type(a, accessed_scope, ast->access.right, false);
         }
         break;
     }
@@ -630,7 +814,8 @@ ast_as_type(Compiler *compiler, Scope *scope, Ast *ast, bool is_distinct)
 
     if (is_distinct && ast->as_type)
     {
-        TypeInfo *unique_type = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+        TypeInfo *unique_type =
+            bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
         *unique_type = *ast->as_type;
         unique_type->flags |= TYPE_FLAG_DISTINCT;
         ast->as_type = unique_type;
@@ -746,7 +931,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
     return accessed_scope;
 }
 
-void create_scopes_ast(Analyzer *a, Ast *ast)
+static void create_scopes_ast(Analyzer *a, Ast *ast)
 {
     switch (ast->type)
     {
@@ -823,13 +1008,13 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_UNARY_EXPR: {
-        create_scopes_ast(a, ast->unop.sub);
+    case AST_DISTINCT_TYPE: {
+        create_scopes_ast(a, ast->distinct.sub);
         break;
     }
 
-    case AST_DISTINCT_TYPE: {
-        create_scopes_ast(a, ast->distinct.sub);
+    case AST_UNARY_EXPR: {
+        create_scopes_ast(a, ast->unop.sub);
         break;
     }
 
@@ -898,7 +1083,10 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_TYPEDEF: {
-        create_scopes_ast(a, ast->type_def.type_expr);
+        if (array_size(ast->type_def.template_params) == 0)
+        {
+            create_scopes_ast(a, ast->type_def.type_expr);
+        }
         break;
     }
 
@@ -987,6 +1175,7 @@ void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TEMPLATE_INST:
     case AST_STRUCT_FIELD_ALIAS:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
@@ -1164,7 +1353,10 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_TYPEDEF: {
         register_symbol_ast_leaf(a, ast, &ast->loc);
-        register_symbol_ast(a, ast->type_def.type_expr);
+        if (array_size(ast->type_def.template_params) == 0)
+        {
+            register_symbol_ast(a, ast->type_def.type_expr);
+        }
         break;
     }
 
@@ -1329,7 +1521,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_TYPEDEF: {
-        analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
+        if (array_size(ast->type_def.template_params) == 0)
+        {
+            analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
+        }
         break;
     }
 
@@ -1426,16 +1621,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             analyze_ast(a, ast->decl.value_expr, ast->type_info);
 
+            if (!ast->decl.value_expr->type_info)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "could not resolve type for variable declaration "
+                    "initializer");
+                break;
+            }
+
             if (!ast->type_info)
             {
-                if (!ast->decl.value_expr->type_info)
-                {
-                    compile_error(
-                        a->compiler,
-                        ast->loc,
-                        "could not infer type for variable declaration");
-                    break;
-                }
                 ast->type_info = ast->decl.value_expr->type_info;
             }
         }
@@ -1582,8 +1779,26 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_VAR_ASSIGN: {
         analyze_ast(a, ast->assign.assigned_expr, NULL);
+        if (!ast->assign.assigned_expr->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->assign.assigned_expr->loc,
+                "could not resolve type for assign destination expression");
+            break;
+        }
+
         analyze_ast(
             a, ast->assign.value_expr, ast->assign.assigned_expr->type_info);
+
+        if (!ast->assign.value_expr->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->assign.value_expr->loc,
+                "could not resolve type for assigned expression");
+            break;
+        }
 
         if (!is_expr_assignable(
                 a->compiler,
@@ -1821,7 +2036,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         return;
     }
 
-    ast_as_type(a->compiler, *array_last(a->scope_stack), ast, false);
+    ast_as_type(a, *array_last(a->scope_stack), ast, false);
 
     switch (ast->type)
     {
@@ -2021,6 +2236,83 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         default: break;
         }
+        break;
+    }
+
+    case AST_TEMPLATE_INST: {
+        Scope *scope = *array_last(a->scope_stack);
+
+        if (ast->template_inst.sub->type != AST_PRIMARY ||
+            ast->template_inst.sub->primary.tok->type != TOKEN_IDENT)
+        {
+            compile_error(
+                a->compiler,
+                ast->template_inst.sub->loc,
+                "template instantiation subexpression is not an identifier");
+            break;
+        }
+
+        String name = ast->template_inst.sub->primary.tok->str;
+        Ast *sym = get_symbol(scope, name, ast->loc.file);
+
+        if (!sym)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "template instantiation subexpression does not refer to a "
+                "symbol");
+            break;
+        }
+
+        for (Ast *param = ast->template_inst.params;
+             param !=
+             ast->template_inst.params + array_size(ast->template_inst.params);
+             ++param)
+        {
+            analyze_ast(a, param, &TYPE_OF_TYPE);
+        }
+
+        switch (sym->type)
+        {
+        case AST_TYPEDEF: {
+            if (array_size(sym->type_def.template_params) == 0)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "typedef is not a template");
+                break;
+            }
+
+            if (array_size(sym->type_def.template_params) !=
+                array_size(ast->template_inst.params))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "wrong count of template parameters");
+                break;
+            }
+
+            if (!ast->as_type)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "template instantiation did not resolve to a type");
+                break;
+            }
+
+            ast->type_info = &TYPE_OF_TYPE;
+            break;
+        }
+
+        default: {
+            compile_error(
+                a->compiler, ast->loc, "tried to instantiate a non-template");
+            break;
+        }
+        }
+
         break;
     }
 
@@ -2934,7 +3226,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         // Recompute as_type after getting the size's type
-        ast_as_type(a->compiler, *array_last(a->scope_stack), ast, false);
+        ast_as_type(a, *array_last(a->scope_stack), ast, false);
 
         if (!ast->as_type)
         {
@@ -3027,6 +3319,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         array_push(a->scope_stack, accessed_scope);
         analyze_ast(a, ast->access.right, NULL);
         array_pop(a->scope_stack);
+
+        if (!ast->access.right->type_info)
+        {
+            compile_error(
+                a->compiler,
+                ast->access.right->loc,
+                "invalid access: could not resolve type of right "
+                "expression");
+            break;
+        }
 
         ast->type_info = ast->access.right->type_info;
 

@@ -3032,10 +3032,7 @@ static void llvm_verify_module(LLContext *l)
     char *error = NULL;
     if (LLVMVerifyModule(l->mod.mod, LLVMReturnStatusAction, &error))
     {
-        if (!l->compiler->args.print_llvm)
-        {
-            fprintf(stderr, "%s\n", LLVMPrintModuleToString(l->mod.mod));
-        }
+        fprintf(stderr, "%s\n", LLVMPrintModuleToString(l->mod.mod));
 
         fprintf(stderr, "Failed to verify module:\n%s\n", error);
         exit(EXIT_FAILURE);

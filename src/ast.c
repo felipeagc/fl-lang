@@ -78,6 +78,7 @@ typedef enum AstType {
     AST_COMPOUND_LIT,
     AST_DISTINCT_TYPE,
     AST_USING,
+    AST_TEMPLATE_INST,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -203,6 +204,7 @@ typedef struct Ast
         {
             String name;
             struct Ast *type_expr;
+            /*array*/ String *template_params;
         } type_def;
         struct
         {
@@ -286,5 +288,10 @@ typedef struct Ast
         {
             size_t position;
         } vec_access;
+        struct
+        {
+            struct Ast *sub;
+            /*array*/ struct Ast *params;
+        } template_inst;
     };
 } Ast;

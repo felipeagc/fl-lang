@@ -245,6 +245,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 static TypeInfo *
 compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 {
+    if (!expected || !received) return NULL;
     if (received->kind == TYPE_POINTER && received->ptr.sub->kind == TYPE_VOID) return expected;
     if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID) return received;
 

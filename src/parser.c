@@ -113,6 +113,51 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
+bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
+{
+    bool res = true;
+
+    if (!parse_primary_expr(p, ast, parsing_type)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    if (parser_peek(p, 0)->type == TOKEN_NOT)
+    {
+        parser_next(p, 1);
+
+        Ast *sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *sub = *ast;
+
+        ast->type = AST_TEMPLATE_INST;
+        ast->template_inst.sub = sub;
+        ast->template_inst.params = NULL;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        {
+            Ast param = {0};
+            if (parse_expr(p, &param, true))
+            {
+                array_push(ast->template_inst.params, param);
+            }
+            else
+            {
+                res = false;
+            }
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+    }
+
+    return res;
+}
+
 bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
@@ -164,7 +209,7 @@ bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
     default: {
-        if (!parse_primary_expr(p, ast, parsing_type)) res = false;
+        if (!parse_template_instantiation(p, ast, parsing_type)) res = false;
         break;
     }
     }
@@ -1426,6 +1471,33 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             res = false;
         else
             ast->type_def.name = type_name_tok->str;
+
+        if (parser_peek(p, 0)->type == TOKEN_NOT)
+        {
+            parser_next(p, 1);
+
+            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                Token *param_name = parser_consume(p, TOKEN_IDENT);
+                if (param_name)
+                {
+                    array_push(ast->type_def.template_params, param_name->str);
+                }
+                else
+                {
+                    res = false;
+                }
+
+                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
+            }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+        }
 
         ast->type_def.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->type_def.type_expr, true)) res = false;
