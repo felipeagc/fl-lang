@@ -7,9 +7,13 @@ typedef struct Analyzer
     /*array*/ Ast **continue_stack;
 } Analyzer;
 
-static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type);
-static void register_symbol_ast(Analyzer *a, Ast *ast);
 static void create_scopes_ast(Analyzer *a, Ast *ast);
+
+static void register_symbol_ast(Analyzer *a, Ast *ast);
+static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count);
+
+static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type);
+static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count);
 
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
@@ -50,9 +54,11 @@ static void instantiate_template(
 {
     if (ast == NULL) return;
 
+    assert(!ast->scope);
     assert(array_size(names_to_replace) == array_size(replacements));
 
     *clone_into = *ast;
+    clone_into->flags &= ~AST_FLAG_IS_TEMPLATE; // turn off bit
 
     switch (ast->type)
     {
@@ -91,7 +97,7 @@ static void instantiate_template(
 
     case AST_PROC_TYPE:
     case AST_PROC_DECL: {
-        INSTANTIATE_AST(proc.return_type);
+        if (ast->proc.return_type) INSTANTIATE_AST(proc.return_type);
         INSTANTIATE_ARRAY(proc.params);
         INSTANTIATE_ARRAY(proc.stmts);
         break;
@@ -170,11 +176,7 @@ static void instantiate_template(
 
     case AST_SLICE_TYPE:
     case AST_ARRAY_TYPE: {
-        if (ast->array_type.size)
-        {
-            INSTANTIATE_AST(array_type.size);
-        }
-
+        if (ast->array_type.size) INSTANTIATE_AST(array_type.size);
         INSTANTIATE_AST(array_type.sub);
         break;
     }
@@ -203,12 +205,8 @@ static void instantiate_template(
 
     case AST_STRUCT_FIELD: {
         INSTANTIATE_AST(struct_field.type_expr);
-
         if (ast->struct_field.value_expr)
-        {
             INSTANTIATE_AST(struct_field.value_expr);
-        }
-
         break;
     }
 
@@ -692,19 +690,23 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             String mangled_type =
                 sb_build(&a->compiler->sb, &a->compiler->bump);
 
-            TypeInfo *cached_type = NULL;
+            Ast *cached_ast = NULL;
             if (hash_get(
                     sym->type_def.template_cache,
                     mangled_type,
-                    (void **)&cached_type))
+                    (void **)&cached_ast))
             {
-                assert(cached_type);
-                ast->as_type = cached_type;
+                assert(cached_ast);
+                ast->type_info = cached_ast->type_info;
+                ast->as_type = cached_ast->as_type;
                 break;
             }
 
             Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
             memset(cloned_ast, 0, sizeof(Ast));
+
+            hash_set(sym->type_def.template_cache, mangled_type, cloned_ast);
+
             instantiate_template(
                 a->compiler,
                 cloned_ast,
@@ -713,12 +715,12 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 ast->template_inst.params);
 
             create_scopes_ast(a, cloned_ast);
-            register_symbol_ast(a, cloned_ast);
-            analyze_ast(a, cloned_ast, &TYPE_OF_TYPE);
+            register_symbol_asts(a, cloned_ast, 1);
+            analyze_asts(a, cloned_ast, 1);
 
-            ast->as_type = ast_as_type(a, sym->sym_scope, cloned_ast, false);
-
-            hash_set(sym->type_def.template_cache, mangled_type, ast->as_type);
+            ast->as_type = cloned_ast->as_type;
+            ast->type_info = cloned_ast->type_info;
+            ast->template_inst.resolves_to = cloned_ast;
         }
 
         break;
@@ -1099,6 +1101,15 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_DECL: {
+        if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+        {
+            // Create template cache
+            ast->proc.template_cache =
+                bump_alloc(&a->compiler->bump, sizeof(HashMap));
+            hash_init(ast->proc.template_cache, 8);
+            break;
+        }
+
         assert(!ast->scope);
         ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
         memset(ast->scope, 0, sizeof(*ast->scope));
@@ -1120,6 +1131,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         }
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
+
         break;
     }
 
@@ -1339,8 +1351,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 }
 
-static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count);
-
 static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 {
     Scope *scope = *array_last(a->scope_stack);
@@ -1386,6 +1396,12 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
     }
 
     case AST_PROC_DECL: {
+        if (array_size(ast->proc.template_params) > 0 &&
+            ((ast->flags & AST_FLAG_IS_TEMPLATE) != AST_FLAG_IS_TEMPLATE))
+        {
+            break;
+        }
+
         sym_name = ast->proc.name;
         break;
     }
@@ -1567,6 +1583,11 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     case AST_PROC_DECL: {
         register_symbol_ast_leaf(a, ast, &ast->loc);
 
+        if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+        {
+            break;
+        }
+
         array_push(a->scope_stack, ast->scope);
         array_push(a->operand_scope_stack, ast->scope);
         for (Ast *param = ast->proc.params;
@@ -1577,14 +1598,13 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         }
         array_pop(a->operand_scope_stack);
         array_pop(a->scope_stack);
+
         break;
     }
 
     default: return;
     }
 }
-
-static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count);
 
 static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 {
@@ -1593,6 +1613,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     // Statements
     switch (ast->type)
     {
+    case AST_UNINITIALIZED: assert(0); break;
+
     case AST_RETURN: {
         Scope *scope = *array_last(a->scope_stack);
 
@@ -1679,18 +1701,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        for (size_t i = 0; i < expr_scope->map->size; ++i)
+        for (size_t i = 0; i < array_size(expr_scope->map->values); ++i)
         {
             Ast *sym = expr_scope->map->values[i];
-            if (expr_scope->map->hashes[i] != 0)
-            {
-                Scope *old_scope = sym->sym_scope;
-                assert(old_scope);
 
-                register_symbol_ast_leaf(a, sym, &ast->loc);
+            Scope *old_scope = sym->sym_scope;
+            assert(old_scope);
 
-                sym->sym_scope = old_scope;
-            }
+            register_symbol_ast_leaf(a, sym, &ast->loc);
+
+            sym->sym_scope = old_scope;
         }
 
         break;
@@ -1801,18 +1821,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            for (size_t i = 0; i < expr_scope->map->size; ++i)
+            for (size_t i = 0; i < array_size(expr_scope->map->values); ++i)
             {
                 Ast *sym = expr_scope->map->values[i];
-                if (expr_scope->map->hashes[i] != 0)
-                {
-                    Scope *old_scope = sym->sym_scope;
-                    assert(old_scope);
+                Scope *old_scope = sym->sym_scope;
+                assert(old_scope);
 
-                    register_symbol_ast_leaf(a, sym, &ast->loc);
+                register_symbol_ast_leaf(a, sym, &ast->loc);
 
-                    sym->sym_scope = old_scope;
-                }
+                sym->sym_scope = old_scope;
             }
         }
 
@@ -1956,6 +1973,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_DECL: {
+        if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+        {
+            break;
+        }
+
         ast->proc.mangled_name = ast->proc.name;
 
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
@@ -2025,7 +2047,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (array_size(ast->proc.template_params) > 0)
             {
-                assert((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN);
+                assert((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN);
 
                 TypeInfo *proc_type = ast->type_info->ptr.sub;
 
@@ -2463,11 +2485,85 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case AST_PROC_DECL: {
+            if ((sym->flags & AST_FLAG_IS_TEMPLATE) != AST_FLAG_IS_TEMPLATE)
+            {
+                compile_error(
+                    a->compiler, sym->loc, "function is not a template");
+                break;
+            }
+
+            if (array_size(sym->proc.template_params) !=
+                array_size(ast->template_inst.params))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "wrong count of template parameters");
+                break;
+            }
+
+            assert(sym->proc.template_cache);
+
+            sb_reset(&a->compiler->sb);
+            for (size_t i = 0; i < array_size(ast->template_inst.params); ++i)
+            {
+                Ast *param = &ast->template_inst.params[i];
+                sb_append(&a->compiler->sb, STR("$"));
+                print_mangled_type(
+                    &a->compiler->sb, ast_as_type(a, scope, param, false));
+            }
+            String mangled_type =
+                sb_build(&a->compiler->sb, &a->compiler->bump);
+
+            Ast *cached_ast = NULL;
+            if (hash_get(
+                    sym->proc.template_cache,
+                    mangled_type,
+                    (void **)&cached_ast))
+            {
+                assert(cached_ast);
+                ast->type_info = cached_ast->type_info;
+                ast->as_type = cached_ast->as_type;
+                ast->template_inst.resolves_to = cached_ast;
+                break;
+            }
+
+            Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
+            memset(cloned_ast, 0, sizeof(Ast));
+
+            hash_set(sym->proc.template_cache, mangled_type, cloned_ast);
+
+            instantiate_template(
+                a->compiler,
+                cloned_ast,
+                sym,
+                sym->proc.template_params,
+                ast->template_inst.params);
+
+            create_scopes_ast(a, cloned_ast);
+            register_symbol_asts(a, cloned_ast, 1);
+            analyze_asts(a, cloned_ast, 1);
+
+            ast->as_type = cloned_ast->as_type;
+            ast->type_info = cloned_ast->type_info;
+            ast->template_inst.resolves_to = cloned_ast;
+
+            break;
+        }
+
         default: {
             compile_error(
                 a->compiler, ast->loc, "tried to instantiate a non-template");
             break;
         }
+        }
+
+        if (!ast->type_info)
+        {
+            compile_error(
+                a->compiler, ast->loc, "failed to instantiate template");
+            break;
         }
 
         break;
@@ -3575,6 +3671,11 @@ static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
+            if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+            {
+                break;
+            }
+
             array_push(a->scope_stack, ast->scope);
             array_push(a->operand_scope_stack, ast->scope);
             register_symbol_asts(
@@ -3629,6 +3730,11 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
+            if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+            {
+                break;
+            }
+
             array_push(a->scope_stack, ast->scope);
             array_push(a->operand_scope_stack, ast->scope);
             analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));

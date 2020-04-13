@@ -105,6 +105,7 @@ typedef enum AstFlags {
     AST_FLAG_STATIC = 1 << 1,
     AST_FLAG_PUBLIC = 1 << 2,
     AST_FLAG_USING = 1 << 3,
+    AST_FLAG_IS_TEMPLATE = 1 << 4,
 } AstFlags;
 
 typedef struct AstAttribute
@@ -152,9 +153,9 @@ typedef struct Ast
 
             /*array*/ String *template_params;
             HashMap *template_cache;
+            bool returned; // helper
 
             AstValue value;
-            bool returned; // helper
         } proc;
         struct
         {
@@ -297,6 +298,8 @@ typedef struct Ast
         {
             struct Ast *sub;
             /*array*/ struct Ast *params;
+
+            struct Ast *resolves_to; // filled in semantic analysis
         } template_inst;
     };
 } Ast;

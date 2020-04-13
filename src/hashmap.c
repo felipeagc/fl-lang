@@ -4,8 +4,10 @@ typedef struct HashMap
 {
     String *keys;
     uint64_t *hashes;
-    void **values;
+    uint64_t *indices;
     uint64_t size;
+
+    void **values;
 } HashMap;
 
 static void hash_grow(HashMap *map);
@@ -45,7 +47,9 @@ static void hash_init(HashMap *map, uint64_t size)
     // Init memory
     map->keys = malloc(sizeof(*map->keys) * map->size);
     map->hashes = malloc(sizeof(*map->hashes) * map->size);
-    map->values = malloc(sizeof(*map->values) * map->size);
+    map->indices = malloc(sizeof(*map->indices) * map->size);
+
+    map->values = NULL;
 
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
@@ -59,7 +63,7 @@ static void hash_clear(HashMap *map)
 }
 #endif
 
-static void *hash_set(HashMap *map, String key, void *value)
+static uint64_t hash_set_internal(HashMap *map, String key, uint64_t index)
 {
     uint64_t hash = hash_str(key);
     uint64_t i = hash & (map->size - 1);
@@ -74,14 +78,22 @@ static void *hash_set(HashMap *map, String key, void *value)
     if (iters >= map->size)
     {
         hash_grow(map);
-        return hash_set(map, key, value);
+        return hash_set_internal(map, key, index);
     }
 
     map->keys[i] = key;
     map->hashes[i] = hash;
-    map->values[i] = value;
+    map->indices[i] = index;
 
-    return value;
+    return index;
+}
+
+static inline void *hash_set(HashMap *map, String key, void *value)
+{
+    size_t index = array_size(map->values);
+    array_push(map->values, value);
+    hash_set_internal(map, key, index);
+    return map->values[index];
 }
 
 static bool hash_get(HashMap *map, String key, void **result)
@@ -102,7 +114,7 @@ static bool hash_get(HashMap *map, String key, void **result)
 
     if (map->hashes[i] != 0)
     {
-        if (result) *result = map->values[i];
+        if (result) *result = map->values[map->indices[i]];
         return true;
     }
 
@@ -138,11 +150,11 @@ static void hash_grow(HashMap *map)
     uint64_t old_size = map->size;
     String *old_keys = map->keys;
     uint64_t *old_hashes = map->hashes;
-    void **old_values = map->values;
+    uint64_t *old_indices = map->indices;
 
     map->size = old_size * 2;
     map->hashes = malloc(sizeof(*map->hashes) * map->size);
-    map->values = malloc(sizeof(*map->values) * map->size);
+    map->indices = malloc(sizeof(*map->indices) * map->size);
     map->keys = malloc(sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
@@ -151,18 +163,19 @@ static void hash_grow(HashMap *map)
     {
         if (old_hashes[i] != 0)
         {
-            hash_set(map, old_keys[i], old_values[i]);
+            hash_set_internal(map, old_keys[i], old_indices[i]);
         }
     }
 
     free(old_hashes);
-    free(old_values);
+    free(old_indices);
     free(old_keys);
 }
 
 static void hash_destroy(HashMap *map)
 {
     free(map->hashes);
-    free(map->values);
+    free(map->indices);
     free(map->keys);
+    array_free(map->values);
 }

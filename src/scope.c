@@ -58,29 +58,35 @@ static Scope *scope_clone(Compiler *compiler, Scope *scope, Ast *owning_ast)
         scope->map->hashes,
         sizeof(*new_map->hashes) * scope->map->size);
 
-    new_map->values = bump_alloc(
-        &compiler->bump, sizeof(*new_map->values) * scope->map->size);
+    new_map->indices = bump_alloc(
+        &compiler->bump, sizeof(*new_map->indices) * scope->map->size);
+    memcpy(
+        new_map->indices,
+        scope->map->indices,
+        sizeof(*new_map->indices) * scope->map->size);
+
+    new_map->values = NULL;
+    array_add(new_map->values, array_size(scope->map->values));
     memcpy(
         new_map->values,
         scope->map->values,
-        sizeof(*new_map->values) * scope->map->size);
+        sizeof(*new_map->values) * array_size(scope->map->values));
 
-    for (size_t i = 0; i < scope->map->size; ++i)
+    for (size_t i = 0; i < array_size(new_map->values); ++i)
     {
         Ast *sym = new_map->values[i];
-        if (new_map->hashes[i] != 0)
-        {
-            Scope* new_subscope = new_scope;
-            if (sym->sym_scope != scope)
-            {
-                new_subscope = scope_clone(compiler, sym->sym_scope, sym->sym_scope->ast);
-            }
 
-            Ast *new_sym = bump_alloc(&compiler->bump, sizeof(Ast));
-            *new_sym = *sym;
-            new_sym->sym_scope = new_subscope;
-            new_map->values[i] = new_sym;
+        Scope *new_subscope = new_scope;
+        if (sym->sym_scope != scope)
+        {
+            new_subscope =
+                scope_clone(compiler, sym->sym_scope, sym->sym_scope->ast);
         }
+
+        Ast *new_sym = bump_alloc(&compiler->bump, sizeof(Ast));
+        *new_sym = *sym;
+        new_sym->sym_scope = new_subscope;
+        new_map->values[i] = new_sym;
     }
 
     new_scope->map = new_map;

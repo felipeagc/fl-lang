@@ -1308,6 +1308,34 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         else
             ast->proc.name = proc_name_tok->str;
 
+        if (parser_peek(p, 0)->type == TOKEN_NOT)
+        {
+            parser_next(p, 1);
+            ast->flags |= AST_FLAG_IS_TEMPLATE;
+
+            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                Token *param_name = parser_consume(p, TOKEN_IDENT);
+                if (param_name)
+                {
+                    array_push(ast->proc.template_params, param_name->str);
+                }
+                else
+                {
+                    res = false;
+                }
+
+                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
+            }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+        }
+
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
@@ -1475,6 +1503,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (parser_peek(p, 0)->type == TOKEN_NOT)
         {
             parser_next(p, 1);
+            ast->flags |= AST_FLAG_IS_TEMPLATE;
 
             if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 

@@ -6,8 +6,8 @@
 #include <stdint.h>
 #include <clang-c/Index.h>
 #include "../string.c"
-#include "../hashmap.c"
 #include "../array.c"
+#include "../hashmap.c"
 #include "../bump_alloc.c"
 #include "../string_builder.c"
 #include "../filesystem.c"

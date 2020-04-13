@@ -242,12 +242,28 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
         switch (ast->type)
         {
         case AST_PROC_DECL: {
+            if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+            {
+                // Generate instantiations
+                for (Ast **instantiation =
+                         (Ast **)ast->proc.template_cache->values;
+                     instantiation !=
+                     (Ast **)ast->proc.template_cache->values +
+                         array_size(ast->proc.template_cache->values);
+                     ++instantiation)
+                {
+                    llvm_add_proc(l, mod, *instantiation, 1);
+                }
+                break;
+            }
+
             TypeInfo *fun_type = ast->type_info->ptr.sub;
             LLVMTypeRef llvm_fun_type = llvm_type(l, fun_type);
 
             String fun_name = ast->proc.mangled_name;
 
             char *fun_name_c = bump_c_str(&l->compiler->bump, fun_name);
+
             LLVMValueRef fun =
                 LLVMAddFunction(mod->mod, fun_name_c, llvm_fun_type);
             ast->proc.value.value = fun;
@@ -333,6 +349,20 @@ static void llvm_codegen_ast(
     }
 
     case AST_PROC_DECL: {
+        if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+        {
+            // Generate instantiations
+            for (Ast **instantiation = (Ast **)ast->proc.template_cache->values;
+                 instantiation !=
+                 (Ast **)ast->proc.template_cache->values +
+                     array_size(ast->proc.template_cache->values);
+                 ++instantiation)
+            {
+                llvm_codegen_ast(l, mod, *instantiation, false, NULL);
+            }
+            break;
+        }
+
         assert(ast->type_info->kind == TYPE_POINTER);
 
         LLVMValueRef fun = ast->proc.value.value;
@@ -518,6 +548,11 @@ static void llvm_codegen_ast(
             switch (sym->type)
             {
             case AST_PROC_DECL: {
+                if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+                {
+                    break;
+                }
+
                 assert(sym->proc.value.value);
                 if (out_value) *out_value = sym->proc.value;
                 break;
@@ -2925,11 +2960,71 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_TEMPLATE_INST: {
+        assert(ast->template_inst.resolves_to);
+        llvm_codegen_ast(
+            l, mod, ast->template_inst.resolves_to, is_const, out_value);
+        break;
+    }
+
     case AST_PROC_TYPE: break;
     case AST_IMPORT: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
     }
+}
+
+static void llvm_codegen_ast_children(
+    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
+
+static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
+{
+    assert(ast->type == AST_PROC_DECL);
+
+    if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
+    {
+        // Generate instantiations
+        for (Ast **instantiation = (Ast **)ast->proc.template_cache->values;
+             instantiation != (Ast **)ast->proc.template_cache->values +
+                                  array_size(ast->proc.template_cache->values);
+             ++instantiation)
+        {
+            llvm_codegen_proc_stmts(l, mod, *instantiation);
+        }
+
+        return;
+    }
+
+    if ((ast->proc.flags & PROC_FLAG_HAS_BODY) != PROC_FLAG_HAS_BODY)
+    {
+        return;
+    }
+
+    LLVMValueRef fun = ast->proc.value.value;
+    assert(fun);
+
+    LLVMBasicBlockRef alloca_block = LLVMAppendBasicBlock(fun, "allocas");
+    LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
+    LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
+
+    LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
+    LLVMBuildBr(mod->builder, entry);
+
+    LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+    array_push(l->scope_stack, ast->scope);
+    array_push(l->operand_scope_stack, ast->scope);
+    llvm_codegen_ast_children(
+        l, mod, ast->proc.stmts, array_size(ast->proc.stmts), false);
+    array_pop(l->operand_scope_stack);
+    array_pop(l->scope_stack);
+
+    if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+    {
+        LLVMBuildRetVoid(mod->builder); // Add void return
+    }
+
+    LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
 }
 
 static void llvm_codegen_ast_children(
@@ -2973,46 +3068,12 @@ static void llvm_codegen_ast_children(
         }
     }
 
-    // Generate children
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         switch (ast->type)
         {
         case AST_PROC_DECL: {
-            if (ast->proc.flags & PROC_FLAG_HAS_BODY)
-            {
-                LLVMValueRef fun = ast->proc.value.value;
-                assert(fun);
-
-                LLVMBasicBlockRef alloca_block =
-                    LLVMAppendBasicBlock(fun, "allocas");
-                LLVMBasicBlockRef entry = LLVMAppendBasicBlock(fun, "entry");
-                LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
-
-                LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
-                LLVMBuildBr(mod->builder, entry);
-
-                LLVMPositionBuilderAtEnd(mod->builder, entry);
-
-                array_push(l->scope_stack, ast->scope);
-                array_push(l->operand_scope_stack, ast->scope);
-                llvm_codegen_ast_children(
-                    l,
-                    mod,
-                    ast->proc.stmts,
-                    array_size(ast->proc.stmts),
-                    is_const);
-                array_pop(l->operand_scope_stack);
-                array_pop(l->scope_stack);
-
-                if (!LLVMGetBasicBlockTerminator(
-                        LLVMGetInsertBlock(mod->builder)))
-                {
-                    LLVMBuildRetVoid(mod->builder); // Add void return
-                }
-
-                LLVMPositionBuilderAtEnd(mod->builder, prev_pos);
-            }
+            llvm_codegen_proc_stmts(l, mod, ast);
             break;
         }
 
