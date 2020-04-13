@@ -26,34 +26,26 @@ version (posix) {
 // Threads
 //
 
-pub fn thread_create(start: ThreadStart, arg: *void) -> Thread {
-    version (posix) {
+version (posix) {
+    pub fn thread_create(start: ThreadStart, arg: *void) -> Thread {
         var thread: Thread;
         pthread_create(&thread, null, start, arg);
         return thread;
     }
-}
 
-pub fn thread_wait(thread: Thread) {
-    version (posix) {
+    pub fn thread_wait(thread: Thread) {
         pthread_join(thread, null);
     }
-}
 
-pub fn thread_sleep(milliseconds: u32) {
-    version (posix) {
+    pub fn thread_sleep(milliseconds: u32) {
         usleep(1000 * milliseconds);
     }
-}
 
-pub fn thread_detach(thread: Thread) {
-    version (posix) {
+    pub fn thread_detach(thread: Thread) {
         pthread_detach(thread);
     }
-}
 
-pub fn thread_exit() {
-    version (posix) {
+    pub fn thread_exit() {
         pthread_exit(cast(*void)0);
     }
 }
@@ -62,32 +54,24 @@ pub fn thread_exit() {
 // Mutex
 //
 
-pub fn mutex_init(mtx: *Mutex) {
-    version (posix) {
+version (posix) {
+    pub fn mutex_init(mtx: *Mutex) {
         pthread_mutex_init(mtx, null);
     }
-}
 
-pub fn mutex_destroy(mtx: *Mutex) {
-    version (posix) {
+    pub fn mutex_destroy(mtx: *Mutex) {
         pthread_mutex_destroy(mtx);
     }
-}
 
-pub fn mutex_lock(mtx: *Mutex) {
-    version (posix) {
+    pub fn mutex_lock(mtx: *Mutex) {
         pthread_mutex_lock(mtx);
     }
-}
 
-pub fn mutex_trylock(mtx: *Mutex) {
-    version (posix) {
+    pub fn mutex_trylock(mtx: *Mutex) {
         pthread_mutex_trylock(mtx);
     }
-}
 
-pub fn mutex_unlock(mtx: *Mutex) {
-    version (posix) {
+    pub fn mutex_unlock(mtx: *Mutex) {
         pthread_mutex_unlock(mtx);
     }
 }
@@ -96,32 +80,24 @@ pub fn mutex_unlock(mtx: *Mutex) {
 // Condition variable
 //
 
-pub fn cond_init(cond: *Cond) {
-    version (posix) {
+version (posix) {
+    pub fn cond_init(cond: *Cond) {
         pthread_cond_init(cond, null);
     }
-}
 
-pub fn cond_destroy(cond: *Cond) {
-    version (posix) {
+    pub fn cond_destroy(cond: *Cond) {
         pthread_cond_destroy(cond);
     }
-}
 
-pub fn cond_wake_one(cond: *Cond) {
-    version (posix) {
+    pub fn cond_wake_one(cond: *Cond) {
         pthread_cond_signal(cond);
     }
-}
 
-pub fn cond_wake_all(cond: *Cond) {
-    version (posix) {
+    pub fn cond_wake_all(cond: *Cond) {
         pthread_cond_broadcast(cond);
     }
-}
 
-pub fn cond_wait(cond: *Cond, mtx: *Mutex) {
-    version (posix) {
+    pub fn cond_wait(cond: *Cond, mtx: *Mutex) {
         pthread_cond_wait(cond, mtx);
     }
 }

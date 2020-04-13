@@ -22,7 +22,6 @@ Empty compound literals
 TODO:
 - @memset, @memcmp
 - implement sizeof and alignof myself instead of letting LLVM handle it
-- templated functions
 - typeinfo type
 - any type
 

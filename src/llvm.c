@@ -303,30 +303,6 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             break;
         }
 
-        case AST_BLOCK:
-        case AST_ROOT: {
-            array_push(l->scope_stack, ast->scope);
-            array_push(l->operand_scope_stack, ast->scope);
-            llvm_add_proc(
-                l, mod, ast->block.stmts, array_size(ast->block.stmts));
-            array_pop(l->operand_scope_stack);
-            array_pop(l->scope_stack);
-            break;
-        }
-
-        case AST_VERSION_BLOCK: {
-            if (compiler_has_version(l->compiler, ast->version_block.version))
-            {
-                llvm_add_proc(
-                    l,
-                    mod,
-                    ast->version_block.stmts,
-                    array_size(ast->version_block.stmts));
-            }
-
-            break;
-        }
-
         default: break;
         }
     }
@@ -345,6 +321,20 @@ static void llvm_codegen_ast(
             l, mod, ast->block.stmts, array_size(ast->block.stmts), is_const);
         array_pop(l->operand_scope_stack);
         array_pop(l->scope_stack);
+        break;
+    }
+
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(l->compiler, ast->version_block.version))
+        {
+            llvm_codegen_ast_children(
+                l,
+                mod,
+                ast->version_block.stmts,
+                array_size(ast->version_block.stmts),
+                is_const);
+        }
+
         break;
     }
 
@@ -2753,21 +2743,6 @@ static void llvm_codegen_ast(
         }
 
         if (out_value) *out_value = result_value;
-
-        break;
-    }
-
-    case AST_VERSION_BLOCK: {
-        if (compiler_has_version(l->compiler, ast->version_block.version))
-        {
-            for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts +
-                             array_size(ast->version_block.stmts);
-                 ++stmt)
-            {
-                llvm_codegen_ast(l, mod, stmt, false, NULL);
-            }
-        }
 
         break;
     }

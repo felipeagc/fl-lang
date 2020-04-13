@@ -1095,6 +1095,21 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
+        {
+            for (Ast *stmt = ast->version_block.stmts;
+                 stmt != ast->version_block.stmts +
+                             array_size(ast->version_block.stmts);
+                 ++stmt)
+            {
+                create_scopes_ast(a, stmt);
+            }
+        }
+
+        break;
+    }
+
     case AST_USING: {
         create_scopes_ast(a, ast->expr);
         break;
@@ -1171,21 +1186,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         {
             create_scopes_ast(a, ast->if_stmt.else_stmt);
         }
-        break;
-    }
-
-    case AST_VERSION_BLOCK: {
-        if (compiler_has_version(a->compiler, ast->version_block.version))
-        {
-            for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts +
-                             array_size(ast->version_block.stmts);
-                 ++stmt)
-            {
-                create_scopes_ast(a, stmt);
-            }
-        }
-
         break;
     }
 
@@ -1678,6 +1678,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
+        {
+            analyze_asts(
+                a,
+                ast->version_block.stmts,
+                array_size(ast->version_block.stmts));
+        }
+
+        break;
+    }
+
     case AST_TYPEDEF: {
         if (array_size(ast->type_def.template_params) == 0)
         {
@@ -2090,21 +2102,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->if_stmt.cond_expr->loc,
                 "conditional only works for numerical types");
             break;
-        }
-
-        break;
-    }
-
-    case AST_VERSION_BLOCK: {
-        if (compiler_has_version(a->compiler, ast->version_block.version))
-        {
-            for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts +
-                             array_size(ast->version_block.stmts);
-                 ++stmt)
-            {
-                analyze_ast(a, stmt, NULL);
-            }
         }
 
         break;
