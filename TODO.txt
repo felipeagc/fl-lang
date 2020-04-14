@@ -8,17 +8,12 @@ Thread local variables
 Macros (?)
 
 Offsetof
-Dynamic arrays
 
 Attributes
-
-Import files as byte arrays
-Multiline string literal
 
 Multiple return values
 
 Key/val struct literal
-Empty compound literals
 
 TODO:
 - @memset, @memcmp
@@ -26,15 +21,25 @@ TODO:
 - typeinfo type
 - any type
 
+Small things:
+- import files as byte arrays
+- multiline string literal
+- empty compound literals
+
 Essential things for writing applications:
 - extern blocks
 - binding generator
+- debug information
 
 Standard library:
 - utf-8 string module
 - threads module
 - os module
 - fs module
+
+Safety:
+- null pointer dereference checking
+- bounds checking
 
 Bugs:
 - I think struct fields don't have location information
