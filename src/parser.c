@@ -172,6 +172,11 @@ bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
             parser_next(p, 1);
             ast->type = AST_SLICE_TYPE;
         }
+        else if (parser_peek(p, 0)->type == TOKEN_DYN)
+        {
+            parser_next(p, 1);
+            ast->type = AST_DYNAMIC_ARRAY_TYPE;
+        }
         else
         {
             ast->type = AST_ARRAY_TYPE;

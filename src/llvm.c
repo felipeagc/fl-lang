@@ -58,11 +58,22 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
     case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
-            LLVMInt64Type(),
-            LLVMPointerType(llvm_type(l, type->array.sub), 0),
+            LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
+            LLVMInt64Type(),                                   // len
         };
 
         type->ref = LLVMStructType(field_types, 2, false);
+        break;
+    }
+
+    case TYPE_DYNAMIC_ARRAY: {
+        LLVMTypeRef field_types[3] = {
+            LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
+            LLVMInt64Type(),                                   // len
+            LLVMInt64Type(),                                   // cap
+        };
+
+        type->ref = LLVMStructType(field_types, 3, false);
         break;
     }
 
@@ -1200,9 +1211,10 @@ static void llvm_codegen_ast(
             break;
         }
 
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
             LLVMValueRef field_ptr = NULL;
-            uint32_t field_index = 1; // Index for pointer field
+            uint32_t field_index = 0; // Index for pointer field
 
             if (left_value.is_lvalue)
             {
@@ -1291,12 +1303,13 @@ static void llvm_codegen_ast(
             break;
         }
 
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
             assert(left_value.is_lvalue);
 
             LLVMValueRef indices[2] = {
                 LLVMConstInt(LLVMInt32Type(), 0, false),
-                LLVMConstInt(LLVMInt32Type(), 1, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false), // ptr index
             };
 
             LLVMValueRef ptr_ptr =
@@ -1307,7 +1320,7 @@ static void llvm_codegen_ast(
             {
                 LLVMValueRef indices[2] = {
                     LLVMConstInt(LLVMInt32Type(), 0, false),
-                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), 1, false), // len index
                 };
 
                 LLVMValueRef len_ptr = LLVMBuildGEP(
@@ -1353,31 +1366,31 @@ static void llvm_codegen_ast(
         }
 
         {
+            LLVMValueRef ptr = LLVMBuildGEP(mod->builder, left, &lower, 1, "");
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+            };
+
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, ptr, ptr_ptr);
+        }
+
+        {
             LLVMValueRef len = LLVMBuildSub(mod->builder, upper, lower, "");
             len = LLVMBuildIntCast2(
                 mod->builder, len, llvm_type(l, &UINT_TYPE), false, "");
 
             LLVMValueRef indices[2] = {
                 LLVMConstInt(LLVMInt32Type(), 0, false),
-                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 1, false),
             };
 
             LLVMValueRef len_ptr =
                 LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
             LLVMBuildStore(mod->builder, len, len_ptr);
-        }
-
-        {
-            LLVMValueRef ptr = LLVMBuildGEP(mod->builder, left, &lower, 1, "");
-
-            LLVMValueRef indices[2] = {
-                LLVMConstInt(LLVMInt32Type(), 0, false),
-                LLVMConstInt(LLVMInt32Type(), 1, false),
-            };
-
-            LLVMValueRef ptr_ptr =
-                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
-            LLVMBuildStore(mod->builder, ptr, ptr_ptr);
         }
 
         if (out_value)
@@ -1647,6 +1660,75 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_BUILTIN_PTR: {
+        Scope *scope = *array_last(l->scope_stack);
+        assert(scope->type_info);
+
+        TypeInfo *type = scope->type_info;
+
+        switch (type->kind)
+        {
+        case TYPE_DYNAMIC_ARRAY:
+        case TYPE_SLICE: {
+            AstValue slice_value = (*array_last(l->scope_stack))->value;
+
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 0; // ptr index
+
+            if (slice_value.is_lvalue)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 2, "");
+            }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr = LLVMBuildGEP(
+                    mod->builder, slice_value.value, indices, 1, "");
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            result_value.value = field_ptr;
+
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        case TYPE_ARRAY: {
+            AstValue array_value = (*array_last(l->scope_stack))->value;
+
+            assert(array_value.is_lvalue);
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+            };
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = false;
+            result_value.value =
+                LLVMBuildGEP(mod->builder, array_value.value, indices, 2, "");
+
+            if (out_value) *out_value = result_value;
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
     case AST_BUILTIN_LEN: {
         Scope *scope = *array_last(l->scope_stack);
         assert(scope->type_info);
@@ -1655,11 +1737,12 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
             AstValue slice_value = (*array_last(l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
-            uint32_t field_index = 0; // len index
+            uint32_t field_index = 1; // len index
 
             if (slice_value.is_lvalue)
             {
@@ -1708,11 +1791,6 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_CAP: {
-        assert(0);
-        break;
-    }
-
-    case AST_BUILTIN_PTR: {
         Scope *scope = *array_last(l->scope_stack);
         assert(scope->type_info);
 
@@ -1720,21 +1798,21 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
-        case TYPE_SLICE: {
-            AstValue slice_value = (*array_last(l->scope_stack))->value;
+        case TYPE_DYNAMIC_ARRAY: {
+            AstValue arr_value = (*array_last(l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
-            uint32_t field_index = 1; // ptr index
+            uint32_t field_index = 2; // cap index
 
-            if (slice_value.is_lvalue)
+            if (arr_value.is_lvalue)
             {
                 LLVMValueRef indices[2] = {
                     LLVMConstInt(LLVMInt32Type(), 0, false),
                     LLVMConstInt(LLVMInt32Type(), field_index, false),
                 };
 
-                field_ptr = LLVMBuildGEP(
-                    mod->builder, slice_value.value, indices, 2, "");
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, arr_value.value, indices, 2, "");
             }
             else
             {
@@ -1742,8 +1820,8 @@ static void llvm_codegen_ast(
                     LLVMConstInt(LLVMInt32Type(), field_index, false),
                 };
 
-                field_ptr = LLVMBuildGEP(
-                    mod->builder, slice_value.value, indices, 1, "");
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, arr_value.value, indices, 1, "");
             }
 
             AstValue result_value = {0};
@@ -1752,25 +1830,6 @@ static void llvm_codegen_ast(
 
             if (out_value) *out_value = result_value;
 
-            break;
-        }
-
-        case TYPE_ARRAY: {
-            AstValue array_value = (*array_last(l->scope_stack))->value;
-
-            assert(array_value.is_lvalue);
-
-            LLVMValueRef indices[2] = {
-                LLVMConstInt(LLVMInt32Type(), 0, false),
-                LLVMConstInt(LLVMInt32Type(), 0, false),
-            };
-
-            AstValue result_value = {0};
-            result_value.is_lvalue = false;
-            result_value.value =
-                LLVMBuildGEP(mod->builder, array_value.value, indices, 2, "");
-
-            if (out_value) *out_value = result_value;
             break;
         }
 

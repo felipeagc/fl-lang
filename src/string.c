@@ -16,6 +16,8 @@ typedef struct String
         .length = strlen(lit),                                                 \
     })
 
+#define PRINT_STR(str) (int)str.length, str.buf
+
 static inline bool string_equals(String a, String b)
 {
     if (a.length != b.length) return false;

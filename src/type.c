@@ -6,9 +6,10 @@ typedef enum TypeKind {
     TYPE_STRUCT,
     TYPE_ENUM,
     TYPE_POINTER,
-    TYPE_ARRAY,
     TYPE_VECTOR,
+    TYPE_ARRAY,
     TYPE_SLICE,
+    TYPE_DYNAMIC_ARRAY,
     TYPE_INT,
     TYPE_FLOAT,
     TYPE_BOOL,
@@ -131,7 +132,8 @@ static inline bool is_type_compound(TypeInfo *type)
 {
     return (
         type->kind == TYPE_STRUCT || type->kind == TYPE_SLICE ||
-        type->kind == TYPE_ARRAY || type->kind == TYPE_VECTOR);
+        type->kind == TYPE_ARRAY || type->kind == TYPE_VECTOR ||
+        type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
@@ -184,6 +186,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
 
+    case TYPE_DYNAMIC_ARRAY:
     case TYPE_SLICE: {
         if (!exact_types(received->array.sub, expected->array.sub)) return NULL;
         break;
@@ -423,26 +426,45 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
+static inline TypeInfo *
+create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_DYNAMIC_ARRAY;
+    ty->array.sub = subtype;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 3, NULL);
+    ty->scope->type_info = ty;
+
+    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
+    ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
+    scope_set(ty->scope, STR("ptr"), ptr_ast);
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    static Ast cap_ast = {.type = AST_BUILTIN_CAP, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("cap"), &cap_ast);
+
+    return ty;
+}
+
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
     switch (type->kind)
     {
-    case TYPE_TYPE: {
-        sb_append(sb, STR("t"));
-        break;
-    }
-    case TYPE_VOID: {
-        sb_append(sb, STR("v"));
-        break;
-    }
-    case TYPE_BOOL: {
-        sb_append(sb, STR("b"));
-        break;
-    }
-    case TYPE_NAMESPACE: {
-        sb_append(sb, STR("n"));
-        break;
-    }
+    case TYPE_TYPE: sb_append(sb, STR("t")); break;
+
+    case TYPE_VOID: sb_append(sb, STR("v")); break;
+
+    case TYPE_BOOL: sb_append(sb, STR("b")); break;
+
+    case TYPE_NAMESPACE: sb_append(sb, STR("n")); break;
+
     case TYPE_INT: {
         if (type->integer.is_signed)
         {
@@ -469,6 +491,7 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
         break;
     }
+
     case TYPE_FLOAT: {
         switch (type->integer.num_bits)
         {
@@ -479,11 +502,12 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
         break;
     }
-    case TYPE_ENUM: {
+
+    case TYPE_ENUM:
         sb_append(sb, STR("e"));
         print_mangled_type(sb, type->enumeration.underlying_type);
         break;
-    }
+
     case TYPE_PROC: {
         sb_append(sb, STR("F"));
         print_mangled_type(sb, type->proc.return_type);
@@ -494,26 +518,33 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
         sb_append(sb, STR("E"));
         break;
     }
-    case TYPE_POINTER: {
+
+    case TYPE_POINTER:
         sb_append(sb, STR("P"));
         print_mangled_type(sb, type->ptr.sub);
         break;
-    }
-    case TYPE_ARRAY: {
+
+    case TYPE_ARRAY:
         sb_sprintf(sb, "A%zu", type->array.size);
         print_mangled_type(sb, type->array.sub);
         break;
-    }
+
     case TYPE_VECTOR: {
         sb_sprintf(sb, "V%zu", type->array.size);
         print_mangled_type(sb, type->array.sub);
         break;
     }
-    case TYPE_SLICE: {
+
+    case TYPE_SLICE:
         sb_append(sb, STR("S"));
         print_mangled_type(sb, type->array.sub);
         break;
-    }
+
+    case TYPE_DYNAMIC_ARRAY:
+        sb_append(sb, STR("D"));
+        print_mangled_type(sb, type->array.sub);
+        break;
+
     case TYPE_STRUCT: {
         sb_append(sb, STR("C"));
         for (size_t i = 0; i < array_size(type->structure.fields); ++i)

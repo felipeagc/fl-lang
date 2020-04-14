@@ -1,0 +1,49 @@
+import "core:c";
+
+const DEFAULT_ARRAY_CAP: uint = 8;
+
+fn array_grow!(V)(arr: *[dyn]V, cap: uint) {
+    if (arr.ptr == cast(*V)null) {
+        arr.len = 0;
+        arr.cap = cap;
+        if (arr.cap == 0) arr.cap = DEFAULT_ARRAY_CAP;
+
+        arr.ptr = malloc(@sizeof(V) * cast(c_size)arr.cap);
+        return;
+    }
+
+    var new_cap = cap;
+    if (new_cap == 0) new_cap = arr.cap * 2;
+    arr.cap = new_cap;
+
+    arr.ptr = realloc(arr.ptr, @sizeof(V) * cast(c_size)arr.cap);
+}
+
+#[inline]
+pub fn array_reserve!(V)(arr: *[dyn]V, cap: uint) {
+    if (arr.cap < cap) array_grow!(V)(arr, cap);
+}
+
+#[inline]
+pub fn array_push!(V)(arr: *[dyn]V, val: V) -> *V {
+    if (arr.len >= arr.cap) array_grow!(V)(arr, 0);
+    (*arr)[arr.len] = val;
+    arr.len += 1;
+    return &((*arr)[arr.len - 1]);
+}
+
+#[inline]
+pub fn array_pop!(V)(arr: *[dyn]V) -> *V {
+    if (arr.len == 0) return null;
+    arr.len -= 1;
+    return &((*arr)[arr.len]);
+}
+
+#[inline]
+pub fn array_free!(V)(arr: *[dyn]V) {
+    if (arr.ptr) free(arr.ptr);
+
+    arr.ptr = null;
+    arr.cap = 0;
+    arr.len = 0;
+}

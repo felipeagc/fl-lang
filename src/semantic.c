@@ -152,7 +152,7 @@ static void instantiate_template(
     case AST_USING:
     case AST_EXPR_STMT:
     case AST_RETURN: {
-        INSTANTIATE_AST(expr);
+        if (ast->expr) INSTANTIATE_AST(expr);
         break;
     }
 
@@ -174,6 +174,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE:
     case AST_ARRAY_TYPE: {
         if (ast->array_type.size) INSTANTIATE_AST(array_type.size);
@@ -419,7 +420,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
                 case AST_BUILTIN_LEN:
                 case AST_BUILTIN_PTR:
                 case AST_BUILTIN_CAP: {
-                    if (sym->sym_scope->ast->type_info->kind != TYPE_ARRAY)
+                    if (sym->sym_scope->type_info->kind != TYPE_ARRAY)
                     {
                         res = true;
                     }
@@ -783,6 +784,16 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
+    case AST_DYNAMIC_ARRAY_TYPE: {
+        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
+
+        TypeInfo *ty = create_dynamic_array_type(
+            a->compiler, ast->array_type.sub->as_type);
+
+        ast->as_type = ty;
+        break;
+    }
+
     case AST_STRUCT: {
         TypeInfo **fields = NULL;
         bool res = true;
@@ -1035,6 +1046,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
             if (ast->as_type) accessed_scope = ast->as_type->scope;
             break;
 
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
         case TYPE_VECTOR:
@@ -1339,6 +1351,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_SUBSCRIPT_SLICE:
     case AST_ARRAY_TYPE:
     case AST_SLICE_TYPE:
+    case AST_DYNAMIC_ARRAY_TYPE:
     case AST_EXPR_STMT:
     case AST_ACCESS:
     case AST_PROC_PARAM:
@@ -2523,6 +2536,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->type_info = cached_ast->type_info;
                 ast->as_type = cached_ast->as_type;
                 ast->template_inst.resolves_to = cached_ast;
+
                 break;
             }
 
@@ -2587,9 +2601,25 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (type->kind)
         {
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
         case TYPE_VECTOR: ast->type_info = &UINT_TYPE; break;
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_BUILTIN_CAP: {
+        Scope *scope = *array_last(a->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        switch (type->kind)
+        {
+        case TYPE_DYNAMIC_ARRAY: ast->type_info = &UINT_TYPE; break;
 
         default: assert(0); break;
         }
@@ -2604,6 +2634,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (type->kind)
         {
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
             ast->type_info = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
@@ -3347,7 +3378,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
             ast->subscript.left->type_info->kind != TYPE_ARRAY &&
             ast->subscript.left->type_info->kind != TYPE_VECTOR &&
-            ast->subscript.left->type_info->kind != TYPE_SLICE)
+            ast->subscript.left->type_info->kind != TYPE_SLICE &&
+            ast->subscript.left->type_info->kind != TYPE_DYNAMIC_ARRAY)
         {
             compile_error(
                 a->compiler,
@@ -3358,6 +3390,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (ast->subscript.left->type_info->kind)
         {
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_VECTOR:
         case TYPE_ARRAY: {
@@ -3425,7 +3458,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
             ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
-            ast->subscript_slice.left->type_info->kind != TYPE_SLICE)
+            ast->subscript_slice.left->type_info->kind != TYPE_SLICE &&
+            ast->subscript_slice.left->type_info->kind != TYPE_DYNAMIC_ARRAY)
         {
             compile_error(
                 a->compiler,
@@ -3438,6 +3472,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (ast->subscript_slice.left->type_info->kind)
         {
+        case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY: {
             subtype = ast->subscript_slice.left->type_info->array.sub;
@@ -3503,9 +3538,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE: {
         ast->type_info = &TYPE_OF_TYPE;
-
         analyze_ast(a, ast->array_type.sub, &TYPE_OF_TYPE);
 
         break;
@@ -3553,6 +3588,22 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 "invalid access: could not resolve type of left "
                 "expression");
             break;
+        }
+
+        if (ast->access.left->type_info->kind == TYPE_POINTER)
+        {
+            // Dereference left if it's a pointer
+
+            Ast *new_left = bump_alloc(&a->compiler->bump, sizeof(Ast));
+            *new_left = *ast->access.left;
+
+            memset(ast->access.left, 0, sizeof(Ast));
+            ast->access.left->loc = new_left->loc;
+            ast->access.left->type = AST_UNARY_EXPR;
+            ast->access.left->unop.type = UNOP_DEREFERENCE;
+            ast->access.left->unop.sub = new_left;
+
+            analyze_ast(a, ast->access.left, NULL);
         }
 
         Scope *accessed_scope = get_expr_scope(

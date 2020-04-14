@@ -1,4 +1,5 @@
 Default struct member initialization
+Default function parameters
 Ternary
 Defer statement
 Unions
@@ -42,3 +43,5 @@ Bugs:
 - Circular imports
 - Circular structs
 - Circular typedefs
+- Infer type in binary operations (null expr)
+- Imports in version blocks
