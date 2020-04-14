@@ -841,12 +841,12 @@ static void llvm_codegen_ast(
 
     case AST_VAR_DECL: {
         Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+        LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
 
         if (ast->flags & AST_FLAG_EXTERN)
         {
             char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
 
-            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
             // Global variable
             ast->decl.value.is_lvalue = true;
             ast->decl.value.value =
@@ -862,7 +862,6 @@ static void llvm_codegen_ast(
         {
             char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
 
-            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
             // Global variable
             ast->decl.value.is_lvalue = true;
             ast->decl.value.value =
@@ -893,7 +892,6 @@ static void llvm_codegen_ast(
             char *global_name = bump_c_str(&l->compiler->bump, ast->decl.name);
 
             assert(!ast->decl.value.value);
-            LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
             // Global variable
             ast->decl.value.is_lvalue = true;
             ast->decl.value.value =
@@ -920,24 +918,36 @@ static void llvm_codegen_ast(
 
         // Local variable
         ast->decl.value.is_lvalue = true;
-        ast->decl.value.value = build_alloca(mod, llvm_type(l, ast->type_info));
+        ast->decl.value.value = build_alloca(mod, llvm_ty);
 
-        if (ast->decl.value_expr)
+        if (!ast->decl.uninitialized)
         {
-            AstValue init_value = {0};
-            init_value.value = ast->decl.value.value;
-            llvm_codegen_ast(l, mod, ast->decl.value_expr, false, &init_value);
-
-            if (init_value.value != ast->decl.value.value)
+            if (ast->decl.value_expr)
             {
-                LLVMValueRef to_store = load_val(mod, &init_value);
-                to_store = autocast_value(
-                    l,
-                    mod,
-                    ast->decl.value_expr->type_info,
-                    ast->type_info,
-                    to_store);
-                LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
+                AstValue init_value = {0};
+                init_value.value = ast->decl.value.value;
+                llvm_codegen_ast(
+                    l, mod, ast->decl.value_expr, false, &init_value);
+
+                if (init_value.value != ast->decl.value.value)
+                {
+                    LLVMValueRef to_store = load_val(mod, &init_value);
+                    to_store = autocast_value(
+                        l,
+                        mod,
+                        ast->decl.value_expr->type_info,
+                        ast->type_info,
+                        to_store);
+                    LLVMBuildStore(
+                        mod->builder, to_store, ast->decl.value.value);
+                }
+            }
+            else
+            {
+                LLVMBuildStore(
+                    mod->builder,
+                    LLVMConstNull(llvm_ty),
+                    ast->decl.value.value);
             }
         }
 
@@ -3093,7 +3103,7 @@ static void llvm_codegen_ast_children(
         default: break;
         }
     }
-    
+
     llvm_add_proc(l, mod, asts, ast_count);
 
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)

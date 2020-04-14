@@ -224,6 +224,7 @@ typedef struct Ast
             struct Ast *type_expr;
             struct Ast *value_expr;
             AstValue value;
+            bool uninitialized;
         } decl;
         struct
         {

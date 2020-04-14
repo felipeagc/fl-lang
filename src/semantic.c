@@ -1800,6 +1800,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (ast->decl.value_expr)
         {
+            if (ast->decl.type_expr &&
+                ast->decl.value_expr->type == AST_PRIMARY &&
+                ast->decl.value_expr->primary.tok->type == TOKEN_VOID)
+            {
+                // Unitialized variable
+                ast->decl.uninitialized = true;
+                break;
+            }
+
             analyze_ast(a, ast->decl.value_expr, ast->type_info);
 
             if (!ast->decl.value_expr->type_info)
