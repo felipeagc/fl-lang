@@ -224,9 +224,6 @@ static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast)
 
     analyze_asts(analyzer, ast, 1);
     print_errors(compiler);
-
-    llvm_codegen_ast(
-        compiler->backend, &compiler->backend->mod, ast, false, NULL);
 }
 
 static SourceFile *process_file(Compiler *compiler, String absolute_path)
@@ -344,7 +341,12 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 
 static void compile_file(Compiler *compiler, String filepath)
 {
-    process_file(compiler, filepath);
+    SourceFile* file = process_file(compiler, filepath);
+
+    file->did_codegen = true;
+    llvm_codegen_ast(
+        compiler->backend, &compiler->backend->mod, file->root, false, NULL);
+
     llvm_verify_module(compiler->backend);
     llvm_optimize_module(compiler->backend);
 

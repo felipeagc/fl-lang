@@ -3001,8 +3001,25 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_IMPORT: {
+        SourceFile *file = NULL;
+        if (!hash_get(
+                &l->compiler->files, ast->import.abs_path, (void **)&file))
+        {
+            assert(0);
+        }
+
+        assert(file);
+        if (!file->did_codegen)
+        {
+            file->did_codegen = true;
+            llvm_codegen_ast(l, mod, file->root, false, out_value);
+        }
+
+        break;
+    }
+
     case AST_PROC_TYPE: break;
-    case AST_IMPORT: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
     }
@@ -3064,6 +3081,19 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
 static void llvm_codegen_ast_children(
     LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const)
 {
+    for (Ast *ast = asts; ast != asts + ast_count; ++ast)
+    {
+        switch (ast->type)
+        {
+        case AST_IMPORT: {
+            llvm_codegen_ast(l, mod, ast, is_const, NULL);
+            break;
+        }
+
+        default: break;
+        }
+    }
+    
     llvm_add_proc(l, mod, asts, ast_count);
 
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
@@ -3085,6 +3115,7 @@ static void llvm_codegen_ast_children(
     {
         switch (ast->type)
         {
+        case AST_IMPORT:
         case AST_CONST_DECL:
         case AST_PROC_DECL:
         case AST_TYPEDEF: break;
