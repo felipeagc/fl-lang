@@ -326,6 +326,21 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
         }
         break;
     }
+
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(compiler, ast->version_block.version))
+        {
+            for (Ast *stmt = ast->version_block.stmts;
+                 stmt != ast->version_block.stmts + array_size(ast->version_block.stmts);
+                 ++stmt)
+            {
+                process_imports(compiler, file, scope, stmt);
+            }
+        }
+
+        break;
+    }
+
     case AST_PROC_DECL: {
         for (Ast *stmt = ast->proc.stmts;
              stmt != ast->proc.stmts + array_size(ast->proc.stmts);
@@ -341,7 +356,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 
 static void compile_file(Compiler *compiler, String filepath)
 {
-    SourceFile* file = process_file(compiler, filepath);
+    SourceFile *file = process_file(compiler, filepath);
 
     file->did_codegen = true;
     llvm_codegen_ast(

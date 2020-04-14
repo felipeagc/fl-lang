@@ -1,0 +1,19 @@
+pub typedef pthread_t distinct *void;
+pub typedef pthread_mutex_t distinct [8]*void; // opaque
+pub typedef pthread_cond_t distinct [8]*void; // opaque
+
+pub extern fn pthread_create(thrd: *pthread_t, attr: *void, start: fn* (_: *void) -> *void, arg: *void) -> i32;
+pub extern fn pthread_join(thrd: pthread_t, retval: *void) -> i32; 
+pub extern fn usleep(usec: u32) -> i32;
+pub extern fn pthread_detach(thread: pthread_t) -> i32;
+pub extern fn pthread_exit(retval: *void);
+pub extern fn pthread_mutex_init(mtx: *pthread_mutex_t, attr: *void) -> i32;
+pub extern fn pthread_mutex_destroy(mtx: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_lock(mtx: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_trylock(mtx: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_unlock(mtx: *pthread_mutex_t) -> i32;
+pub extern fn pthread_cond_init(cond: *pthread_cond_t, attr: *void) -> i32;
+pub extern fn pthread_cond_destroy(cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_signal(cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_broadcast(cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_wait(cond: *pthread_cond_t, mtx: *pthread_mutex_t) -> i32;

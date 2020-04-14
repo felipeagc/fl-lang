@@ -1,25 +1,10 @@
 typedef ThreadStart fn* (arg: *void) -> *void;
 
 version (posix) {
-    pub typedef Thread distinct *void;
-    pub typedef Mutex distinct [8]*void; // opaque
-    pub typedef Cond distinct [8]*void; // opaque
-
-    extern fn pthread_create(thrd: *Thread, attr: *void, start: ThreadStart, arg: *void) -> i32;
-    extern fn pthread_join(thrd: Thread, retval: *void) -> i32; 
-    extern fn usleep(usec: u32) -> i32;
-    extern fn pthread_detach(thread: Thread) -> i32;
-    extern fn pthread_exit(retval: *void);
-    extern fn pthread_mutex_init(mtx: *Mutex, attr: *void) -> i32;
-    extern fn pthread_mutex_destroy(mtx: *Mutex) -> i32;
-    extern fn pthread_mutex_lock(mtx: *Mutex) -> i32;
-    extern fn pthread_mutex_trylock(mtx: *Mutex) -> i32;
-    extern fn pthread_mutex_unlock(mtx: *Mutex) -> i32;
-    extern fn pthread_cond_init(cond: *Cond, attr: *void) -> i32;
-    extern fn pthread_cond_destroy(cond: *Cond) -> i32;
-    extern fn pthread_cond_signal(cond: *Cond) -> i32;
-    extern fn pthread_cond_broadcast(cond: *Cond) -> i32;
-    extern fn pthread_cond_wait(cond: *Cond, mtx: *Mutex) -> i32;
+    import "core:posix";
+    pub typedef Thread pthread_t;
+    pub typedef Mutex pthread_mutex_t;
+    pub typedef Cond pthread_cond_t;
 }
 
 //
@@ -27,24 +12,29 @@ version (posix) {
 //
 
 version (posix) {
+    #[inline]
     pub fn thread_create(start: ThreadStart, arg: *void) -> Thread {
         var thread: Thread;
         pthread_create(&thread, null, start, arg);
         return thread;
     }
 
+    #[inline]
     pub fn thread_wait(thread: Thread) {
         pthread_join(thread, null);
     }
 
+    #[inline]
     pub fn thread_sleep(milliseconds: u32) {
         usleep(1000 * milliseconds);
     }
 
+    #[inline]
     pub fn thread_detach(thread: Thread) {
         pthread_detach(thread);
     }
 
+    #[inline]
     pub fn thread_exit() {
         pthread_exit(cast(*void)0);
     }
@@ -55,22 +45,27 @@ version (posix) {
 //
 
 version (posix) {
+    #[inline]
     pub fn mutex_init(mtx: *Mutex) {
         pthread_mutex_init(mtx, null);
     }
 
+    #[inline]
     pub fn mutex_destroy(mtx: *Mutex) {
         pthread_mutex_destroy(mtx);
     }
 
+    #[inline]
     pub fn mutex_lock(mtx: *Mutex) {
         pthread_mutex_lock(mtx);
     }
 
+    #[inline]
     pub fn mutex_trylock(mtx: *Mutex) {
         pthread_mutex_trylock(mtx);
     }
 
+    #[inline]
     pub fn mutex_unlock(mtx: *Mutex) {
         pthread_mutex_unlock(mtx);
     }
@@ -81,22 +76,27 @@ version (posix) {
 //
 
 version (posix) {
+    #[inline]
     pub fn cond_init(cond: *Cond) {
         pthread_cond_init(cond, null);
     }
 
+    #[inline]
     pub fn cond_destroy(cond: *Cond) {
         pthread_cond_destroy(cond);
     }
 
+    #[inline]
     pub fn cond_wake_one(cond: *Cond) {
         pthread_cond_signal(cond);
     }
 
+    #[inline]
     pub fn cond_wake_all(cond: *Cond) {
         pthread_cond_broadcast(cond);
     }
 
+    #[inline]
     pub fn cond_wait(cond: *Cond, mtx: *Mutex) {
         pthread_cond_wait(cond, mtx);
     }

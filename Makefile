@@ -3,6 +3,8 @@ LLVM_CFLAGS=$(shell llvm-config-10 --cflags)
 LLVM_LDFLAGS=$(shell llvm-config-10 --ldflags)
 CFLAGS=-Wall -g
 
+CORE_FILES=$(wildcard core/*.lang)
+
 all: compiler bindgen examples
 
 compiler: $(wildcard src/*.c)
@@ -22,10 +24,10 @@ clean:
 test: compiler
 	@bash ./tests/run_tests.sh
 
-examples/ray: compiler bindgen examples/ray.lang
+examples/ray: compiler bindgen examples/ray.lang $(CORE_FILES)
 	./compiler -o=$@ examples/ray.lang
 
-examples/table: compiler bindgen examples/table.lang
+examples/table: compiler bindgen examples/table.lang $(CORE_FILES)
 	./compiler -o=$@ examples/table.lang
 
 examples: examples/ray examples/table
