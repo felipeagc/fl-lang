@@ -1,23 +1,23 @@
-import "core:c";
+import "core:fmt";
 
 extern fn main() -> i32 {
-    defer printf(c"Yo\n");
+    defer print("Yo\n");
 
     {
-        defer printf(c"later!\n");
+        defer print("later!\n");
 
         defer {
-            printf(c"world!\n");
+            print("world!\n");
         };
 
-        printf(c"hello ");
+        print("hello ");
     }
 
     for (var i = 0; i < 10; i += 1) {
-        defer printf(c"Goodbye!\n");
+        defer print("Goodbye!\n");
         return 0;
         continue;
-        printf(c"Hello!\n");
+        print("Hello!\n");
     }
 
     return 0;

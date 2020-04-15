@@ -1,9 +1,9 @@
+import fmt "core:fmt";
+
 typedef MyFunc fn* ();
 
-extern fn printf(fmt: *char, ...) -> i32;
-
 fn callback() {
-    printf(c"Hey!\n");
+    fmt.print("Hey!\n");
 }
 
 extern fn main() {

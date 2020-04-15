@@ -1,0 +1,16 @@
+version(posix) {
+    pub typedef Handle distinct i32;
+
+    extern fn write(fd: Handle, buf: *void, count: uint) -> i32;
+
+    #[inline]
+    pub fn get_stdin() -> Handle { return 0; }
+    #[inline]
+    pub fn get_stdout() -> Handle { return 1; }
+    #[inline]
+    pub fn get_stderr() -> Handle { return 2; }
+
+    pub fn write_to_stream(stream: Handle, buf: [_]byte) -> int {
+        return cast(int)write(stream, cast(*void)buf.ptr, buf.len);
+    }
+}

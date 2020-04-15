@@ -1,4 +1,4 @@
-pub import c "core:c";
+pub import fmt "core:fmt";
 
 pub const array_size = 5;
 pub const some_const: i32 = 512;
@@ -9,5 +9,5 @@ pub typedef SomeType struct {
 };
 
 pub fn say_hello() {
-    c.printf(c"Hello!\n");
+    fmt.print("Hello!\n");
 }

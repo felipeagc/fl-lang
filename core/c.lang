@@ -2,11 +2,7 @@ pub typedef c_int i32;
 pub typedef c_size uint;
 pub typedef FILE distinct struct {};
 
-pub extern var stderr: *FILE;
-pub extern var stdout: *FILE;
-
 pub extern fn printf(fmt: *char, ...) -> c_int;
-pub extern fn fprintf(stream: *FILE, fmt: *char, ...) -> c_int;
 pub extern fn sprintf(str: *char, fmt: *char, ...) -> c_int;
 pub extern fn snprintf(str: *char, size: c_size, fmt: *char, ...) -> c_int;
 
