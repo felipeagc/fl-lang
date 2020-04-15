@@ -2667,6 +2667,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TYPE_SLICE:
         case TYPE_ARRAY:
             ast->type_info = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+            memset(ast->type_info, 0, sizeof(TypeInfo));
             ast->type_info->kind = TYPE_POINTER;
             ast->type_info->ptr.sub = type->array.sub;
             break;
@@ -3703,7 +3704,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {
-            compile_error(a->compiler, ast->loc, "wrong type");
+            sb_reset(&a->compiler->sb);
+            sb_append(&a->compiler->sb, STR("wrong type, expected "));
+            print_mangled_type(&a->compiler->sb, expected_type);
+            sb_append(&a->compiler->sb, STR(", got "));
+            print_mangled_type(&a->compiler->sb, ast->type_info);
+            String error = sb_build(&a->compiler->sb, &a->compiler->bump);
+            compile_error(a->compiler, ast->loc, "%.*s", PRINT_STR(error));
         }
     }
 }
