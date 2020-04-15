@@ -130,6 +130,7 @@ extern fn main() -> i32 {
     {
         var table: Table!(int);
         table_init!(int)(&table, 5);
+        defer table_deinit!(int)(&table);
 
         table_set!(int)(&table, "hello", 5);
 
@@ -139,13 +140,12 @@ extern fn main() -> i32 {
             if (result != 5) abort();
             printf(c"table[\"hello\"] = %ld\n", result);
         }
-
-        table_deinit!(int)(&table);
     }
 
     {
         var table: Table!(u16);
         table_init!(u16)(&table, 5);
+        defer table_deinit!(u16)(&table);
 
         table_set!(u16)(&table, "hello", 5);
 
@@ -155,8 +155,6 @@ extern fn main() -> i32 {
             if (result != 5) abort();
             printf(c"table[\"hello\"] = %hu\n", result);
         }
-
-        table_deinit!(u16)(&table);
     }
 
     return 0;

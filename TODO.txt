@@ -1,7 +1,6 @@
 Default struct member initialization
 Default function parameters
 Ternary
-Defer statement
 Unions
 Thread local variables
 

@@ -1,0 +1,24 @@
+import "core:c";
+
+extern fn main() -> i32 {
+    defer printf(c"Yo\n");
+
+    {
+        defer printf(c"later!\n");
+
+        defer {
+            printf(c"world!\n");
+        };
+
+        printf(c"hello ");
+    }
+
+    for (var i = 0; i < 10; i += 1) {
+        defer printf(c"Goodbye!\n");
+        return 0;
+        continue;
+        printf(c"Hello!\n");
+    }
+
+    return 0;
+}

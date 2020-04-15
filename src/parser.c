@@ -1190,6 +1190,16 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    case TOKEN_DEFER: {
+        parser_next(p, 1);
+        ast->type = AST_DEFER;
+
+        ast->stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->stmt, inside_procedure, false)) res = false;
+
+        break;
+    }
+
     case TOKEN_LCURLY: {
         parser_next(p, 1);
         need_semi = false;

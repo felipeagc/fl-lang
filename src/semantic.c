@@ -156,6 +156,11 @@ static void instantiate_template(
         break;
     }
 
+    case AST_DEFER: {
+        if (ast->stmt) INSTANTIATE_AST(stmt);
+        break;
+    }
+
     case AST_DISTINCT_TYPE: {
         INSTANTIATE_AST(distinct.sub);
         break;
@@ -1127,6 +1132,11 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_DEFER: {
+        create_scopes_ast(a, ast->stmt);
+        break;
+    }
+
     case AST_PROC_DECL: {
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
         {
@@ -1566,6 +1576,11 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_DEFER: {
+        register_symbol_ast(a, ast->stmt);
+        break;
+    }
+
     case AST_IF: {
         register_symbol_ast(a, ast->if_stmt.cond_stmt);
         if (ast->if_stmt.else_stmt)
@@ -1738,6 +1753,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             sym->sym_scope = old_scope;
         }
 
+        break;
+    }
+
+    case AST_DEFER: {
+        analyze_ast(a, ast->stmt, NULL);
         break;
     }
 

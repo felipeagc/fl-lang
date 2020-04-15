@@ -13,6 +13,8 @@ typedef struct Scope
 
     struct Ast *ast;
     struct TypeInfo *type_info;
+
+    /*array*/ struct Ast **deferred_stmts;
 } Scope;
 
 static void scope_init(

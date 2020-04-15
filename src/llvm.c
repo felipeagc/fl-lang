@@ -15,6 +15,11 @@ typedef struct LLContext
     /*array*/ LLVMBasicBlockRef *continue_block_stack;
 } LLContext;
 
+static void llvm_codegen_ast(
+    LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value);
+static void llvm_codegen_ast_children(
+    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
+
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 {
     if (type->ref) return type->ref;
@@ -316,6 +321,30 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 
         default: break;
         }
+    }
+}
+
+static void
+llvm_codegen_deferred_stmts(LLContext *l, LLModule *mod, bool is_return)
+{
+    Scope *scope = *array_last(l->scope_stack);
+
+    while (scope)
+    {
+        while (array_size(scope->deferred_stmts) > 0)
+        {
+            Ast *stmt = *array_last(scope->deferred_stmts);
+            llvm_codegen_ast(l, mod, stmt, false, NULL);
+            array_pop(scope->deferred_stmts);
+        }
+
+        if (is_return)
+        {
+            scope = scope->parent;
+            continue;
+        }
+
+        scope = NULL;
     }
 }
 
@@ -975,6 +1004,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_RETURN: {
+        llvm_codegen_deferred_stmts(l, mod, true);
+
         Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
         assert(proc);
 
@@ -2991,6 +3022,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_BREAK: {
+        llvm_codegen_deferred_stmts(l, mod, false);
+
         LLVMBasicBlockRef *break_block = array_last(l->break_block_stack);
         assert(break_block);
         LLVMBuildBr(mod->builder, *break_block);
@@ -2998,6 +3031,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_CONTINUE: {
+        llvm_codegen_deferred_stmts(l, mod, false);
+
         LLVMBasicBlockRef *continue_block = array_last(l->continue_block_stack);
         assert(continue_block);
         LLVMBuildBr(mod->builder, *continue_block);
@@ -3029,14 +3064,17 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_DEFER: {
+        Scope *last_scope = *array_last(l->scope_stack);
+        array_push(last_scope->deferred_stmts, ast->stmt);
+        break;
+    }
+
     case AST_PROC_TYPE: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
     }
 }
-
-static void llvm_codegen_ast_children(
-    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
 
 static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
 {
@@ -3121,6 +3159,8 @@ static void llvm_codegen_ast_children(
         }
     }
 
+    bool returned = false;
+
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         switch (ast->type)
@@ -3139,8 +3179,15 @@ static void llvm_codegen_ast_children(
         if (ast->type == AST_RETURN || ast->type == AST_BREAK ||
             ast->type == AST_CONTINUE)
         {
+            returned = true;
             break;
         }
+    }
+
+    // Generate deferred stmts
+    if (!returned)
+    {
+        llvm_codegen_deferred_stmts(l, mod, false);
     }
 
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)

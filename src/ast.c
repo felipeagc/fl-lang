@@ -80,6 +80,7 @@ typedef enum AstType {
     AST_DISTINCT_TYPE,
     AST_USING,
     AST_TEMPLATE_INST,
+    AST_DEFER,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -129,6 +130,7 @@ typedef struct Ast
     union
     {
         struct Ast *expr;
+        struct Ast *stmt;
         struct
         {
             Token *tok;
