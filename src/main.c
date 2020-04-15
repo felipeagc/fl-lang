@@ -438,10 +438,6 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
         array_push(args, "-o");
         array_push(args, c_out_file_path);
 
-#if defined(__APPLE__)
-        array_push(args, "-mlinker-version=305");
-#endif
-
         for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
         {
             char arg[256] = {0};

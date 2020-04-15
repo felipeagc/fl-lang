@@ -4,11 +4,6 @@ CFLAGS=-Wall -g
 
 CC=clang
 
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-	CFLAGS += -mlinker-version=305
-endif
-
 CORE_FILES=$(wildcard core/*.lang)
 
 all: compiler bindgen examples
