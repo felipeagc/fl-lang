@@ -17,10 +17,7 @@
 #include <llvm-c/TargetMachine.h>
 #include <llvm-c/Transforms/PassManagerBuilder.h>
 
-#ifdef __linux__
-#include <sys/types.h>
-#include <sys/wait.h>
-#endif
+#include "os_includes.h"
 
 #define LANG_FILE_EXTENSION ".lang"
 #define TMP_OBJECT_NAME "tmp.o"
@@ -157,8 +154,16 @@ static void compiler_init(Compiler *compiler)
     // Initialize builtin module
     compiler->builtin_module = create_module_ast(compiler);
 
+#if defined(__linux__)
     hash_set(&compiler->versions, STR("linux"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
+#elif defined(__APPLE__)
+    hash_set(&compiler->versions, STR("apple"), NULL);
+    hash_set(&compiler->versions, STR("posix"), NULL);
+#else
+#error OS not supported
+#endif
+
     hash_set(&compiler->versions, STR("x86_64"), NULL);
     hash_set(&compiler->versions, STR("debug"), NULL);
 
@@ -419,15 +424,23 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 
     char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
 
+#if defined(__linux__) || defined(__APPLE__)
+
+#define LINKER_PATH "clang"
+
     pid_t pid = fork();
     if (pid == 0)
     {
         char **args = NULL;
-        array_push(args, "clang");
+        array_push(args, LINKER_PATH);
         array_push(args, TMP_OBJECT_NAME);
         array_push(args, "-lm");
         array_push(args, "-o");
         array_push(args, c_out_file_path);
+
+#if defined(__APPLE__)
+        array_push(args, "-mlinker-version=305");
+#endif
 
         for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
         {
@@ -444,7 +457,7 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
         }
 
         array_push(args, NULL);
-        execvp("clang", args);
+        execvp(LINKER_PATH, args);
     }
 
     int status;
@@ -457,6 +470,9 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     }
 
     remove(TMP_OBJECT_NAME);
+#else
+#error OS not supported
+#endif
 }
 
 static const char *COMPILER_USAGE[] = {

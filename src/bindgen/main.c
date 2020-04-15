@@ -4,7 +4,12 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <stdint.h>
+#include <stdarg.h>
+
 #include <clang-c/Index.h>
+
+#include "../os_includes.h"
+
 #include "../string.c"
 #include "../array.c"
 #include "../hashmap.c"

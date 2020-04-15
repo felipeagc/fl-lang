@@ -2,3 +2,5 @@
 /bindgen
 /examples/ray
 /examples/table
+*.dSYM
+tags
