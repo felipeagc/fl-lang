@@ -1635,6 +1635,65 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
+    case TOKEN_SWITCH: {
+        parser_next(p, 1);
+        need_semi = false;
+
+        ast->type = AST_SWITCH;
+
+        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+
+        ast->switch_stmt.expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->switch_stmt.expr, false)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+
+        ast->switch_stmt.vals = NULL;
+        ast->switch_stmt.stmts = NULL;
+        ast->switch_stmt.else_stmt = NULL;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        {
+            if (parser_peek(p, 0)->type == TOKEN_ELSE)
+            {
+                parser_next(p, 1);
+                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true, true)) res = false;
+
+                if (res)
+                {
+                    ast->switch_stmt.else_stmt =
+                        bump_alloc(&p->compiler->bump, sizeof(Ast));
+                    *ast->switch_stmt.else_stmt = stmt;
+                }
+            }
+            else
+            {
+                Ast val = {0};
+                if (!parse_expr(p, &val, false)) res = false;
+
+                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true, true)) res = false;
+
+                if (res)
+                {
+                    array_push(ast->switch_stmt.vals, val);
+                    array_push(ast->switch_stmt.stmts, stmt);
+                }
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
     case TOKEN_WHILE: {
         parser_next(p, 1);
 

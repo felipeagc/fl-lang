@@ -2951,6 +2951,79 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_SWITCH: {
+        AstValue expr_val = {0};
+        llvm_codegen_ast(l, mod, ast->switch_stmt.expr, false, &expr_val);
+
+        LLVMValueRef fun =
+            LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+        assert(fun);
+
+        size_t case_count = array_size(ast->switch_stmt.vals);
+
+        LLVMBasicBlockRef *case_bbs = bump_alloc(
+            &l->compiler->bump, sizeof(LLVMBasicBlockRef) * case_count);
+        for (size_t i = 0; i < case_count; ++i)
+        {
+            case_bbs[i] = LLVMAppendBasicBlock(fun, "");
+        }
+
+        LLVMBasicBlockRef default_bb = NULL;
+        if (ast->switch_stmt.else_stmt)
+        {
+            default_bb = LLVMAppendBasicBlock(fun, "");
+        }
+
+        LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "");
+        if (!default_bb) default_bb = merge_bb;
+
+        LLVMValueRef switch_val = LLVMBuildSwitch(
+            mod->builder,
+            load_val(mod, &expr_val),
+            default_bb,
+            (unsigned)case_count);
+
+        for (size_t i = 0; i < case_count; ++i)
+        {
+            AstValue cond_val;
+            llvm_codegen_ast(
+                l, mod, &ast->switch_stmt.vals[i], true, &cond_val);
+            LLVMAddCase(switch_val, cond_val.value, case_bbs[i]);
+        }
+
+        for (size_t i = 0; i < case_count; ++i)
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, case_bbs[i]);
+
+            array_push(l->break_block_stack, merge_bb);
+            llvm_codegen_ast(l, mod, &ast->switch_stmt.stmts[i], false, NULL);
+            array_pop(l->break_block_stack);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+            {
+                LLVMBuildBr(mod->builder, merge_bb);
+            }
+        }
+
+        if (ast->switch_stmt.else_stmt)
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, default_bb);
+
+            array_push(l->break_block_stack, merge_bb);
+            llvm_codegen_ast(l, mod, ast->switch_stmt.else_stmt, false, NULL);
+            array_pop(l->break_block_stack);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+            {
+                LLVMBuildBr(mod->builder, merge_bb);
+            }
+        }
+
+        LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
+
+        break;
+    }
+
     case AST_WHILE: {
         LLVMValueRef fun =
             LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));

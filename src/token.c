@@ -30,6 +30,7 @@ typedef enum TokenType {
     TOKEN_COMMA,
 
     TOKEN_ARROW, // ->
+    TOKEN_FAT_ARROW, // =>
 
     TOKEN_NOT,    // !
     TOKEN_ASSIGN, // =
@@ -149,6 +150,7 @@ static const char *token_strings[] = {
     [TOKEN_COMMA] = ",",
 
     [TOKEN_ARROW] = "->",
+    [TOKEN_FAT_ARROW] = "=>",
 
     [TOKEN_NOT] = "!",
     [TOKEN_ASSIGN] = "=",

@@ -1,0 +1,24 @@
+import fmt "core:fmt";
+import "core:c";
+
+extern fn main() -> i32 {
+    switch (4) {
+        1 => abort();
+        2 => abort();
+        else => fmt.print("None of the above!\n");
+    }
+
+    switch (1) {
+        1 => {}
+        else => abort();
+    }
+
+    switch (1) {
+        else => {
+            break;
+            abort();
+        }
+    }
+
+    return 0;
+}

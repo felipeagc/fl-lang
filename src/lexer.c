@@ -314,6 +314,12 @@ void lex_token(Lexer *l)
             lex_next(l, 1);
             tok.type = TOKEN_EQUAL;
         }
+        else if (lex_peek(l, 0) == '>')
+        {
+            ++tok.loc.length;
+            lex_next(l, 1);
+            tok.type = TOKEN_FAT_ARROW;
+        }
         break;
     }
     case '!': {

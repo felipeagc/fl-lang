@@ -231,6 +231,14 @@ static void instantiate_template(
         break;
     }
 
+    case AST_SWITCH: {
+        INSTANTIATE_AST(switch_stmt.expr);
+        INSTANTIATE_ARRAY(switch_stmt.vals);
+        INSTANTIATE_ARRAY(switch_stmt.stmts);
+        if (ast->switch_stmt.else_stmt) INSTANTIATE_AST(switch_stmt.else_stmt);
+        break;
+    }
+
     case AST_WHILE: {
         INSTANTIATE_AST(while_stmt.cond);
         INSTANTIATE_AST(while_stmt.stmt);
@@ -1258,6 +1266,31 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_SWITCH: {
+        create_scopes_ast(a, ast->switch_stmt.expr);
+
+        for (Ast *val = ast->switch_stmt.vals;
+             val != ast->switch_stmt.vals + array_size(ast->switch_stmt.vals);
+             ++val)
+        {
+            create_scopes_ast(a, val);
+        }
+
+        for (Ast *stmt = ast->switch_stmt.stmts;
+             stmt !=
+             ast->switch_stmt.stmts + array_size(ast->switch_stmt.stmts);
+             ++stmt)
+        {
+            create_scopes_ast(a, stmt);
+        }
+
+        if (ast->switch_stmt.else_stmt)
+        {
+            create_scopes_ast(a, ast->switch_stmt.else_stmt);
+        }
+        break;
+    }
+
     case AST_WHILE: {
         create_scopes_ast(a, ast->while_stmt.cond);
         create_scopes_ast(a, ast->while_stmt.stmt);
@@ -2197,6 +2230,52 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->if_stmt.cond_expr->loc,
                 "conditional only works for numerical types");
             break;
+        }
+
+        break;
+    }
+
+    case AST_SWITCH: {
+        analyze_ast(a, ast->switch_stmt.expr, NULL);
+
+        TypeInfo *val_type = ast->switch_stmt.expr->type_info;
+
+        if (!val_type)
+        {
+            compile_error(
+                a->compiler,
+                ast->switch_stmt.expr->loc,
+                "could not resolve type for switch statement value");
+            break;
+        }
+
+        if (!is_type_basic(val_type))
+        {
+            compile_error(
+                a->compiler,
+                ast->switch_stmt.expr->loc,
+                "can only switch on basic types");
+            break;
+        }
+
+        assert(
+            array_size(ast->switch_stmt.vals) ==
+            array_size(ast->switch_stmt.stmts));
+
+        for (size_t i = 0; i < array_size(ast->switch_stmt.vals); ++i)
+        {
+            analyze_ast(a, &ast->switch_stmt.vals[i], val_type);
+
+            array_push(a->break_stack, ast);
+            analyze_ast(a, &ast->switch_stmt.stmts[i], NULL);
+            array_pop(a->break_stack);
+        }
+
+        if (ast->switch_stmt.else_stmt)
+        {
+            array_push(a->break_stack, ast);
+            analyze_ast(a, ast->switch_stmt.else_stmt, NULL);
+            array_pop(a->break_stack);
         }
 
         break;

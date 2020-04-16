@@ -72,6 +72,7 @@ typedef enum AstType {
     AST_PROC_PARAM,
     AST_CAST,
     AST_IF,
+    AST_SWITCH,
     AST_WHILE,
     AST_FOR,
     AST_BREAK,
@@ -166,6 +167,15 @@ typedef struct Ast
             struct Ast *cond_stmt;
             struct Ast *else_stmt;
         } if_stmt;
+        struct
+        {
+            struct Ast *expr;
+
+            /*array*/ struct Ast *vals;
+            /*array*/ struct Ast *stmts;
+
+            struct Ast *else_stmt;
+        } switch_stmt;
         struct
         {
             String version;

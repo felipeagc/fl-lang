@@ -20,12 +20,14 @@ extern fn main() -> i32 {
     }
     defer SDL_DestroyRenderer(ren);
 
-    var quit = false;
+    var should_close = false;
 
-    while (!quit) {
+    while (!should_close) {
         var e: SDL_Event;
-        while (SDL_PollEvent(&e)){
-            if (e.type == SDL_QUIT) quit = true;
+        while (SDL_PollEvent(&e)) {
+            switch (e.type) {
+                SDL_QUIT => should_close = true;
+            }
         }
 
         SDL_RenderClear(ren);

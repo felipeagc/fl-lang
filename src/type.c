@@ -139,6 +139,13 @@ static inline bool is_type_compound(TypeInfo *type)
         type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
+static inline bool is_type_basic(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_INT || type->kind == TYPE_BOOL ||
+        type->kind == TYPE_FLOAT || type->kind == TYPE_ENUM);
+}
+
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind != expected->kind)
