@@ -7,6 +7,9 @@ typedef struct Analyzer
     /*array*/ Ast **continue_stack;
 } Analyzer;
 
+static TypeInfo *
+ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct);
+
 static void create_scopes_ast(Analyzer *a, Ast *ast);
 
 static void register_symbol_ast(Analyzer *a, Ast *ast);
@@ -485,8 +488,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
     return res;
 }
 
-static bool
-resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
+static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
 {
     bool res = false;
     switch (ast->type)
@@ -519,17 +521,14 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
                 case AST_CONST_DECL: {
                     assert(sym->sym_scope);
                     res = resolve_expr_int(
-                        compiler, sym->sym_scope, sym->decl.value_expr, i64);
+                        a, sym->sym_scope, sym->decl.value_expr, i64);
                     break;
                 }
 
                 case AST_ENUM_FIELD: {
                     assert(sym->sym_scope);
                     res = resolve_expr_int(
-                        compiler,
-                        sym->sym_scope,
-                        sym->enum_field.value_expr,
-                        i64);
+                        a, sym->sym_scope, sym->enum_field.value_expr, i64);
                     break;
                 }
 
@@ -547,8 +546,7 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
         res = true;
 
         int64_t sub_int;
-        if (!resolve_expr_int(compiler, scope, ast->unop.sub, &sub_int))
-            res = false;
+        if (!resolve_expr_int(a, scope, ast->unop.sub, &sub_int)) res = false;
 
         switch (ast->unop.type)
         {
@@ -565,9 +563,9 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
 
         int64_t left_int;
         int64_t right_int;
-        if (!resolve_expr_int(compiler, scope, ast->binop.left, &left_int))
+        if (!resolve_expr_int(a, scope, ast->binop.left, &left_int))
             res = false;
-        if (!resolve_expr_int(compiler, scope, ast->binop.right, &right_int))
+        if (!resolve_expr_int(a, scope, ast->binop.right, &right_int))
             res = false;
 
         switch (ast->binop.type)
@@ -595,13 +593,57 @@ resolve_expr_int(Compiler *compiler, Scope *scope, Ast *ast, int64_t *i64)
         break;
     }
 
+    case AST_INTRINSIC_CALL: {
+        switch (ast->intrinsic_call.type)
+        {
+        case INTRINSIC_SIZEOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            TypeInfo *type = NULL;
+
+            if (param->type_info && param->type_info->kind == TYPE_TYPE)
+                type = ast_as_type(a, scope, param, false);
+            else
+                type = param->type_info;
+
+            if (type)
+            {
+                res = true;
+                *i64 = (int64_t)size_of_type(type);
+            }
+
+            break;
+        }
+
+        case INTRINSIC_ALIGNOF: {
+            Ast *param = &ast->intrinsic_call.params[0];
+            TypeInfo *type = NULL;
+
+            if (param->type_info && param->type_info->kind == TYPE_TYPE)
+                type = ast_as_type(a, scope, param, false);
+            else
+                type = param->type_info;
+
+            if (type)
+            {
+                res = true;
+                *i64 = (int64_t)align_of_type(type);
+            }
+
+            break;
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
     case AST_ACCESS: {
         Scope *accessed_scope =
-            get_expr_scope(compiler, scope, ast->access.left);
+            get_expr_scope(a->compiler, scope, ast->access.left);
         if (accessed_scope)
         {
-            res = resolve_expr_int(
-                compiler, accessed_scope, ast->access.right, i64);
+            res = resolve_expr_int(a, accessed_scope, ast->access.right, i64);
         }
         break;
     }
@@ -758,8 +800,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_ARRAY_TYPE: {
         int64_t size = 0;
-        bool resolves =
-            resolve_expr_int(a->compiler, scope, ast->array_type.size, &size);
+        bool resolves = resolve_expr_int(a, scope, ast->array_type.size, &size);
 
         if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
 
@@ -929,7 +970,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             if (!elem_type->as_type) break;
 
             int64_t width;
-            if (!resolve_expr_int(a->compiler, scope, vec_width, &width)) break;
+            if (!resolve_expr_int(a, scope, vec_width, &width)) break;
             if (width <= 0) break;
 
             ast->as_type = create_vector_type(
