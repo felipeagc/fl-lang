@@ -799,6 +799,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_ARRAY_TYPE: {
+        if (!ast->array_type.size) break;
+
         int64_t size = 0;
         bool resolves = resolve_expr_int(a, scope, ast->array_type.size, &size);
 
@@ -3369,6 +3371,25 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_COMPOUND_LIT: {
+        if (ast->compound.type_expr->type == AST_ARRAY_TYPE &&
+            !ast->compound.type_expr->array_type.size)
+        {
+            // Array compound with no size
+            Token *tok = bump_alloc(&a->compiler->bump, sizeof(Token));
+            memset(tok, 0, sizeof(Token));
+            tok->type = TOKEN_INT_LIT;
+            tok->loc = ast->compound.type_expr->loc;
+            tok->i64 = (int64_t)array_size(ast->compound.values);
+
+            Ast *size = bump_alloc(&a->compiler->bump, sizeof(Ast));
+            memset(size, 0, sizeof(Ast));
+            size->type = AST_PRIMARY;
+            size->loc = ast->compound.type_expr->loc;
+            size->primary.tok = tok;
+
+            ast->compound.type_expr->array_type.size = size;
+        }
+
         analyze_ast(a, ast->compound.type_expr, &TYPE_OF_TYPE);
 
         if (!ast->compound.type_expr->as_type)
@@ -3385,7 +3406,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TYPE_VECTOR:
         case TYPE_ARRAY: {
             if (array_size(ast->compound.values) != compound_type->array.size &&
-                array_size(ast->compound.values) != 1)
+                array_size(ast->compound.values) != 1 &&
+                array_size(ast->compound.values) != 0)
             {
                 compile_error(
                     a->compiler,
@@ -3406,7 +3428,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TYPE_STRUCT: {
             if (array_size(ast->compound.values) !=
-                array_size(compound_type->structure.fields))
+                    array_size(compound_type->structure.fields) &&
+                array_size(ast->compound.values) != 0)
             {
                 compile_error(
                     a->compiler,
@@ -3576,6 +3599,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         ast->type_info = &TYPE_OF_TYPE;
 
         analyze_ast(a, ast->array_type.sub, &TYPE_OF_TYPE);
+
+        if (!ast->array_type.size)
+        {
+            compile_error(a->compiler, ast->loc, "missing size for array type");
+            break;
+        }
+
         analyze_ast(a, ast->array_type.size, NULL);
 
         TypeInfo *size_type = get_inner_type(ast->array_type.size->type_info);

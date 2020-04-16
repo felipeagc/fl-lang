@@ -21,7 +21,6 @@ TODO:
 Small things:
 - import files as byte arrays
 - multiline string literal
-- empty compound literals
 
 Essential things for writing applications:
 - extern blocks
