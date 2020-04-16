@@ -107,15 +107,22 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
 
     case TYPE_STRUCT: {
-        type->ref = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
-        size_t field_count = array_size(type->structure.fields);
-        LLVMTypeRef *field_types =
-            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
-        for (size_t i = 0; i < field_count; i++)
+        if (!type->structure.is_union)
         {
-            field_types[i] = llvm_type(l, type->structure.fields[i]);
+            type->ref = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
+            size_t field_count = array_size(type->structure.fields);
+            LLVMTypeRef *field_types = bump_alloc(
+                &l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
+            for (size_t i = 0; i < field_count; i++)
+            {
+                field_types[i] = llvm_type(l, type->structure.fields[i]);
+            }
+            LLVMStructSetBody(type->ref, field_types, field_count, false);
         }
-        LLVMStructSetBody(type->ref, field_types, field_count, false);
+        else
+        {
+            type->ref = LLVMArrayType(LLVMInt8Type(), size_of_type(type));
+        }
         break;
     }
 
@@ -230,8 +237,11 @@ static inline LLVMValueRef bool_value(
     return i1_val;
 }
 
-static inline LLVMValueRef build_alloca(LLModule *mod, LLVMTypeRef type)
+static inline LLVMValueRef
+build_alloca(LLContext *l, LLModule *mod, TypeInfo *type)
 {
+    LLVMTypeRef llvm_ty = llvm_type(l, type);
+
     LLVMBasicBlockRef current_block = LLVMGetInsertBlock(mod->builder);
 
     LLVMValueRef fun = LLVMGetBasicBlockParent(current_block);
@@ -240,7 +250,8 @@ static inline LLVMValueRef build_alloca(LLModule *mod, LLVMTypeRef type)
     LLVMPositionBuilder(
         mod->builder, entry_block, LLVMGetBasicBlockTerminator(entry_block));
 
-    LLVMValueRef alloca = LLVMBuildAlloca(mod->builder, type, "");
+    LLVMValueRef alloca = LLVMBuildAlloca(mod->builder, llvm_ty, "");
+    LLVMSetAlignment(alloca, align_of_type(type));
 
     LLVMPositionBuilderAtEnd(mod->builder, current_block);
 
@@ -666,7 +677,7 @@ static void llvm_codegen_ast(
                 params[i] = param_value.value;
                 if (!param_value.is_lvalue)
                 {
-                    params[i] = build_alloca(mod, llvm_type(l, param_type));
+                    params[i] = build_alloca(l, mod, param_type);
                     LLVMBuildStore(mod->builder, param_value.value, params[i]);
                 }
             }
@@ -948,7 +959,7 @@ static void llvm_codegen_ast(
 
         // Local variable
         ast->decl.value.is_lvalue = true;
-        ast->decl.value.value = build_alloca(mod, llvm_ty);
+        ast->decl.value.value = build_alloca(l, mod, ast->type_info);
 
         if (!ast->decl.uninitialized)
         {
@@ -1124,7 +1135,7 @@ static void llvm_codegen_ast(
             if (!sub_value.is_lvalue)
             {
                 result_value.value =
-                    build_alloca(mod, llvm_type(l, ast->unop.sub->type_info));
+                    build_alloca(l, mod, ast->unop.sub->type_info);
                 result_value.is_lvalue = false;
 
                 LLVMBuildStore(
@@ -1403,8 +1414,7 @@ static void llvm_codegen_ast(
         }
         else
         {
-            result_value.value =
-                build_alloca(mod, llvm_type(l, ast->type_info));
+            result_value.value = build_alloca(l, mod, ast->type_info);
         }
 
         {
@@ -1457,8 +1467,7 @@ static void llvm_codegen_ast(
             }
             else
             {
-                result_value.value =
-                    build_alloca(mod, llvm_type(l, ast->type_info));
+                result_value.value = build_alloca(l, mod, ast->type_info);
             }
 
             switch (ast->type_info->kind)
@@ -1657,14 +1666,31 @@ static void llvm_codegen_ast(
     }
 
     case AST_STRUCT_FIELD: {
+        Ast *left_expr = ast->sym_scope->ast;
+        assert(left_expr);
+        assert(left_expr->type_info);
+        assert(left_expr->type_info->kind == TYPE_STRUCT);
+
         AstValue struct_val = ast->sym_scope->value;
         assert(struct_val.value);
+        assert(struct_val.is_lvalue);
 
         AstValue field_value = {0};
         field_value.is_lvalue = true;
 
-        field_value.value = LLVMBuildStructGEP(
-            mod->builder, struct_val.value, ast->struct_field.index, "");
+        if (!left_expr->type_info->structure.is_union)
+        {
+            field_value.value = LLVMBuildStructGEP(
+                mod->builder, struct_val.value, ast->struct_field.index, "");
+        }
+        else
+        {
+            field_value.value = LLVMBuildBitCast(
+                mod->builder,
+                struct_val.value,
+                LLVMPointerType(llvm_type(l, ast->type_info), 0),
+                "");
+        }
 
         if (out_value) *out_value = field_value;
 
@@ -2085,7 +2111,7 @@ static void llvm_codegen_ast(
         {
             if (lhs_type->kind == TYPE_VECTOR && rhs_type->kind != TYPE_VECTOR)
             {
-                LLVMValueRef vector = build_alloca(mod, llvm_type(l, lhs_type));
+                LLVMValueRef vector = build_alloca(l, mod, lhs_type);
                 for (unsigned i = 0; i < lhs_type->array.size; ++i)
                 {
                     LLVMValueRef indices[2] = {
@@ -2102,7 +2128,7 @@ static void llvm_codegen_ast(
 
             if (rhs_type->kind == TYPE_VECTOR && lhs_type->kind != TYPE_VECTOR)
             {
-                LLVMValueRef vector = build_alloca(mod, llvm_type(l, rhs_type));
+                LLVMValueRef vector = build_alloca(l, mod, rhs_type);
                 for (unsigned i = 0; i < rhs_type->array.size; ++i)
                 {
                     LLVMValueRef indices[2] = {

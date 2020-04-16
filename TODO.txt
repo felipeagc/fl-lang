@@ -14,7 +14,6 @@ Multiple return values
 Key/val struct literal
 
 TODO:
-- unions
 - typeinfo type
 - @memset, @memcmp
 - any type

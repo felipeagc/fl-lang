@@ -61,6 +61,7 @@ typedef struct TypeInfo
         struct
         {
             /*array*/ struct TypeInfo **fields;
+            bool is_union;
         } structure;
         struct
         {
@@ -654,22 +655,34 @@ static uint32_t size_of_type(TypeInfo *type)
         break;
 
     case TYPE_STRUCT: {
-        for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+        if (!type->structure.is_union)
         {
-            TypeInfo *field = type->structure.fields[i];
-            TypeInfo *next_field = type->structure.fields[i + 1];
-            if (i == (array_size(type->structure.fields) - 1))
+            for (size_t i = 0; i < array_size(type->structure.fields); ++i)
             {
-                next_field = type->structure.fields[0];
+                TypeInfo *field = type->structure.fields[i];
+                TypeInfo *next_field = type->structure.fields[i + 1];
+                if (i == (array_size(type->structure.fields) - 1))
+                {
+                    next_field = type->structure.fields[0];
+                }
+
+                uint32_t field_size = size_of_type(field);
+
+                // Add padding
+                uint32_t next_alignment = align_of_type(next_field);
+                field_size = pad_to_alignment(field_size, next_alignment);
+
+                size += field_size;
             }
-
-            uint32_t field_size = size_of_type(field);
-
-            // Add padding
-            uint32_t next_alignment = align_of_type(next_field);
-            field_size = pad_to_alignment(field_size, next_alignment);
-
-            size += field_size;
+        }
+        else
+        {
+            for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+            {
+                TypeInfo *field = type->structure.fields[i];
+                uint32_t field_size = size_of_type(field);
+                if (field_size > size) size = field_size;
+            }
         }
 
         break;

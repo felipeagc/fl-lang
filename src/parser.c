@@ -527,9 +527,15 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
 
+    case TOKEN_UNION:
     case TOKEN_STRUCT: {
         ast->type = AST_STRUCT;
         parser_next(p, 1);
+
+        if (tok->type == TOKEN_UNION)
+        {
+            ast->structure.is_union = true;
+        }
 
         if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 

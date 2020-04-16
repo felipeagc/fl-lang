@@ -187,6 +187,7 @@ typedef struct Ast
         struct
         {
             /*array*/ struct Ast *fields;
+            bool is_union;
         } structure;
         struct
         {

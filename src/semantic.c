@@ -844,6 +844,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         TypeInfo **fields = NULL;
         bool res = true;
 
+        // We need to set the type here in advance because of recursive type
+        // stuff
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
         memset(ty, 0, sizeof(*ty));
         ast->as_type = ty;
@@ -864,11 +866,13 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             ty->kind = TYPE_STRUCT;
             ty->structure.fields = fields;
             ty->scope = ast->scope;
+            ty->structure.is_union = ast->structure.is_union;
         }
         else
         {
             ast->as_type = NULL;
         }
+
         break;
     }
 
