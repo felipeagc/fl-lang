@@ -82,7 +82,8 @@ static void print_ident(StringBuilder *sb, String ident)
         sb_append(sb, STR("_"));
 }
 
-static void print_type(StringBuilder *sb, CXType type, bool named);
+static void
+print_type(StringBuilder *sb, CXType type, bool named, bool is_param);
 
 static enum CXChildVisitResult
 struct_field_visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
@@ -101,7 +102,7 @@ struct_field_visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         print_ident(sb, field_name);
 
         sb_append(sb, STR(": "));
-        print_type(sb, clang_getCursorType(cursor), true);
+        print_type(sb, clang_getCursorType(cursor), true, false);
         sb_append(sb, STR(",\n"));
         break;
     }
@@ -112,7 +113,8 @@ struct_field_visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     return CXChildVisit_Continue;
 }
 
-static void print_type(StringBuilder *sb, CXType type, bool named)
+static void
+print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
 {
     enum CXTypeKind kind = type.kind;
 
@@ -187,18 +189,30 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
     }
 
     case CXType_Record: {
-        CXCursor struct_decl = clang_getTypeDeclaration(type);
+        CXCursor decl = clang_getTypeDeclaration(type);
+        enum CXCursorKind cursor_kind = clang_getCursorKind(decl);
 
         char *struct_name_c =
-            (char *)clang_getCString(clang_getCursorSpelling(struct_decl));
+            (char *)clang_getCString(clang_getCursorSpelling(decl));
         String struct_name = CSTR(struct_name_c);
 
         if (struct_name.length == 0 || !named)
         {
-            sb_append(sb, STR("struct {\n"));
+            if (cursor_kind == CXCursor_StructDecl)
+            {
+                sb_append(sb, STR("struct {\n"));
+            }
+            else if (cursor_kind == CXCursor_UnionDecl)
+            {
+                sb_append(sb, STR("union {\n"));
+            }
+            else
+            {
+                assert(0);
+            }
 
             g_indent += 4;
-            clang_visitChildren(struct_decl, struct_field_visitor, sb);
+            clang_visitChildren(decl, struct_field_visitor, sb);
             g_indent -= 4;
 
             PRINT_INDENT(sb);
@@ -215,12 +229,12 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
         CXType pointee = clang_getPointeeType(type);
         if (pointee.kind == CXType_FunctionProto)
         {
-            print_type(sb, pointee, true);
+            print_type(sb, pointee, true, false);
             break;
         }
 
         sb_append(sb, STR("*"));
-        print_type(sb, pointee, true);
+        print_type(sb, pointee, true, false);
         break;
     }
 
@@ -248,7 +262,7 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
                 sb_append(sb, STR("_"));
             }
             sb_append(sb, STR(": "));
-            print_type(sb, clang_getArgType(type, i), true);
+            print_type(sb, clang_getArgType(type, i), true, true);
         }
 
         sb_append(sb, STR(")"));
@@ -257,7 +271,7 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
         if (return_type.kind != CXType_Void)
         {
             sb_append(sb, STR(" -> "));
-            print_type(sb, return_type, true);
+            print_type(sb, return_type, true, true);
         }
 
         break;
@@ -295,29 +309,36 @@ static void print_type(StringBuilder *sb, CXType type, bool named)
     }
 
     case CXType_Elaborated: {
-        print_type(sb, clang_Type_getNamedType(type), true);
+        print_type(sb, clang_Type_getNamedType(type), true, is_param);
         break;
     }
 
     case CXType_ConstantArray: {
-        size_t element_count = clang_getNumElements(type);
-        sb_sprintf(sb, "[%d]", (int)element_count);
-        CXType element_type = clang_getArrayElementType(type);
+        if (is_param)
+        {
+            sb_append(sb, STR("*"));
+        }
+        else
+        {
+            size_t element_count = clang_getNumElements(type);
+            sb_sprintf(sb, "[%d]", (int)element_count);
+        }
 
-        print_type(sb, element_type, true);
+        CXType element_type = clang_getArrayElementType(type);
+        print_type(sb, element_type, true, false);
         break;
     }
 
     case CXType_IncompleteArray: {
         sb_append(sb, STR("*"));
         CXType element_type = clang_getArrayElementType(type);
-        print_type(sb, element_type, true);
+        print_type(sb, element_type, true, false);
         break;
     }
 
     case CXType_Enum: {
         CXCursor decl = clang_getTypeDeclaration(type);
-        print_type(sb, clang_getEnumDeclIntegerType(decl), true);
+        print_type(sb, clang_getEnumDeclIntegerType(decl), true, is_param);
         break;
     }
 
@@ -367,7 +388,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         sb_append(sb, STR("pub typedef "));
         sb_append(sb, typedef_name);
         sb_append(sb, STR(" "));
-        print_type(sb, clang_getTypedefDeclUnderlyingType(cursor), true);
+        print_type(sb, clang_getTypedefDeclUnderlyingType(cursor), true, false);
         sb_append(sb, STR(";\n"));
 
         hash_set(&g_symbol_map, typedef_name, NULL);
@@ -390,7 +411,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         sb_append(sb, STR("pub typedef "));
         sb_append(sb, struct_name);
         sb_append(sb, STR(" "));
-        print_type(sb, clang_getCursorType(cursor), false);
+        print_type(sb, clang_getCursorType(cursor), false, false);
         sb_append(sb, STR(";\n"));
 
         hash_set(&g_symbol_map, struct_name, NULL);
@@ -399,8 +420,24 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     }
 
     case CXCursor_UnionDecl: {
-        fprintf(stderr, "Error: unions not implemented\n");
-        exit(1);
+        char *struct_name_c =
+            (char *)clang_getCString(clang_getCursorSpelling(cursor));
+        String struct_name = CSTR(struct_name_c);
+
+        if (struct_name.length == 0)
+        {
+            break;
+        }
+
+        if (hash_get(&g_symbol_map, struct_name, NULL)) break;
+
+        sb_append(sb, STR("pub typedef "));
+        sb_append(sb, struct_name);
+        sb_append(sb, STR(" "));
+        print_type(sb, clang_getCursorType(cursor), false, false);
+        sb_append(sb, STR(";\n"));
+
+        hash_set(&g_symbol_map, struct_name, NULL);
         break;
     }
 
@@ -432,7 +469,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             print_ident(sb, CSTR(arg_name));
 
             sb_append(sb, STR(": "));
-            print_type(sb, clang_getCursorType(arg), true);
+            print_type(sb, clang_getCursorType(arg), true, true);
         }
 
         sb_append(sb, STR(")"));
@@ -441,7 +478,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (return_type.kind != CXType_Void)
         {
             sb_append(sb, STR(" -> "));
-            print_type(sb, return_type, true);
+            print_type(sb, return_type, true, false);
         }
 
         sb_append(sb, STR(";\n"));
@@ -459,7 +496,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             sb,
             CSTR((char *)clang_getCString(clang_getCursorSpelling(cursor))));
         sb_append(sb, STR(": "));
-        print_type(sb, clang_getCursorType(cursor), true);
+        print_type(sb, clang_getCursorType(cursor), true, false);
         sb_sprintf(sb, " = %lld", clang_getEnumConstantDeclValue(cursor));
         sb_append(sb, STR(";\n"));
         break;
