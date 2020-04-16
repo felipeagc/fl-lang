@@ -2144,20 +2144,26 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ptr_ty->ptr.sub = ty;
             ast->type_info = ptr_ty;
 
-            if (array_size(ast->proc.template_params) > 0)
+            TypeInfo *proc_type = ast->type_info->ptr.sub;
+
+            if ((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN)
             {
-                assert((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN);
-
-                TypeInfo *proc_type = ast->type_info->ptr.sub;
-
                 sb_reset(&a->compiler->sb);
+                sb_append(
+                    &a->compiler->sb, STR("_F")); // mangled function prefix
                 sb_append(&a->compiler->sb, ast->proc.name);
-                for (size_t i = 0; i < array_size(proc_type->proc.params); ++i)
+
+                if (array_size(ast->proc.template_params) > 0)
                 {
-                    TypeInfo *param_type = proc_type->proc.params[i];
-                    sb_append(&a->compiler->sb, STR("$"));
-                    print_mangled_type(&a->compiler->sb, param_type);
+                    for (size_t i = 0; i < array_size(proc_type->proc.params);
+                         ++i)
+                    {
+                        TypeInfo *param_type = proc_type->proc.params[i];
+                        sb_append(&a->compiler->sb, STR("$"));
+                        print_mangled_type(&a->compiler->sb, param_type);
+                    }
                 }
+
                 ast->proc.mangled_name =
                     sb_build(&a->compiler->sb, &a->compiler->bump);
             }
