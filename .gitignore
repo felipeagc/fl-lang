@@ -2,5 +2,6 @@
 /bindgen
 /examples/ray
 /examples/table
+/examples/sdl_game
 *.dSYM
 tags

@@ -217,10 +217,18 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
 
             PRINT_INDENT(sb);
             sb_append(sb, STR("}"));
-            break;
         }
-
-        sb_append(sb, struct_name);
+        else
+        {
+            if (!hash_get(&g_symbol_map, struct_name, NULL))
+            {
+                sb_append(sb, STR("struct {}"));
+            }
+            else
+            {
+                sb_append(sb, struct_name);
+            }
+        }
 
         break;
     }

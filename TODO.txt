@@ -17,6 +17,7 @@ TODO:
 - typeinfo type
 - @memset, @memcmp
 - any type
+- aligned type
 
 Small things:
 - import files as byte arrays

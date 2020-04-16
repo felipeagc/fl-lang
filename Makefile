@@ -31,7 +31,10 @@ examples/ray: compiler bindgen examples/ray.lang $(CORE_FILES)
 examples/table: compiler bindgen examples/table.lang $(CORE_FILES)
 	./compiler -o=$@ examples/table.lang
 
-examples: examples/ray examples/table
+examples/sdl_game: compiler bindgen examples/sdl.lang examples/sdl_game.lang $(CORE_FILES)
+	./compiler -o=$@ -l=SDL2 examples/sdl_game.lang
+
+examples: examples/ray examples/table examples/sdl_game
 
 bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang
