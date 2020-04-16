@@ -709,20 +709,20 @@ static void llvm_codegen_ast(
         {
         case INTRINSIC_SIZEOF: {
             Ast *param = &ast->intrinsic_call.params[0];
-            LLVMTypeRef llvm_ty = NULL;
+            TypeInfo *type = NULL;
 
             if (param->type_info->kind == TYPE_TYPE)
-            {
-                llvm_ty = llvm_type(l, param->as_type);
-            }
+                type = param->as_type;
             else
-            {
-                llvm_ty = llvm_type(l, param->type_info);
-            }
+                type = param->type_info;
 
-            assert(llvm_ty);
+            assert(type);
+
             AstValue size_val = {0};
-            size_val.value = LLVMSizeOf(llvm_ty);
+            size_val.value = LLVMConstInt(
+                llvm_type(l, ast->type_info),
+                (unsigned long long)size_of_type(type),
+                false);
             if (out_value) *out_value = size_val;
 
             break;
@@ -730,20 +730,21 @@ static void llvm_codegen_ast(
 
         case INTRINSIC_ALIGNOF: {
             Ast *param = &ast->intrinsic_call.params[0];
-            LLVMTypeRef llvm_ty = NULL;
+
+            TypeInfo *type = NULL;
 
             if (param->type_info->kind == TYPE_TYPE)
-            {
-                llvm_ty = llvm_type(l, param->as_type);
-            }
+                type = param->as_type;
             else
-            {
-                llvm_ty = llvm_type(l, param->type_info);
-            }
+                type = param->type_info;
 
-            assert(llvm_ty);
+            assert(type);
+
             AstValue align_val = {0};
-            align_val.value = LLVMAlignOf(llvm_ty);
+            align_val.value = LLVMConstInt(
+                llvm_type(l, ast->type_info),
+                (unsigned long long)align_of_type(type),
+                false);
             if (out_value) *out_value = align_val;
 
             break;

@@ -30,6 +30,8 @@ typedef struct TypeInfo
     struct Scope *scope;
     TypeKind kind;
     uint32_t flags;
+    uint32_t size;
+    uint32_t align;
 
     union
     {
@@ -558,4 +560,129 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     case TYPE_UNINITIALIZED:
     case TYPE_NONE: assert(0); break;
     }
+}
+
+#define PTR_SIZE 8
+
+static uint32_t pad_to_alignment(uint32_t current, uint32_t align)
+{
+    assert(align >= 1);
+
+    uint32_t minum = current & (align - 1);
+    if (minum)
+    {
+        assert((current % align) != 0);
+        current += align - minum;
+    }
+
+    return current;
+}
+
+static uint32_t align_of_type(TypeInfo *type)
+{
+    if (type->align > 0) return type->align;
+
+    uint32_t align = 1;
+    switch (type->kind)
+    {
+    case TYPE_INT: align = type->integer.num_bits / 8; break;
+    case TYPE_FLOAT: align = type->floating.num_bits / 8; break;
+    case TYPE_BOOL: align = BOOL_INT_TYPE.integer.num_bits / 8; break;
+    case TYPE_ENUM:
+        align = align_of_type(type->enumeration.underlying_type);
+        break;
+
+    case TYPE_POINTER: align = PTR_SIZE; break;
+    case TYPE_SLICE: align = PTR_SIZE; break;
+    case TYPE_DYNAMIC_ARRAY: align = PTR_SIZE; break;
+
+    case TYPE_VECTOR:
+        align = align_of_type(type->array.sub) * type->array.size;
+        break;
+    case TYPE_ARRAY: align = align_of_type(type->array.sub); break;
+
+    case TYPE_STRUCT: {
+        for (TypeInfo **field = type->structure.fields;
+             field !=
+             type->structure.fields + array_size(type->structure.fields);
+             ++field)
+        {
+            uint32_t field_align = align_of_type(*field);
+            if (field_align > align) align = field_align;
+        }
+
+        break;
+    }
+
+    case TYPE_PROC:
+    case TYPE_UNINITIALIZED:
+    case TYPE_NONE:
+    case TYPE_VOID:
+    case TYPE_NAMESPACE:
+    case TYPE_TYPE: assert(0); break;
+    }
+
+    type->align = align;
+
+    return type->align;
+}
+
+static uint32_t size_of_type(TypeInfo *type)
+{
+    if (type->size > 0) return type->size;
+
+    uint32_t size = 0;
+
+    switch (type->kind)
+    {
+    case TYPE_INT: size = type->integer.num_bits / 8; break;
+    case TYPE_FLOAT: size = type->floating.num_bits / 8; break;
+    case TYPE_BOOL: size = BOOL_INT_TYPE.integer.num_bits / 8; break;
+    case TYPE_ENUM:
+        size = size_of_type(type->enumeration.underlying_type);
+        break;
+
+    case TYPE_POINTER: size = PTR_SIZE; break;
+    case TYPE_SLICE: size = PTR_SIZE * 2; break;
+    case TYPE_DYNAMIC_ARRAY: size = PTR_SIZE * 3; break;
+
+    case TYPE_VECTOR:
+        size = size_of_type(type->array.sub) * type->array.size;
+        break;
+    case TYPE_ARRAY:
+        size = size_of_type(type->array.sub) * type->array.size;
+        break;
+
+    case TYPE_STRUCT: {
+        for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+        {
+            TypeInfo *field = type->structure.fields[i];
+            TypeInfo *next_field = type->structure.fields[i + 1];
+            if (i == (array_size(type->structure.fields) - 1))
+            {
+                next_field = type->structure.fields[0];
+            }
+
+            uint32_t field_size = size_of_type(field);
+
+            // Add padding
+            uint32_t next_alignment = align_of_type(next_field);
+            field_size = pad_to_alignment(field_size, next_alignment);
+
+            size += field_size;
+        }
+
+        break;
+    }
+
+    case TYPE_PROC:
+    case TYPE_UNINITIALIZED:
+    case TYPE_NONE:
+    case TYPE_VOID:
+    case TYPE_NAMESPACE:
+    case TYPE_TYPE: assert(0); break;
+    }
+
+    type->size = size;
+    return type->size;
 }

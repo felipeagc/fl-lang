@@ -1,7 +1,6 @@
 Default struct member initialization
 Default function parameters
 Ternary
-Unions
 Thread local variables
 
 Macros (?)
@@ -15,9 +14,9 @@ Multiple return values
 Key/val struct literal
 
 TODO:
-- @memset, @memcmp
-- implement sizeof and alignof myself instead of letting LLVM handle it
+- unions
 - typeinfo type
+- @memset, @memcmp
 - any type
 
 Small things:
