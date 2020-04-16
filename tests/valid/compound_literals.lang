@@ -41,7 +41,7 @@ extern fn main() -> i32 {
     {
         var zeroed_struct = Struct{};
         if (zeroed_struct.a != 0) abort();
-        if (zeroed_struct.b != cast(*char)null) abort();
+        if (zeroed_struct.b != null) abort();
         printf(c"zeroed_struct.a = %d\n", zeroed_struct.a);
         printf(c"zeroed_struct.b = \"%s\"\n", zeroed_struct.b);
     }

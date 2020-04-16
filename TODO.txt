@@ -45,4 +45,3 @@ Bugs:
 - Circular imports
 - Circular structs
 - Circular typedefs
-- Infer type in binary operations (null expr)

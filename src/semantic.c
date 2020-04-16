@@ -2412,7 +2412,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_NULL: {
-            ast->type_info = &VOID_PTR_TYPE;
+            ast->type_info = &NULL_PTR_TYPE;
 
             if (expected_type)
             {

@@ -120,6 +120,9 @@ static TypeInfo DOUBLE_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
 
 static TypeInfo VOID_TYPE = {.kind = TYPE_VOID};
 
+static TypeInfo NULL_PTR_TYPE = {
+    .kind = TYPE_POINTER, .flags = TYPE_FLAG_CAN_CHANGE, .ptr.sub = &VOID_TYPE};
+
 static TypeInfo VOID_PTR_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &VOID_TYPE};
 
 static TypeInfo BOOL_INT_TYPE = {
@@ -269,6 +272,13 @@ compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 
 static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
+    if (a->kind == TYPE_POINTER && b->kind == TYPE_POINTER)
+    {
+        if (a->flags & TYPE_FLAG_CAN_CHANGE) return b;
+        if (b->flags & TYPE_FLAG_CAN_CHANGE) return a;
+        return NULL;
+    }
+
     TypeInfo *float_type = NULL;
     TypeInfo *other_type = NULL;
     if (a->kind == TYPE_FLOAT)
@@ -287,15 +297,8 @@ static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
         return float_type;
     }
 
-    if (a->flags & TYPE_FLAG_CAN_CHANGE)
-    {
-        return b;
-    }
-
-    if (b->flags & TYPE_FLAG_CAN_CHANGE)
-    {
-        return a;
-    }
+    if (a->flags & TYPE_FLAG_CAN_CHANGE) return b;
+    if (b->flags & TYPE_FLAG_CAN_CHANGE) return a;
 
     return NULL;
 }

@@ -3,7 +3,7 @@ import "core:c";
 const DEFAULT_ARRAY_CAP: uint = 8;
 
 fn array_grow!(V)(arr: *[dyn]V, cap: uint) {
-    if (arr.ptr == cast(*V)null) {
+    if (arr.ptr == null) {
         arr.len = 0;
         arr.cap = cap;
         if (arr.cap == 0) arr.cap = DEFAULT_ARRAY_CAP;
