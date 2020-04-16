@@ -5,7 +5,7 @@ pub fn print(str: [_]char) {
     var buf: [_]byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
-    os.write_to_stream(os.get_stderr(), buf);
+    os.write_to_stream(os.get_stdout(), buf);
 }
 
 pub fn eprint(str: [_]char) {
