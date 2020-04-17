@@ -26,7 +26,7 @@ static inline Token *parser_next(Parser *p, size_t count)
     return &p->lexer->tokens[p->pos - count];
 }
 
-static inline Token *parser_consume(Parser *p, TokenType tok_type)
+static inline Token *parser_consume(Parser *p, TokenKind tok_type)
 {
     if (parser_is_at_end(p))
     {

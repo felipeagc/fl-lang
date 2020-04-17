@@ -1,4 +1,4 @@
-typedef enum TokenType {
+typedef enum TokenKind {
     TOKEN_LPAREN,
     TOKEN_RPAREN,
     TOKEN_LBRACK,
@@ -115,7 +115,7 @@ typedef enum TokenType {
 
     TOKEN_INT,
     TOKEN_UINT,
-} TokenType;
+} TokenKind;
 
 static const char *token_strings[] = {
     [TOKEN_LPAREN] = "(",
@@ -239,7 +239,7 @@ static const char *token_strings[] = {
 
 typedef struct Token
 {
-    TokenType type;
+    TokenKind type;
     Location loc;
     union
     {

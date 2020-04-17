@@ -19,8 +19,39 @@
 
 #include "os_includes.h"
 
+#if defined(_WIN32)
+typedef struct VSFindResult
+{
+    int windows_sdk_version; // Zero if no Windows SDK found.
+
+    wchar_t *windows_sdk_root;
+    wchar_t *windows_sdk_um_library_path;
+    wchar_t *windows_sdk_ucrt_library_path;
+
+    wchar_t *vs_exe_path;
+    wchar_t *vs_library_path;
+} VSFindResult;
+
+VSFindResult find_visual_studio_and_windows_sdk();
+#endif
+
 #define LANG_FILE_EXTENSION ".lang"
+
+#if defined(__unix__) || defined(__APPLE__)
 #define TMP_OBJECT_NAME "tmp.o"
+#elif defined(_WIN32)
+#define TMP_OBJECT_NAME "tmp.obj"
+#else
+#error OS not supported
+#endif
+
+#if defined(__unix__) || defined(__APPLE__)
+#define DEFAULT_EXE_NAME "a.out"
+#elif defined(_WIN32)
+#define DEFAULT_EXE_NAME "a.exe"
+#else
+#error OS not supported
+#endif
 
 #include "filesystem.c"
 #include "string.c"
@@ -160,6 +191,8 @@ static void compiler_init(Compiler *compiler)
 #elif defined(__APPLE__)
     hash_set(&compiler->versions, STR("apple"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
+#elif defined(_WIN32)
+    hash_set(&compiler->versions, STR("windows"), NULL);
 #else
 #error OS not supported
 #endif
@@ -336,7 +369,8 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
         if (compiler_has_version(compiler, ast->version_block.version))
         {
             for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts + array_size(ast->version_block.stmts);
+                 stmt != ast->version_block.stmts +
+                             array_size(ast->version_block.stmts);
                  ++stmt)
             {
                 process_imports(compiler, file, scope, stmt);
@@ -422,11 +456,9 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
         exit(1);
     }
 
-    char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
-
 #if defined(__linux__) || defined(__APPLE__)
-
 #define LINKER_PATH "clang"
+    char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
 
     pid_t pid = fork();
     if (pid == 0)
@@ -466,6 +498,65 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     }
 
     remove(TMP_OBJECT_NAME);
+#elif defined(_WIN32)
+    sb_reset(&compiler->sb);
+
+    VSFindResult find_result = find_visual_studio_and_windows_sdk();
+    char *link_exe_path = utf16_to_utf8(find_result.vs_exe_path);
+    char* vs_lib_path = utf16_to_utf8(find_result.vs_library_path);
+    char* win_crt_lib_path = utf16_to_utf8(find_result.windows_sdk_ucrt_library_path);
+    char* win_um_lib_path = utf16_to_utf8(find_result.windows_sdk_um_library_path);
+
+    sb_sprintf(&compiler->sb, "\"%s\\link.exe\"", link_exe_path);
+    sb_sprintf(&compiler->sb, " /LIBPATH:\"%s\"", vs_lib_path);
+    sb_sprintf(&compiler->sb, " /LIBPATH:\"%s\"", win_crt_lib_path);
+    sb_sprintf(&compiler->sb, " /LIBPATH:\"%s\"", win_um_lib_path);
+    sb_append(
+        &compiler->sb,
+        STR(" /nologo /defaultlib:libcmt /ENTRY:mainCRTStartup"));
+    sb_append(&compiler->sb, STR(" -OUT:\""));
+    sb_append(&compiler->sb, out_file_path);
+    sb_append(&compiler->sb, STR("\" "));
+    sb_append(&compiler->sb, STR(TMP_OBJECT_NAME));
+    for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
+    {
+        sb_sprintf(
+            &compiler->sb,
+            " /LIBPATH:\"%s\"",
+            compiler->args.link_libraries[i]);
+    }
+    for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
+    {
+        sb_sprintf(&compiler->sb, " \"%s\"", compiler->args.link_libraries[i]);
+    }
+
+    String cmd_line = sb_build(&compiler->sb, &compiler->bump);
+    char *cmd_line_c = bump_c_str(&compiler->bump, cmd_line);
+
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    BOOL result = CreateProcessA(
+        NULL, cmd_line_c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+    if (!result)
+    {
+        fprintf(stderr, "Failed to start linker!\n");
+        exit(1);
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    if (!DeleteFileA(TMP_OBJECT_NAME))
+    {
+        fprintf(stderr, "Failed to delete temporary object\n");
+    }
+
 #else
 #error OS not supported
 #endif

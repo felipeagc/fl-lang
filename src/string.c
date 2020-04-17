@@ -23,3 +23,13 @@ static inline bool string_equals(String a, String b)
     if (a.length != b.length) return false;
     return strncmp(a.buf, b.buf, a.length) == 0;
 }
+
+#if defined(_WIN32)
+static char *utf16_to_utf8(wchar_t *source)
+{
+    size_t required_size = WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
+    char *buf = calloc(required_size, sizeof(char));
+    WideCharToMultiByte(CP_UTF8, 0, source, -1, buf, required_size, NULL, NULL);
+    return buf;
+}
+#endif

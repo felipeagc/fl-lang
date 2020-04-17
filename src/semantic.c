@@ -2552,7 +2552,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->access.right->primary.tok->str =
                     sym->struct_field_alias.right_name;
 
-                return analyze_ast(a, ast, expected_type);
+                analyze_ast(a, ast, expected_type);
+                return;
             }
 
             case AST_IMPORT: {
@@ -3857,7 +3858,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->subscript_slice.lower = NULL;
                 ast->subscript_slice.upper = NULL;
 
-                return analyze_ast(a, ast, expected_type);
+                analyze_ast(a, ast, expected_type);
+                return;
             }
         }
 

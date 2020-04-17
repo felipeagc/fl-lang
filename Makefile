@@ -1,45 +1,16 @@
-LLVM_CFLAGS=$(shell llvm-config --cflags)
-LLVM_LDFLAGS=$(shell llvm-config --ldflags)
-CFLAGS=-Wall -g
+CC=cl
+LLVM_PATH=C:\llvm
+CFLAGS=/nologo /I$(LLVM_PATH)\include
 
-CC=clang
+all: compiler.exe
 
-CORE_FILES=$(wildcard core/*.lang)
+LLVM-C.dll:
+	copy $(LLVM_PATH)\bin\LLVM-C.dll .
 
-all: compiler bindgen examples
-
-compiler: $(wildcard src/*.c)
-	$(CC) $(LLVM_LDFLAGS) $(CFLAGS) $(LLVM_CFLAGS) -lLLVM -o $@ src/main.c
-
-bindgen: $(wildcard src/*.c) $(wildcard src/bindgen/*.c)
-	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -L/usr/local/opt/llvm/lib -Wno-unused-function -lclang -o $@ src/bindgen/main.c
-
-.PHONY: clean test examples
+compiler.exe: LLVM-C.dll src/*.c
+	$(CC) $(CFLAGS) -Fecompiler src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib advapi32.lib ole32.lib oleaut32.lib
+	del *.obj
 
 clean:
-	rm compiler
-	rm bindgen
-	rm examples/ray
-	rm examples/table
-
-test: compiler
-	@bash ./tests/run_tests.sh
-
-examples/ray: compiler bindgen examples/ray.lang $(CORE_FILES)
-	./compiler -o=$@ examples/ray.lang
-
-examples/table: compiler bindgen examples/table.lang $(CORE_FILES)
-	./compiler -o=$@ examples/table.lang
-
-examples/sdl_game: compiler bindgen examples/sdl.lang examples/sdl_game.lang $(CORE_FILES)
-	./compiler -o=$@ -l=SDL2 examples/sdl_game.lang
-
-examples: examples/ray examples/table examples/sdl_game
-
-bindgen-tests: compiler bindgen
-	./bindgen examples/stb_image.h > examples/stb_image.lang
-	./compiler -r examples/stb_image.lang
-	./bindgen examples/glfw3.h > examples/glfw3.lang
-	./compiler -r examples/glfw3.lang
-
-
+	del compiler.exe
+	del LLVM-C.dll

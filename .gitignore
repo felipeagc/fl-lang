@@ -5,3 +5,7 @@
 /examples/sdl_game
 *.dSYM
 tags
+*.dll
+*.obj
+*.o
+*.exe

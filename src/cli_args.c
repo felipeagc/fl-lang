@@ -13,7 +13,7 @@ static void parse_args(Arguments *args, int argc, char **argv)
 {
     memset(args, 0, sizeof(*args));
 
-    args->out_path = "a.out";
+    args->out_path = DEFAULT_EXE_NAME;
 
     for (int i = 1; i < argc; ++i)
     {
