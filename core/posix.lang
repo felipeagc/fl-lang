@@ -1,19 +1,588 @@
-pub typedef pthread_t distinct *void;
-pub typedef pthread_mutex_t distinct [8]*void; // opaque
-pub typedef pthread_cond_t distinct [8]*void; // opaque
+pub typedef __u_char u8;
+pub typedef __u_short u16;
+pub typedef __u_int u32;
+pub typedef __u_long u64;
+pub typedef __int8_t i8;
+pub typedef __uint8_t u8;
+pub typedef __int16_t i16;
+pub typedef __uint16_t u16;
+pub typedef __int32_t i32;
+pub typedef __uint32_t u32;
+pub typedef __int64_t i64;
+pub typedef __uint64_t u64;
+pub typedef __int_least8_t __int8_t;
+pub typedef __uint_least8_t __uint8_t;
+pub typedef __int_least16_t __int16_t;
+pub typedef __uint_least16_t __uint16_t;
+pub typedef __int_least32_t __int32_t;
+pub typedef __uint_least32_t __uint32_t;
+pub typedef __int_least64_t __int64_t;
+pub typedef __uint_least64_t __uint64_t;
+pub typedef __quad_t i64;
+pub typedef __u_quad_t u64;
+pub typedef __intmax_t i64;
+pub typedef __uintmax_t u64;
+pub typedef __dev_t u64;
+pub typedef __uid_t u32;
+pub typedef __gid_t u32;
+pub typedef __ino_t u64;
+pub typedef __ino64_t u64;
+pub typedef __mode_t u32;
+pub typedef __nlink_t u64;
+pub typedef __off_t i64;
+pub typedef __off64_t i64;
+pub typedef __pid_t i32;
+pub typedef __fsid_t struct {
+    __val: [2]i32,
+};
+pub typedef __clock_t i64;
+pub typedef __rlim_t u64;
+pub typedef __rlim64_t u64;
+pub typedef __id_t u32;
+pub typedef __time_t i64;
+pub typedef __useconds_t u32;
+pub typedef __suseconds_t i64;
+pub typedef __daddr_t i32;
+pub typedef __key_t i32;
+pub typedef __clockid_t i32;
+pub typedef __timer_t *void;
+pub typedef __blksize_t i64;
+pub typedef __blkcnt_t i64;
+pub typedef __blkcnt64_t i64;
+pub typedef __fsblkcnt_t u64;
+pub typedef __fsblkcnt64_t u64;
+pub typedef __fsfilcnt_t u64;
+pub typedef __fsfilcnt64_t u64;
+pub typedef __fsword_t i64;
+pub typedef __ssize_t i64;
+pub typedef __syscall_slong_t i64;
+pub typedef __syscall_ulong_t u64;
+pub typedef __loff_t __off64_t;
+pub typedef __caddr_t *i8;
+pub typedef __intptr_t i64;
+pub typedef __socklen_t u32;
+pub typedef __sig_atomic_t i32;
+pub typedef time_t __time_t;
+pub typedef timespec struct {
+    tv_sec: __time_t,
+    tv_nsec: __syscall_slong_t,
+};
+pub typedef pid_t __pid_t;
+pub typedef intptr_t __intptr_t;
+pub typedef sched_param struct {
+    sched_priority: i32,
+};
+pub extern fn clone(__fn: fn* (_: *void) -> i32, __child_stack: *void, __flags: i32, __arg: *void) -> i32;
+pub extern fn unshare(__flags: i32) -> i32;
+pub extern fn sched_getcpu() -> i32;
+pub extern fn getcpu(: *u32, : *u32) -> i32;
+pub extern fn setns(__fd: i32, __nstype: i32) -> i32;
+pub typedef __cpu_mask u64;
+pub typedef cpu_set_t struct {
+    __bits: [16]__cpu_mask,
+};
+pub typedef u_char __u_char;
+pub typedef u_short __u_short;
+pub typedef u_int __u_int;
+pub typedef u_long __u_long;
+pub typedef quad_t __quad_t;
+pub typedef u_quad_t __u_quad_t;
+pub typedef fsid_t __fsid_t;
+pub typedef loff_t __loff_t;
+pub typedef ino_t __ino_t;
+pub typedef ino64_t __ino64_t;
+pub typedef dev_t __dev_t;
+pub typedef gid_t __gid_t;
+pub typedef mode_t __mode_t;
+pub typedef nlink_t __nlink_t;
+pub typedef uid_t __uid_t;
+pub typedef off_t __off_t;
+pub typedef off64_t __off64_t;
+pub typedef id_t __id_t;
+pub typedef ssize_t __ssize_t;
+pub typedef daddr_t __daddr_t;
+pub typedef caddr_t __caddr_t;
+pub typedef key_t __key_t;
+pub typedef clock_t __clock_t;
+pub typedef clockid_t __clockid_t;
+pub typedef timer_t __timer_t;
+pub typedef useconds_t __useconds_t;
+pub typedef suseconds_t __suseconds_t;
+pub typedef ulong u64;
+pub typedef ushort u16;
+pub typedef int8_t __int8_t;
+pub typedef int16_t __int16_t;
+pub typedef int32_t __int32_t;
+pub typedef int64_t __int64_t;
+pub typedef u_int8_t __uint8_t;
+pub typedef u_int16_t __uint16_t;
+pub typedef u_int32_t __uint32_t;
+pub typedef u_int64_t __uint64_t;
+pub typedef register_t i64;
+pub extern fn __bswap_16(__bsx: __uint16_t) -> __uint16_t;
+pub extern fn __bswap_32(__bsx: __uint32_t) -> __uint32_t;
+pub extern fn __bswap_64(__bsx: __uint64_t) -> __uint64_t;
+pub extern fn __uint16_identity(__x: __uint16_t) -> __uint16_t;
+pub extern fn __uint32_identity(__x: __uint32_t) -> __uint32_t;
+pub extern fn __uint64_identity(__x: __uint64_t) -> __uint64_t;
+pub typedef __sigset_t struct {
+    __val: [16]u64,
+};
+pub typedef sigset_t __sigset_t;
+pub typedef timeval struct {
+    tv_sec: __time_t,
+    tv_usec: __suseconds_t,
+};
+pub typedef __fd_mask i64;
+pub typedef fd_set struct {
+    fds_bits: [16]__fd_mask,
+};
+pub typedef fd_mask __fd_mask;
+pub extern fn select(__nfds: i32, __readfds: *fd_set, __writefds: *fd_set, __exceptfds: *fd_set, __timeout: *timeval) -> i32;
+pub extern fn pselect(__nfds: i32, __readfds: *fd_set, __writefds: *fd_set, __exceptfds: *fd_set, __timeout: *timespec, __sigmask: *__sigset_t) -> i32;
+pub typedef blksize_t __blksize_t;
+pub typedef blkcnt_t __blkcnt_t;
+pub typedef fsblkcnt_t __fsblkcnt_t;
+pub typedef fsfilcnt_t __fsfilcnt_t;
+pub typedef blkcnt64_t __blkcnt64_t;
+pub typedef fsblkcnt64_t __fsblkcnt64_t;
+pub typedef fsfilcnt64_t __fsfilcnt64_t;
 
-pub extern fn pthread_create(thrd: *pthread_t, attr: *void, start: fn* (_: *void) -> *void, arg: *void) -> i32;
-pub extern fn pthread_join(thrd: pthread_t, retval: *void) -> i32; 
-pub extern fn usleep(usec: u32) -> i32;
-pub extern fn pthread_detach(thread: pthread_t) -> i32;
-pub extern fn pthread_exit(retval: *void);
-pub extern fn pthread_mutex_init(mtx: *pthread_mutex_t, attr: *void) -> i32;
-pub extern fn pthread_mutex_destroy(mtx: *pthread_mutex_t) -> i32;
-pub extern fn pthread_mutex_lock(mtx: *pthread_mutex_t) -> i32;
-pub extern fn pthread_mutex_trylock(mtx: *pthread_mutex_t) -> i32;
-pub extern fn pthread_mutex_unlock(mtx: *pthread_mutex_t) -> i32;
-pub extern fn pthread_cond_init(cond: *pthread_cond_t, attr: *void) -> i32;
-pub extern fn pthread_cond_destroy(cond: *pthread_cond_t) -> i32;
-pub extern fn pthread_cond_signal(cond: *pthread_cond_t) -> i32;
-pub extern fn pthread_cond_broadcast(cond: *pthread_cond_t) -> i32;
-pub extern fn pthread_cond_wait(cond: *pthread_cond_t, mtx: *pthread_mutex_t) -> i32;
+
+//
+// spawn
+//
+
+pub typedef posix_spawnattr_t struct {
+    __flags: i16,
+    __pgrp: pid_t,
+    __sd: sigset_t,
+    __ss: sigset_t,
+    __sp: sched_param,
+    __policy: i32,
+    __pad: [16]i32,
+};
+pub typedef posix_spawn_file_actions_t struct {
+    __allocated: i32,
+    __used: i32,
+    __actions: *struct {},
+    __pad: [16]i32,
+};
+pub extern fn posix_spawn(__pid: *pid_t, __path: *i8, __file_actions: *posix_spawn_file_actions_t, __attrp: *posix_spawnattr_t, __argv: **i8, __envp: **i8) -> i32;
+pub extern fn posix_spawnp(__pid: *pid_t, __file: *i8, __file_actions: *posix_spawn_file_actions_t, __attrp: *posix_spawnattr_t, __argv: **i8, __envp: **i8) -> i32;
+pub extern fn posix_spawnattr_init(__attr: *posix_spawnattr_t) -> i32;
+pub extern fn posix_spawnattr_destroy(__attr: *posix_spawnattr_t) -> i32;
+pub extern fn posix_spawnattr_getsigdefault(__attr: *posix_spawnattr_t, __sigdefault: *sigset_t) -> i32;
+pub extern fn posix_spawnattr_setsigdefault(__attr: *posix_spawnattr_t, __sigdefault: *sigset_t) -> i32;
+pub extern fn posix_spawnattr_getsigmask(__attr: *posix_spawnattr_t, __sigmask: *sigset_t) -> i32;
+pub extern fn posix_spawnattr_setsigmask(__attr: *posix_spawnattr_t, __sigmask: *sigset_t) -> i32;
+pub extern fn posix_spawnattr_getflags(__attr: *posix_spawnattr_t, __flags: *i16) -> i32;
+pub extern fn posix_spawnattr_setflags(_attr: *posix_spawnattr_t, __flags: i16) -> i32;
+pub extern fn posix_spawnattr_getpgroup(__attr: *posix_spawnattr_t, __pgroup: *pid_t) -> i32;
+pub extern fn posix_spawnattr_setpgroup(__attr: *posix_spawnattr_t, __pgroup: pid_t) -> i32;
+pub extern fn posix_spawnattr_getschedpolicy(__attr: *posix_spawnattr_t, __schedpolicy: *i32) -> i32;
+pub extern fn posix_spawnattr_setschedpolicy(__attr: *posix_spawnattr_t, __schedpolicy: i32) -> i32;
+pub extern fn posix_spawnattr_getschedparam(__attr: *posix_spawnattr_t, __schedparam: *sched_param) -> i32;
+pub extern fn posix_spawnattr_setschedparam(__attr: *posix_spawnattr_t, __schedparam: *sched_param) -> i32;
+pub extern fn posix_spawn_file_actions_init(__file_actions: *posix_spawn_file_actions_t) -> i32;
+pub extern fn posix_spawn_file_actions_destroy(__file_actions: *posix_spawn_file_actions_t) -> i32;
+pub extern fn posix_spawn_file_actions_addopen(__file_actions: *posix_spawn_file_actions_t, __fd: i32, __path: *i8, __oflag: i32, __mode: mode_t) -> i32;
+pub extern fn posix_spawn_file_actions_addclose(__file_actions: *posix_spawn_file_actions_t, __fd: i32) -> i32;
+pub extern fn posix_spawn_file_actions_adddup2(__file_actions: *posix_spawn_file_actions_t, __fd: i32, __newfd: i32) -> i32;
+pub extern fn posix_spawn_file_actions_addchdir_np(__actions: *posix_spawn_file_actions_t, __path: *i8) -> i32;
+pub extern fn posix_spawn_file_actions_addfchdir_np(: *posix_spawn_file_actions_t, __fd: i32) -> i32;
+
+
+//
+// pthreads
+//
+
+pub typedef __pthread_rwlock_arch_t struct {
+    __readers: u32,
+    __writers: u32,
+    __wrphase_futex: u32,
+    __writers_futex: u32,
+    __pad3: u32,
+    __pad4: u32,
+    __cur_writer: i32,
+    __shared: i32,
+    __rwelision: i8,
+    __pad1: [7]u8,
+    __pad2: u64,
+    __flags: u32,
+};
+pub typedef __pthread_internal_list struct {
+    __prev: *struct {},
+    __next: *struct {},
+};
+pub typedef __pthread_list_t __pthread_internal_list;
+pub typedef __pthread_mutex_s struct {
+    __lock: i32,
+    __count: u32,
+    __owner: i32,
+    __nusers: u32,
+    __kind: i32,
+    __spins: i16,
+    __elision: i16,
+    __list: __pthread_list_t,
+};
+pub typedef __pthread_cond_s struct {
+    __g_refs: [2]u32,
+    __g_size: [2]u32,
+    __g1_orig_size: u32,
+    __wrefs: u32,
+    __g_signals: [2]u32,
+};
+pub typedef pthread_t u64;
+pub typedef pthread_mutexattr_t union {
+    __size: [4]i8,
+    __align: i32,
+};
+pub typedef pthread_condattr_t union {
+    __size: [4]i8,
+    __align: i32,
+};
+pub typedef pthread_key_t u32;
+pub typedef pthread_once_t i32;
+pub typedef pthread_attr_t union {
+    __size: [56]i8,
+    __align: i64,
+};
+pub typedef pthread_mutex_t union {
+    __data: __pthread_mutex_s,
+    __size: [40]i8,
+    __align: i64,
+};
+pub typedef pthread_cond_t union {
+    __data: __pthread_cond_s,
+    __size: [48]i8,
+    __align: i64,
+};
+pub typedef pthread_rwlock_t union {
+    __data: __pthread_rwlock_arch_t,
+    __size: [56]i8,
+    __align: i64,
+};
+pub typedef pthread_rwlockattr_t union {
+    __size: [8]i8,
+    __align: i64,
+};
+pub typedef pthread_spinlock_t i32;
+pub typedef pthread_barrier_t union {
+    __size: [32]i8,
+    __align: i64,
+};
+pub typedef pthread_barrierattr_t union {
+    __size: [4]i8,
+    __align: i32,
+};
+pub typedef __jmp_buf [8]i64;
+pub const PTHREAD_CREATE_JOINABLE: u32 = 0;
+pub const PTHREAD_CREATE_DETACHED: u32 = 1;
+pub const PTHREAD_MUTEX_TIMED_NP: u32 = 0;
+pub const PTHREAD_MUTEX_RECURSIVE_NP: u32 = 1;
+pub const PTHREAD_MUTEX_ERRORCHECK_NP: u32 = 2;
+pub const PTHREAD_MUTEX_ADAPTIVE_NP: u32 = 3;
+pub const PTHREAD_MUTEX_NORMAL: u32 = 0;
+pub const PTHREAD_MUTEX_RECURSIVE: u32 = 1;
+pub const PTHREAD_MUTEX_ERRORCHECK: u32 = 2;
+pub const PTHREAD_MUTEX_DEFAULT: u32 = 0;
+pub const PTHREAD_MUTEX_FAST_NP: u32 = 0;
+pub const PTHREAD_MUTEX_STALLED: u32 = 0;
+pub const PTHREAD_MUTEX_STALLED_NP: u32 = 0;
+pub const PTHREAD_MUTEX_ROBUST: u32 = 1;
+pub const PTHREAD_MUTEX_ROBUST_NP: u32 = 1;
+pub const PTHREAD_PRIO_NONE: u32 = 0;
+pub const PTHREAD_PRIO_INHERIT: u32 = 1;
+pub const PTHREAD_PRIO_PROTECT: u32 = 2;
+pub const PTHREAD_RWLOCK_PREFER_READER_NP: u32 = 0;
+pub const PTHREAD_RWLOCK_PREFER_WRITER_NP: u32 = 1;
+pub const PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP: u32 = 2;
+pub const PTHREAD_RWLOCK_DEFAULT_NP: u32 = 0;
+pub const PTHREAD_INHERIT_SCHED: u32 = 0;
+pub const PTHREAD_EXPLICIT_SCHED: u32 = 1;
+pub const PTHREAD_SCOPE_SYSTEM: u32 = 0;
+pub const PTHREAD_SCOPE_PROCESS: u32 = 1;
+pub const PTHREAD_PROCESS_PRIVATE: u32 = 0;
+pub const PTHREAD_PROCESS_SHARED: u32 = 1;
+pub typedef _pthread_cleanup_buffer struct {
+    __routine: fn* (_: *void),
+    __arg: *void,
+    __canceltype: i32,
+    __prev: *struct {},
+};
+pub const PTHREAD_CANCEL_ENABLE: u32 = 0;
+pub const PTHREAD_CANCEL_DISABLE: u32 = 1;
+pub const PTHREAD_CANCEL_DEFERRED: u32 = 0;
+pub const PTHREAD_CANCEL_ASYNCHRONOUS: u32 = 1;
+pub extern fn pthread_create(__newthread: *pthread_t, __attr: *pthread_attr_t, __start_routine: fn* (_: *void) -> *void, __arg: *void) -> i32;
+pub extern fn pthread_exit(__retval: *void);
+pub extern fn pthread_join(__th: pthread_t, __thread_return: **void) -> i32;
+pub extern fn pthread_tryjoin_np(__th: pthread_t, __thread_return: **void) -> i32;
+pub extern fn pthread_timedjoin_np(__th: pthread_t, __thread_return: **void, __abstime: *timespec) -> i32;
+pub extern fn pthread_detach(__th: pthread_t) -> i32;
+pub extern fn pthread_self() -> pthread_t;
+pub extern fn pthread_equal(__thread1: pthread_t, __thread2: pthread_t) -> i32;
+pub extern fn pthread_attr_init(__attr: *pthread_attr_t) -> i32;
+pub extern fn pthread_attr_destroy(__attr: *pthread_attr_t) -> i32;
+pub extern fn pthread_attr_getdetachstate(__attr: *pthread_attr_t, __detachstate: *i32) -> i32;
+pub extern fn pthread_attr_setdetachstate(__attr: *pthread_attr_t, __detachstate: i32) -> i32;
+pub extern fn pthread_attr_getguardsize(__attr: *pthread_attr_t, __guardsize: *uint) -> i32;
+pub extern fn pthread_attr_setguardsize(__attr: *pthread_attr_t, __guardsize: uint) -> i32;
+pub extern fn pthread_attr_getschedparam(__attr: *pthread_attr_t, __param: *sched_param) -> i32;
+pub extern fn pthread_attr_setschedparam(__attr: *pthread_attr_t, __param: *sched_param) -> i32;
+pub extern fn pthread_attr_getschedpolicy(__attr: *pthread_attr_t, __policy: *i32) -> i32;
+pub extern fn pthread_attr_setschedpolicy(__attr: *pthread_attr_t, __policy: i32) -> i32;
+pub extern fn pthread_attr_getinheritsched(__attr: *pthread_attr_t, __inherit: *i32) -> i32;
+pub extern fn pthread_attr_setinheritsched(__attr: *pthread_attr_t, __inherit: i32) -> i32;
+pub extern fn pthread_attr_getscope(__attr: *pthread_attr_t, __scope: *i32) -> i32;
+pub extern fn pthread_attr_setscope(__attr: *pthread_attr_t, __scope: i32) -> i32;
+pub extern fn pthread_attr_getstackaddr(__attr: *pthread_attr_t, __stackaddr: **void) -> i32;
+pub extern fn pthread_attr_setstackaddr(__attr: *pthread_attr_t, __stackaddr: *void) -> i32;
+pub extern fn pthread_attr_getstacksize(__attr: *pthread_attr_t, __stacksize: *uint) -> i32;
+pub extern fn pthread_attr_setstacksize(__attr: *pthread_attr_t, __stacksize: uint) -> i32;
+pub extern fn pthread_attr_getstack(__attr: *pthread_attr_t, __stackaddr: **void, __stacksize: *uint) -> i32;
+pub extern fn pthread_attr_setstack(__attr: *pthread_attr_t, __stackaddr: *void, __stacksize: uint) -> i32;
+pub extern fn pthread_attr_setaffinity_np(__attr: *pthread_attr_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
+pub extern fn pthread_attr_getaffinity_np(__attr: *pthread_attr_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
+pub extern fn pthread_getattr_default_np(__attr: *pthread_attr_t) -> i32;
+pub extern fn pthread_setattr_default_np(__attr: *pthread_attr_t) -> i32;
+pub extern fn pthread_getattr_np(__th: pthread_t, __attr: *pthread_attr_t) -> i32;
+pub extern fn pthread_setschedparam(__target_thread: pthread_t, __policy: i32, __param: *sched_param) -> i32;
+pub extern fn pthread_getschedparam(__target_thread: pthread_t, __policy: *i32, __param: *sched_param) -> i32;
+pub extern fn pthread_setschedprio(__target_thread: pthread_t, __prio: i32) -> i32;
+pub extern fn pthread_getname_np(__target_thread: pthread_t, __buf: *i8, __buflen: uint) -> i32;
+pub extern fn pthread_setname_np(__target_thread: pthread_t, __name: *i8) -> i32;
+pub extern fn pthread_getconcurrency() -> i32;
+pub extern fn pthread_setconcurrency(__level: i32) -> i32;
+pub extern fn pthread_yield() -> i32;
+pub extern fn pthread_setaffinity_np(__th: pthread_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
+pub extern fn pthread_getaffinity_np(__th: pthread_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
+pub extern fn pthread_once(__once_control: *pthread_once_t, __init_routine: fn* ()) -> i32;
+pub extern fn pthread_setcancelstate(__state: i32, __oldstate: *i32) -> i32;
+pub extern fn pthread_setcanceltype(__type: i32, __oldtype: *i32) -> i32;
+pub extern fn pthread_cancel(__th: pthread_t) -> i32;
+pub extern fn pthread_testcancel();
+pub typedef __pthread_unwind_buf_t struct {
+    __cancel_jmp_buf: [1]struct {
+        __cancel_jmp_buf: __jmp_buf,
+        __mask_was_saved: i32,
+    },
+    __pad: [4]*void,
+};
+pub typedef __pthread_cleanup_frame struct {
+    __cancel_routine: fn* (_: *void),
+    __cancel_arg: *void,
+    __do_it: i32,
+    __cancel_type: i32,
+};
+pub typedef __jmp_buf_tag struct {
+};
+pub extern fn __sigsetjmp(__env: *__jmp_buf_tag, __savemask: i32) -> i32;
+pub extern fn pthread_mutex_init(__mutex: *pthread_mutex_t, __mutexattr: *pthread_mutexattr_t) -> i32;
+pub extern fn pthread_mutex_destroy(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_trylock(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_lock(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_timedlock(__mutex: *pthread_mutex_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_mutex_clocklock(__mutex: *pthread_mutex_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_mutex_unlock(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_getprioceiling(__mutex: *pthread_mutex_t, __prioceiling: *i32) -> i32;
+pub extern fn pthread_mutex_setprioceiling(__mutex: *pthread_mutex_t, __prioceiling: i32, __old_ceiling: *i32) -> i32;
+pub extern fn pthread_mutex_consistent(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutex_consistent_np(__mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_mutexattr_init(__attr: *pthread_mutexattr_t) -> i32;
+pub extern fn pthread_mutexattr_destroy(__attr: *pthread_mutexattr_t) -> i32;
+pub extern fn pthread_mutexattr_getpshared(__attr: *pthread_mutexattr_t, __pshared: *i32) -> i32;
+pub extern fn pthread_mutexattr_setpshared(__attr: *pthread_mutexattr_t, __pshared: i32) -> i32;
+pub extern fn pthread_mutexattr_gettype(__attr: *pthread_mutexattr_t, __kind: *i32) -> i32;
+pub extern fn pthread_mutexattr_settype(__attr: *pthread_mutexattr_t, __kind: i32) -> i32;
+pub extern fn pthread_mutexattr_getprotocol(__attr: *pthread_mutexattr_t, __protocol: *i32) -> i32;
+pub extern fn pthread_mutexattr_setprotocol(__attr: *pthread_mutexattr_t, __protocol: i32) -> i32;
+pub extern fn pthread_mutexattr_getprioceiling(__attr: *pthread_mutexattr_t, __prioceiling: *i32) -> i32;
+pub extern fn pthread_mutexattr_setprioceiling(__attr: *pthread_mutexattr_t, __prioceiling: i32) -> i32;
+pub extern fn pthread_mutexattr_getrobust(__attr: *pthread_mutexattr_t, __robustness: *i32) -> i32;
+pub extern fn pthread_mutexattr_getrobust_np(__attr: *pthread_mutexattr_t, __robustness: *i32) -> i32;
+pub extern fn pthread_mutexattr_setrobust(__attr: *pthread_mutexattr_t, __robustness: i32) -> i32;
+pub extern fn pthread_mutexattr_setrobust_np(__attr: *pthread_mutexattr_t, __robustness: i32) -> i32;
+pub extern fn pthread_rwlock_init(__rwlock: *pthread_rwlock_t, __attr: *pthread_rwlockattr_t) -> i32;
+pub extern fn pthread_rwlock_destroy(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlock_rdlock(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlock_tryrdlock(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlock_timedrdlock(__rwlock: *pthread_rwlock_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_rwlock_clockrdlock(__rwlock: *pthread_rwlock_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_rwlock_wrlock(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlock_trywrlock(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlock_timedwrlock(__rwlock: *pthread_rwlock_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_rwlock_clockwrlock(__rwlock: *pthread_rwlock_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_rwlock_unlock(__rwlock: *pthread_rwlock_t) -> i32;
+pub extern fn pthread_rwlockattr_init(__attr: *pthread_rwlockattr_t) -> i32;
+pub extern fn pthread_rwlockattr_destroy(__attr: *pthread_rwlockattr_t) -> i32;
+pub extern fn pthread_rwlockattr_getpshared(__attr: *pthread_rwlockattr_t, __pshared: *i32) -> i32;
+pub extern fn pthread_rwlockattr_setpshared(__attr: *pthread_rwlockattr_t, __pshared: i32) -> i32;
+pub extern fn pthread_rwlockattr_getkind_np(__attr: *pthread_rwlockattr_t, __pref: *i32) -> i32;
+pub extern fn pthread_rwlockattr_setkind_np(__attr: *pthread_rwlockattr_t, __pref: i32) -> i32;
+pub extern fn pthread_cond_init(__cond: *pthread_cond_t, __cond_attr: *pthread_condattr_t) -> i32;
+pub extern fn pthread_cond_destroy(__cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_signal(__cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_broadcast(__cond: *pthread_cond_t) -> i32;
+pub extern fn pthread_cond_wait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t) -> i32;
+pub extern fn pthread_cond_timedwait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_cond_clockwait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t, __clock_id: __clockid_t, __abstime: *timespec) -> i32;
+pub extern fn pthread_condattr_init(__attr: *pthread_condattr_t) -> i32;
+pub extern fn pthread_condattr_destroy(__attr: *pthread_condattr_t) -> i32;
+pub extern fn pthread_condattr_getpshared(__attr: *pthread_condattr_t, __pshared: *i32) -> i32;
+pub extern fn pthread_condattr_setpshared(__attr: *pthread_condattr_t, __pshared: i32) -> i32;
+pub extern fn pthread_condattr_getclock(__attr: *pthread_condattr_t, __clock_id: *__clockid_t) -> i32;
+pub extern fn pthread_condattr_setclock(__attr: *pthread_condattr_t, __clock_id: __clockid_t) -> i32;
+pub extern fn pthread_spin_init(__lock: *pthread_spinlock_t, __pshared: i32) -> i32;
+pub extern fn pthread_spin_destroy(__lock: *pthread_spinlock_t) -> i32;
+pub extern fn pthread_spin_lock(__lock: *pthread_spinlock_t) -> i32;
+pub extern fn pthread_spin_trylock(__lock: *pthread_spinlock_t) -> i32;
+pub extern fn pthread_spin_unlock(__lock: *pthread_spinlock_t) -> i32;
+pub extern fn pthread_barrier_init(__barrier: *pthread_barrier_t, __attr: *pthread_barrierattr_t, __count: u32) -> i32;
+pub extern fn pthread_barrier_destroy(__barrier: *pthread_barrier_t) -> i32;
+pub extern fn pthread_barrier_wait(__barrier: *pthread_barrier_t) -> i32;
+pub extern fn pthread_barrierattr_init(__attr: *pthread_barrierattr_t) -> i32;
+pub extern fn pthread_barrierattr_destroy(__attr: *pthread_barrierattr_t) -> i32;
+pub extern fn pthread_barrierattr_getpshared(__attr: *pthread_barrierattr_t, __pshared: *i32) -> i32;
+pub extern fn pthread_barrierattr_setpshared(__attr: *pthread_barrierattr_t, __pshared: i32) -> i32;
+pub extern fn pthread_key_create(__key: *pthread_key_t, __destr_function: fn* (_: *void)) -> i32;
+pub extern fn pthread_key_delete(__key: pthread_key_t) -> i32;
+pub extern fn pthread_getspecific(__key: pthread_key_t) -> *void;
+pub extern fn pthread_setspecific(__key: pthread_key_t, __pointer: *void) -> i32;
+pub extern fn pthread_getcpuclockid(__thread_id: pthread_t, __clock_id: *__clockid_t) -> i32;
+pub extern fn pthread_atfork(__prepare: fn* (), __parent: fn* (), __child: fn* ()) -> i32;
+
+//
+// unistd
+//
+
+pub extern fn access(__name: *i8, __type: i32) -> i32;
+pub extern fn euidaccess(__name: *i8, __type: i32) -> i32;
+pub extern fn eaccess(__name: *i8, __type: i32) -> i32;
+pub extern fn faccessat(__fd: i32, __file: *i8, __type: i32, __flag: i32) -> i32;
+pub extern fn lseek(__fd: i32, __offset: __off_t, __whence: i32) -> __off_t;
+pub extern fn lseek64(__fd: i32, __offset: __off64_t, __whence: i32) -> __off64_t;
+pub extern fn close(__fd: i32) -> i32;
+pub extern fn read(__fd: i32, __buf: *void, __nbytes: uint) -> ssize_t;
+pub extern fn write(__fd: i32, __buf: *void, __n: uint) -> ssize_t;
+pub extern fn pread(__fd: i32, __buf: *void, __nbytes: uint, __offset: __off_t) -> ssize_t;
+pub extern fn pwrite(__fd: i32, __buf: *void, __n: uint, __offset: __off_t) -> ssize_t;
+pub extern fn pread64(__fd: i32, __buf: *void, __nbytes: uint, __offset: __off64_t) -> ssize_t;
+pub extern fn pwrite64(__fd: i32, __buf: *void, __n: uint, __offset: __off64_t) -> ssize_t;
+pub extern fn pipe(__pipedes: *i32) -> i32;
+pub extern fn pipe2(__pipedes: *i32, __flags: i32) -> i32;
+pub extern fn alarm(__seconds: u32) -> u32;
+pub extern fn sleep(__seconds: u32) -> u32;
+pub extern fn ualarm(__value: __useconds_t, __interval: __useconds_t) -> __useconds_t;
+pub extern fn usleep(__useconds: __useconds_t) -> i32;
+pub extern fn pause() -> i32;
+pub extern fn chown(__file: *i8, __owner: __uid_t, __group: __gid_t) -> i32;
+pub extern fn fchown(__fd: i32, __owner: __uid_t, __group: __gid_t) -> i32;
+pub extern fn lchown(__file: *i8, __owner: __uid_t, __group: __gid_t) -> i32;
+pub extern fn fchownat(__fd: i32, __file: *i8, __owner: __uid_t, __group: __gid_t, __flag: i32) -> i32;
+pub extern fn chdir(__path: *i8) -> i32;
+pub extern fn fchdir(__fd: i32) -> i32;
+pub extern fn getcwd(__buf: *i8, __size: uint) -> *i8;
+pub extern fn get_current_dir_name() -> *i8;
+pub extern fn getwd(__buf: *i8) -> *i8;
+pub extern fn dup(__fd: i32) -> i32;
+pub extern fn dup2(__fd: i32, __fd2: i32) -> i32;
+pub extern fn dup3(__fd: i32, __fd2: i32, __flags: i32) -> i32;
+pub extern fn execve(__path: *i8, __argv: **i8, __envp: **i8) -> i32;
+pub extern fn fexecve(__fd: i32, __argv: **i8, __envp: **i8) -> i32;
+pub extern fn execv(__path: *i8, __argv: **i8) -> i32;
+pub extern fn execle(__path: *i8, __arg: *i8) -> i32;
+pub extern fn execl(__path: *i8, __arg: *i8) -> i32;
+pub extern fn execvp(__file: *i8, __argv: **i8) -> i32;
+pub extern fn execlp(__file: *i8, __arg: *i8) -> i32;
+pub extern fn execvpe(__file: *i8, __argv: **i8, __envp: **i8) -> i32;
+pub extern fn nice(__inc: i32) -> i32;
+pub extern fn _exit(__status: i32);
+
+pub extern fn pathconf(__path: *i8, __name: i32) -> i64;
+pub extern fn fpathconf(__fd: i32, __name: i32) -> i64;
+pub extern fn sysconf(__name: i32) -> i64;
+pub extern fn confstr(__name: i32, __buf: *i8, __len: uint) -> uint;
+pub extern fn getpid() -> __pid_t;
+pub extern fn getppid() -> __pid_t;
+pub extern fn getpgrp() -> __pid_t;
+pub extern fn __getpgid(__pid: __pid_t) -> __pid_t;
+pub extern fn getpgid(__pid: __pid_t) -> __pid_t;
+pub extern fn setpgid(__pid: __pid_t, __pgid: __pid_t) -> i32;
+pub extern fn setpgrp() -> i32;
+pub extern fn setsid() -> __pid_t;
+pub extern fn getsid(__pid: __pid_t) -> __pid_t;
+pub extern fn getuid() -> __uid_t;
+pub extern fn geteuid() -> __uid_t;
+pub extern fn getgid() -> __gid_t;
+pub extern fn getegid() -> __gid_t;
+pub extern fn getgroups(__size: i32, __list: *__gid_t) -> i32;
+pub extern fn group_member(__gid: __gid_t) -> i32;
+pub extern fn setuid(__uid: __uid_t) -> i32;
+pub extern fn setreuid(__ruid: __uid_t, __euid: __uid_t) -> i32;
+pub extern fn seteuid(__uid: __uid_t) -> i32;
+pub extern fn setgid(__gid: __gid_t) -> i32;
+pub extern fn setregid(__rgid: __gid_t, __egid: __gid_t) -> i32;
+pub extern fn setegid(__gid: __gid_t) -> i32;
+pub extern fn getresuid(__ruid: *__uid_t, __euid: *__uid_t, __suid: *__uid_t) -> i32;
+pub extern fn getresgid(__rgid: *__gid_t, __egid: *__gid_t, __sgid: *__gid_t) -> i32;
+pub extern fn setresuid(__ruid: __uid_t, __euid: __uid_t, __suid: __uid_t) -> i32;
+pub extern fn setresgid(__rgid: __gid_t, __egid: __gid_t, __sgid: __gid_t) -> i32;
+pub extern fn fork() -> __pid_t;
+pub extern fn vfork() -> __pid_t;
+pub extern fn ttyname(__fd: i32) -> *i8;
+pub extern fn ttyname_r(__fd: i32, __buf: *i8, __buflen: uint) -> i32;
+pub extern fn isatty(__fd: i32) -> i32;
+pub extern fn ttyslot() -> i32;
+pub extern fn link(__from: *i8, __to: *i8) -> i32;
+pub extern fn linkat(__fromfd: i32, __from: *i8, __tofd: i32, __to: *i8, __flags: i32) -> i32;
+pub extern fn symlink(__from: *i8, __to: *i8) -> i32;
+pub extern fn readlink(__path: *i8, __buf: *i8, __len: uint) -> ssize_t;
+pub extern fn symlinkat(__from: *i8, __tofd: i32, __to: *i8) -> i32;
+pub extern fn readlinkat(__fd: i32, __path: *i8, __buf: *i8, __len: uint) -> ssize_t;
+pub extern fn unlink(__name: *i8) -> i32;
+pub extern fn unlinkat(__fd: i32, __name: *i8, __flag: i32) -> i32;
+pub extern fn rmdir(__path: *i8) -> i32;
+pub extern fn tcgetpgrp(__fd: i32) -> __pid_t;
+pub extern fn tcsetpgrp(__fd: i32, __pgrp_id: __pid_t) -> i32;
+pub extern fn getlogin() -> *i8;
+pub extern fn getlogin_r(__name: *i8, __name_len: uint) -> i32;
+pub extern fn setlogin(__name: *i8) -> i32;
+pub extern fn getopt(___argc: i32, ___argv: **i8, __shortopts: *i8) -> i32;
+pub extern fn gethostname(__name: *i8, __len: uint) -> i32;
+pub extern fn sethostname(__name: *i8, __len: uint) -> i32;
+pub extern fn sethostid(__id: i64) -> i32;
+pub extern fn getdomainname(__name: *i8, __len: uint) -> i32;
+pub extern fn setdomainname(__name: *i8, __len: uint) -> i32;
+pub extern fn vhangup() -> i32;
+pub extern fn revoke(__file: *i8) -> i32;
+pub extern fn profil(__sample_buffer: *u16, __size: uint, __offset: uint, __scale: u32) -> i32;
+pub extern fn acct(__name: *i8) -> i32;
+pub extern fn getusershell() -> *i8;
+pub extern fn endusershell();
+pub extern fn setusershell();
+pub extern fn daemon(__nochdir: i32, __noclose: i32) -> i32;
+pub extern fn chroot(__path: *i8) -> i32;
+pub extern fn getpass(__prompt: *i8) -> *i8;
+pub extern fn fsync(__fd: i32) -> i32;
+pub extern fn syncfs(__fd: i32) -> i32;
+pub extern fn gethostid() -> i64;
+pub extern fn sync();
+pub extern fn getpagesize() -> i32;
+pub extern fn getdtablesize() -> i32;
+pub extern fn truncate(__file: *i8, __length: __off_t) -> i32;
+pub extern fn truncate64(__file: *i8, __length: __off64_t) -> i32;
+pub extern fn ftruncate(__fd: i32, __length: __off_t) -> i32;
+pub extern fn ftruncate64(__fd: i32, __length: __off64_t) -> i32;
+pub extern fn brk(__addr: *void) -> i32;
+pub extern fn sbrk(__delta: intptr_t) -> *void;
+pub extern fn syscall(__sysno: i64) -> i64;
+pub extern fn lockf(__fd: i32, __cmd: i32, __len: __off_t) -> i32;
+pub extern fn lockf64(__fd: i32, __cmd: i32, __len: __off64_t) -> i32;
+pub extern fn copy_file_range(__infd: i32, __pinoff: *__off64_t, __outfd: i32, __poutoff: *__off64_t, __length: uint, __flags: u32) -> ssize_t;
+pub extern fn fdatasync(__fildes: i32) -> i32;
+pub extern fn crypt(__key: *i8, __salt: *i8) -> *i8;
+pub extern fn swab(__from: *void, __to: *void, __n: ssize_t);
+pub extern fn getentropy(__buffer: *void, __length: uint) -> i32;
+pub extern fn gettid() -> __pid_t;

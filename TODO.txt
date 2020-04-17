@@ -14,6 +14,13 @@ Multiple return values
 Key/val struct literal
 
 TODO:
+- attributes with values
+- #[link_name="blabla"]
+- compiler API
+- build scripts
+- replace test script with an actual program
+- windows support in core library
+
 - typeinfo type
 - @memset, @memcmp
 - any type

@@ -3,6 +3,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <spawn.h>
+
+extern char **environ;
 #endif
 
 #if defined(__APPLE__)

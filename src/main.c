@@ -460,40 +460,50 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 #define LINKER_PATH "clang"
     char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
 
-    pid_t pid = fork();
-    if (pid == 0)
+    char **args = NULL;
+    array_push(args, LINKER_PATH);
+    array_push(args, TMP_OBJECT_NAME);
+    array_push(args, "-lm");
+    array_push(args, "-o");
+    array_push(args, c_out_file_path);
+
+    for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
     {
-        char **args = NULL;
-        array_push(args, LINKER_PATH);
-        array_push(args, TMP_OBJECT_NAME);
-        array_push(args, "-lm");
-        array_push(args, "-o");
-        array_push(args, c_out_file_path);
-
-        for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
-        {
-            char arg[256] = {0};
-            sprintf(arg, "-L%s", compiler->args.library_paths[i]);
-            array_push(args, strdup(arg));
-        }
-
-        for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
-        {
-            char arg[256] = {0};
-            sprintf(arg, "-l%s", compiler->args.link_libraries[i]);
-            array_push(args, strdup(arg));
-        }
-
-        array_push(args, NULL);
-        execvp(LINKER_PATH, args);
+        char arg[256] = {0};
+        sprintf(arg, "-L%s", compiler->args.library_paths[i]);
+        array_push(args, strdup(arg));
     }
 
-    int status;
-    waitpid(pid, &status, 0);
-    if (status != 0)
+    for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
     {
-        remove(TMP_OBJECT_NAME);
-        fprintf(stderr, "Linking failed!\n");
+        char arg[256] = {0};
+        sprintf(arg, "-l%s", compiler->args.link_libraries[i]);
+        array_push(args, strdup(arg));
+    }
+
+    array_push(args, NULL);
+
+    pid_t pid;
+    int status = posix_spawnp(&pid, LINKER_PATH, NULL, NULL, args, environ);
+    if (status == 0)
+    {
+        if (waitpid(pid, &status, 0) == -1)
+        {
+            remove(TMP_OBJECT_NAME);
+            fprintf(stderr, "Linking failed 1!\n");
+            exit(status);
+        }
+
+        if (status != 0)
+        {
+            remove(TMP_OBJECT_NAME);
+            fprintf(stderr, "Linking failed 2!\n");
+            exit(status);
+        }
+    }
+    else
+    {
+        fprintf(stderr, "Linking failed 3!\n");
         exit(status);
     }
 
@@ -503,9 +513,11 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 
     VSFindResult find_result = find_visual_studio_and_windows_sdk();
     char *link_exe_path = utf16_to_utf8(find_result.vs_exe_path);
-    char* vs_lib_path = utf16_to_utf8(find_result.vs_library_path);
-    char* win_crt_lib_path = utf16_to_utf8(find_result.windows_sdk_ucrt_library_path);
-    char* win_um_lib_path = utf16_to_utf8(find_result.windows_sdk_um_library_path);
+    char *vs_lib_path = utf16_to_utf8(find_result.vs_library_path);
+    char *win_crt_lib_path =
+        utf16_to_utf8(find_result.windows_sdk_ucrt_library_path);
+    char *win_um_lib_path =
+        utf16_to_utf8(find_result.windows_sdk_um_library_path);
 
     sb_sprintf(&compiler->sb, "\"%s\\link.exe\"", link_exe_path);
     sb_sprintf(&compiler->sb, " /LIBPATH:\"%s\"", vs_lib_path);
