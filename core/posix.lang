@@ -68,6 +68,7 @@ pub typedef timespec struct {
     tv_nsec: __syscall_slong_t,
 };
 pub typedef pid_t __pid_t;
+pub typedef idtype_t i32;
 pub typedef intptr_t __intptr_t;
 pub typedef sched_param struct {
     sched_priority: i32,
@@ -147,7 +148,6 @@ pub typedef fsfilcnt_t __fsfilcnt_t;
 pub typedef blkcnt64_t __blkcnt64_t;
 pub typedef fsblkcnt64_t __fsblkcnt64_t;
 pub typedef fsfilcnt64_t __fsfilcnt64_t;
-
 
 //
 // spawn
@@ -586,3 +586,15 @@ pub extern fn crypt(__key: *i8, __salt: *i8) -> *i8;
 pub extern fn swab(__from: *void, __to: *void, __n: ssize_t);
 pub extern fn getentropy(__buffer: *void, __length: uint) -> i32;
 pub extern fn gettid() -> __pid_t;
+
+//
+// sys/wait.h
+//
+
+pub typedef siginfo_t struct {};
+pub extern fn wait(__stat_loc: *i32) -> __pid_t;
+pub extern fn waitpid(__pid: __pid_t, __stat_loc: *i32, __options: i32) -> __pid_t;
+pub extern fn waitid(__idtype: idtype_t, __id: __id_t, __infop: *siginfo_t, __options: i32) -> i32;
+pub typedef rusage struct {};
+pub extern fn wait3(__stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;
+pub extern fn wait4(__pid: __pid_t, __stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;

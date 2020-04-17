@@ -160,8 +160,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         return NULL;
     }
 
-    if ((received->flags & TYPE_FLAG_DISTINCT) ||
-        (expected->flags & TYPE_FLAG_DISTINCT))
+    if ((expected->flags & TYPE_FLAG_DISTINCT))
     {
         if (expected != received) return NULL;
     }

@@ -1,16 +1,31 @@
 version(posix) {
+    import posix "posix.lang";
+
+    extern var environ: **char;
+
     pub typedef Handle distinct i32;
+    pub const NULL_HANDLE: Handle = 0;
 
-    extern fn write(fd: Handle, buf: *void, count: uint) -> i32;
-
-    #[inline]
-    pub fn get_stdin() -> Handle { return 0; }
-    #[inline]
-    pub fn get_stdout() -> Handle { return 1; }
-    #[inline]
-    pub fn get_stderr() -> Handle { return 2; }
+    #[inline] pub fn get_stdin() -> Handle { return 0; }
+    #[inline] pub fn get_stdout() -> Handle { return 1; }
+    #[inline] pub fn get_stderr() -> Handle { return 2; }
 
     pub fn write_to_stream(stream: Handle, buf: [_]byte) -> int {
-        return cast(int)write(stream, cast(*void)buf.ptr, buf.len);
+        return cast(int)posix.write(stream, buf.ptr, buf.len);
+    }
+
+    pub fn run_process(file: *char, args: **char) -> Handle {
+        var pid: Handle;
+        if (posix.posix_spawnp(&pid, file, null, null, args, environ) != 0) {
+            return NULL_HANDLE;
+        }
+        return pid;
+    }
+
+    pub fn wait_process(process: Handle, status: *i32) -> bool {
+        if (posix.waitpid(process, status, 0) == -1) {
+            return false;
+        }
+        return true;
     }
 }
