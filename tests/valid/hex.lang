@@ -1,0 +1,6 @@
+import "core:c";
+
+extern fn main() -> i32 {
+    if (0xffffff != 16777215) abort();
+    return 0;
+}

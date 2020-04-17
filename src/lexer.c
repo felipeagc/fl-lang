@@ -577,6 +577,35 @@ void lex_token(Lexer *l)
             l->col--;
             char *dot_ptr = NULL;
 
+            if (lex_peek(l, 0) == '0' && lex_peek(l, 1) == 'x')
+            {
+                // Hexadecimal
+                tok.type = TOKEN_INT_LIT;
+                lex_next(l, 2);
+                tok.loc.length += 2;
+
+                while (is_numeric(tok.loc.buf[tok.loc.length]) ||
+                       (tok.loc.buf[tok.loc.length] >= 'a' &&
+                        tok.loc.buf[tok.loc.length] <= 'f') ||
+                       (tok.loc.buf[tok.loc.length] >= 'A' &&
+                        tok.loc.buf[tok.loc.length] <= 'F'))
+                {
+                    tok.loc.length++;
+                }
+
+                l->col += tok.loc.length;
+                lex_next(l, tok.loc.length - 2);
+
+                char *str = bump_c_str(
+                    &l->compiler->bump,
+                    (String){.buf = (tok.loc.buf + 2),
+                             .length = (tok.loc.length - 2)});
+
+                tok.i64 = strtol(str, NULL, 16);
+
+                break;
+            }
+
             while (is_numeric(tok.loc.buf[tok.loc.length]) ||
                    tok.loc.buf[tok.loc.length] == '.')
             {

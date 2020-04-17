@@ -3,7 +3,7 @@ import c "core:c";
 import fmt "core:fmt";
 
 extern fn main() -> i32 {
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_Init(SDL_INIT_EVERYTHING);
     defer SDL_Quit();
 
     var win = SDL_CreateWindow(c"Hello World!", 100, 100, 640, 480, SDL_WINDOW_SHOWN);

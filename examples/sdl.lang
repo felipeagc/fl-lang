@@ -1,12 +1,12 @@
-pub const SDL_INIT_TIMER: Uint32 = 1;
-pub const SDL_INIT_AUDIO: Uint32 = 16;
-pub const SDL_INIT_VIDEO: Uint32 = 32;
-pub const SDL_INIT_JOYSTICK: Uint32 = 512;
-pub const SDL_INIT_HAPTIC: Uint32 = 4096;
-pub const SDL_INIT_GAMECONTROLLER: Uint32 = 8192;
-pub const SDL_INIT_EVENTS: Uint32 = 16384;
-pub const SDL_INIT_SENSOR: Uint32 = 32768;
-pub const SDL_INIT_NOPARACHUTE: Uint32 = 1048576;
+pub const SDL_INIT_TIMER: Uint32          = 0x00000001;
+pub const SDL_INIT_AUDIO: Uint32          = 0x00000010;
+pub const SDL_INIT_VIDEO: Uint32          = 0x00000020;
+pub const SDL_INIT_JOYSTICK: Uint32       = 0x00000200;
+pub const SDL_INIT_HAPTIC: Uint32         = 0x00001000;
+pub const SDL_INIT_GAMECONTROLLER: Uint32 = 0x00002000;
+pub const SDL_INIT_EVENTS: Uint32         = 0x00004000;
+pub const SDL_INIT_SENSOR: Uint32         = 0x00008000;
+pub const SDL_INIT_NOPARACHUTE: Uint32    = 0x00100000;
 pub const SDL_INIT_EVERYTHING: Uint32 =
             SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_EVENTS |
             SDL_INIT_JOYSTICK | SDL_INIT_HAPTIC | SDL_INIT_GAMECONTROLLER | SDL_INIT_SENSOR;
