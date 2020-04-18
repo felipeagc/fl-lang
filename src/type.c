@@ -1,27 +1,27 @@
 typedef enum TypeKind {
-    TYPE_UNINITIALIZED,
-    TYPE_NONE,
-    TYPE_TYPE,
-    TYPE_PROC,
-    TYPE_STRUCT,
-    TYPE_ENUM,
-    TYPE_POINTER,
-    TYPE_VECTOR,
-    TYPE_ARRAY,
-    TYPE_SLICE,
-    TYPE_DYNAMIC_ARRAY,
-    TYPE_INT,
-    TYPE_FLOAT,
-    TYPE_BOOL,
-    TYPE_VOID,
-    TYPE_NAMESPACE,
+    TYPE_UNINITIALIZED = 0,
+    TYPE_NONE = 1,
+    TYPE_TYPE = 2,
+    TYPE_PROC = 3,
+    TYPE_STRUCT = 4,
+    TYPE_ENUM = 5,
+    TYPE_POINTER = 6,
+    TYPE_VECTOR = 7,
+    TYPE_ARRAY = 8,
+    TYPE_SLICE = 9,
+    TYPE_DYNAMIC_ARRAY = 10,
+    TYPE_INT = 11,
+    TYPE_FLOAT = 12,
+    TYPE_BOOL = 13,
+    TYPE_VOID = 14,
+    TYPE_NAMESPACE = 15,
 } TypeKind;
 
 typedef enum TypeFlags {
     TYPE_FLAG_DISTINCT = 1 << 0,
-    TYPE_FLAG_CAN_CHANGE = 1 << 1,
-    TYPE_FLAG_EXTERN = 1 << 2,
-    TYPE_FLAG_C_VARARGS = 1 << 3,
+    TYPE_FLAG_EXTERN = 1 << 1,
+    TYPE_FLAG_C_VARARGS = 1 << 2,
+    TYPE_FLAG_CAN_CHANGE = 1 << 10,
 } TypeFlags;
 
 typedef struct TypeInfo TypeInfo;
@@ -30,12 +30,12 @@ typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
 
 struct TypeInfo
 {
-    LLVMTypeRef ref;
-    struct Scope *scope;
     TypeKind kind;
     uint32_t flags;
     uint32_t size;
     uint32_t align;
+    LLVMTypeRef ref;
+    struct Scope *scope;
 
     union
     {
@@ -681,9 +681,8 @@ static uint32_t size_of_type(TypeInfo *type)
 
                 // Add padding
                 uint32_t next_alignment = align_of_type(next_field);
-                field_size = pad_to_alignment(field_size, next_alignment);
-
                 size += field_size;
+                size = pad_to_alignment(size, next_alignment);
             }
         }
         else

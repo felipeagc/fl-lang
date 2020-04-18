@@ -39,12 +39,6 @@
         (a)->ptr = NULL;                                                       \
     } while (0)
 
-typedef struct ArrayHeader
-{
-    uint64_t size;
-    uint64_t capacity;
-} ArrayHeader;
-
 static void *
 array_grow(void *ptr, size_t *cap, size_t wanted_cap, size_t item_size)
 {
