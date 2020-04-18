@@ -54,8 +54,8 @@ VSFindResult find_visual_studio_and_windows_sdk();
 #endif
 
 #include "filesystem.c"
-#include "string.c"
 #include "array.c"
+#include "string.c"
 #include "hashmap.c"
 #include "bump_alloc.c"
 #include "string_builder.c"
@@ -70,7 +70,7 @@ typedef struct Compiler
     BumpAlloc bump;
     StringBuilder sb;
 
-    /*array*/ Error *errors;
+    ArrayOfError errors;
     HashMap files;
     HashMap versions;
     struct LLContext *backend;
@@ -98,7 +98,7 @@ compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
         &compiler->bump, (String){.buf = buf, .length = strlen(buf)});
 
     Error err = {.loc = loc, .message = message};
-    array_push(compiler->errors, err);
+    array_push(&compiler->errors, err);
 }
 
 static bool compiler_has_version(Compiler *compiler, String version)
@@ -108,10 +108,10 @@ static bool compiler_has_version(Compiler *compiler, String version)
 
 static void print_errors(Compiler *compiler)
 {
-    if (array_size(compiler->errors) > 0)
+    if (compiler->errors.len > 0)
     {
-        for (Error *err = compiler->errors;
-             err != compiler->errors + array_size(compiler->errors);
+        for (Error *err = compiler->errors.ptr;
+             err != compiler->errors.ptr + compiler->errors.len;
              ++err)
         {
             fprintf(
@@ -343,7 +343,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
 
         if (ast->import.name.buf == NULL)
         {
-            array_push(scope->siblings, imported_file->root->scope);
+            array_push(&scope->siblings, imported_file->root->scope);
         }
 
         break;
@@ -356,8 +356,8 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
     {
     case AST_BLOCK:
     case AST_ROOT: {
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
+        for (Ast *stmt = ast->block.stmts.ptr;
+             stmt != ast->block.stmts.ptr + ast->block.stmts.len;
              ++stmt)
         {
             process_imports(compiler, file, ast->scope, stmt);
@@ -368,9 +368,9 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
     case AST_VERSION_BLOCK: {
         if (compiler_has_version(compiler, ast->version_block.version))
         {
-            for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts +
-                             array_size(ast->version_block.stmts);
+            for (Ast *stmt = ast->version_block.stmts.ptr;
+                 stmt !=
+                 ast->version_block.stmts.ptr + ast->version_block.stmts.len;
                  ++stmt)
             {
                 process_imports(compiler, file, scope, stmt);
@@ -381,8 +381,8 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
     }
 
     case AST_PROC_DECL: {
-        for (Ast *stmt = ast->proc.stmts;
-             stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+        for (Ast *stmt = ast->proc.stmts.ptr;
+             stmt != ast->proc.stmts.ptr + ast->proc.stmts.len;
              ++stmt)
         {
             process_imports(compiler, file, ast->scope, stmt);
@@ -460,31 +460,31 @@ static void link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 #define LINKER_PATH "clang"
     char *c_out_file_path = bump_c_str(&compiler->bump, out_file_path);
 
-    char **args = NULL;
-    array_push(args, LINKER_PATH);
-    array_push(args, TMP_OBJECT_NAME);
-    array_push(args, "-lm");
-    array_push(args, "-o");
-    array_push(args, c_out_file_path);
+    ArrayOfCharPtr args = {0};
+    array_push(&args, LINKER_PATH);
+    array_push(&args, TMP_OBJECT_NAME);
+    array_push(&args, "-lm");
+    array_push(&args, "-o");
+    array_push(&args, c_out_file_path);
 
-    for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
+    for (size_t i = 0; i < compiler->args.library_paths.len; ++i)
     {
         char arg[256] = {0};
-        sprintf(arg, "-L%s", compiler->args.library_paths[i]);
-        array_push(args, strdup(arg));
+        sprintf(arg, "-L%s", compiler->args.library_paths.ptr[i]);
+        array_push(&args, strdup(arg));
     }
 
-    for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
+    for (size_t i = 0; i < compiler->args.link_libraries.len; ++i)
     {
         char arg[256] = {0};
-        sprintf(arg, "-l%s", compiler->args.link_libraries[i]);
-        array_push(args, strdup(arg));
+        sprintf(arg, "-l%s", compiler->args.link_libraries.ptr[i]);
+        array_push(&args, strdup(arg));
     }
 
-    array_push(args, NULL);
+    array_push(&args, NULL);
 
     pid_t pid;
-    int status = posix_spawnp(&pid, LINKER_PATH, NULL, NULL, args, environ);
+    int status = posix_spawnp(&pid, LINKER_PATH, NULL, NULL, args.ptr, environ);
     if (status == 0)
     {
         if (waitpid(pid, &status, 0) == -1)
@@ -604,13 +604,13 @@ int main(int argc, char **argv)
     compiler_init(compiler);
     parse_args(&compiler->args, argc, argv);
 
-    if (array_size(compiler->args.in_paths) != 1)
+    if (compiler->args.in_paths.len != 1)
     {
         print_usage(argc, argv);
         exit(EXIT_FAILURE);
     }
 
-    char *in_path = compiler->args.in_paths[0];
+    char *in_path = compiler->args.in_paths.ptr[0];
 
     char *absolute_path = get_absolute_path(in_path);
     String filepath = CSTR(absolute_path);

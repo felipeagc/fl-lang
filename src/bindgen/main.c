@@ -10,8 +10,8 @@
 
 #include "../os_includes.h"
 
-#include "../string.c"
 #include "../array.c"
+#include "../string.c"
 #include "../hashmap.c"
 #include "../bump_alloc.c"
 #include "../string_builder.c"
@@ -19,7 +19,7 @@
 
 static size_t g_indent = 0;
 static HashMap g_symbol_map = {0};
-static const char **g_to_parse = {0};
+static ArrayOfCharPtr g_to_parse = {0};
 static char *g_dir;
 
 #define PRINT_INDENT(sb)                                                       \
@@ -526,12 +526,12 @@ int main(int argc, char **argv)
 
     if (argc == 2)
     {
-        array_push(g_to_parse, argv[1]);
+        array_push(&g_to_parse, argv[1]);
         g_dir = get_file_dir(argv[1]);
 
-        while (array_size(g_to_parse))
+        while (g_to_parse.len)
         {
-            const char *path = *array_pop(g_to_parse);
+            const char *path = *array_pop(&g_to_parse);
 
             BumpAlloc bump;
             bump_init(&bump, 1 << 16);

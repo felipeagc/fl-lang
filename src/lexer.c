@@ -5,7 +5,7 @@ typedef struct Lexer
     size_t pos;
     uint32_t line;
     uint32_t col;
-    /*array*/ Token *tokens;
+    ArrayOfToken tokens;
 } Lexer;
 
 static inline bool is_letter(char c)
@@ -436,7 +436,7 @@ void lex_token(Lexer *l)
                 lex_next(l, 1);
             }
 
-            tok.str = (String){0};
+            sb_reset(&l->compiler->sb);
 
             while (lex_peek(l, 0) != '\"' && !lex_is_at_end(l))
             {
@@ -464,15 +464,15 @@ void lex_token(Lexer *l)
                     }
                 }
 
-                array_push(tok.str.buf, n);
+                sb_append_char(&l->compiler->sb, n);
             }
 
             if (tok.type == TOKEN_CSTRING_LIT)
             {
-                array_push(tok.str.buf, '\0');
+                sb_append_char(&l->compiler->sb, '\0');
             }
 
-            tok.str.length = array_size(tok.str.buf);
+            tok.str = sb_build(&l->compiler->sb, &l->compiler->bump);
 
             ++tok.loc.length;
             if (lex_next(l, 1) != '\"' || lex_is_at_end(l))
@@ -655,7 +655,7 @@ void lex_token(Lexer *l)
 
     if (tok.loc.length > 0)
     {
-        array_push(l->tokens, tok);
+        array_push(&l->tokens, tok);
     }
 }
 

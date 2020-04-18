@@ -24,7 +24,11 @@ typedef enum TypeFlags {
     TYPE_FLAG_C_VARARGS = 1 << 3,
 } TypeFlags;
 
-typedef struct TypeInfo
+typedef struct TypeInfo TypeInfo;
+
+typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
+
+struct TypeInfo
 {
     LLVMTypeRef ref;
     struct Scope *scope;
@@ -56,11 +60,11 @@ typedef struct TypeInfo
         struct
         {
             struct TypeInfo *return_type;
-            /*array*/ struct TypeInfo **params;
+            ArrayOfTypeInfoPtr params;
         } proc;
         struct
         {
-            /*array*/ struct TypeInfo **fields;
+            ArrayOfTypeInfoPtr fields;
             bool is_union;
         } structure;
         struct
@@ -68,7 +72,7 @@ typedef struct TypeInfo
             struct TypeInfo *underlying_type;
         } enumeration;
     };
-} TypeInfo;
+};
 
 // Unsigned int types
 static TypeInfo U8_TYPE = {.kind = TYPE_INT,
@@ -210,16 +214,16 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     }
 
     case TYPE_STRUCT: {
-        if (array_size(received->structure.fields) !=
-            array_size(expected->structure.fields))
+        if ((received->structure.fields.len) !=
+            (expected->structure.fields.len))
             return NULL;
 
-        size_t field_count = array_size(expected->structure.fields);
+        size_t field_count = expected->structure.fields.len;
         for (size_t i = 0; i < field_count; ++i)
         {
             if (!exact_types(
-                    received->structure.fields[i],
-                    expected->structure.fields[i]))
+                    received->structure.fields.ptr[i],
+                    expected->structure.fields.ptr[i]))
             {
                 return NULL;
             }
@@ -232,14 +236,13 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
                 received->proc.return_type, expected->proc.return_type))
             return NULL;
 
-        if (array_size(received->proc.params) !=
-            array_size(expected->proc.params))
+        if ((received->proc.params.len) != (expected->proc.params.len))
             return NULL;
 
-        for (size_t i = 0; i < array_size(received->proc.params); ++i)
+        for (size_t i = 0; i < received->proc.params.len; ++i)
         {
             if (!exact_types(
-                    received->proc.params[i], expected->proc.params[i]))
+                    received->proc.params.ptr[i], expected->proc.params.ptr[i]))
                 return NULL;
         }
 
@@ -523,9 +526,9 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     case TYPE_PROC: {
         sb_append(sb, STR("F"));
         print_mangled_type(sb, type->proc.return_type);
-        for (size_t i = 0; i < array_size(type->proc.params); ++i)
+        for (size_t i = 0; i < type->proc.params.len; ++i)
         {
-            print_mangled_type(sb, type->proc.params[i]);
+            print_mangled_type(sb, type->proc.params.ptr[i]);
         }
         sb_append(sb, STR("E"));
         break;
@@ -559,9 +562,9 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
     case TYPE_STRUCT: {
         sb_append(sb, STR("C"));
-        for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+        for (size_t i = 0; i < type->structure.fields.len; ++i)
         {
-            print_mangled_type(sb, type->structure.fields[i]);
+            print_mangled_type(sb, type->structure.fields.ptr[i]);
         }
         sb_append(sb, STR("E"));
         break;
@@ -612,9 +615,8 @@ static uint32_t align_of_type(TypeInfo *type)
     case TYPE_ARRAY: align = align_of_type(type->array.sub); break;
 
     case TYPE_STRUCT: {
-        for (TypeInfo **field = type->structure.fields;
-             field !=
-             type->structure.fields + array_size(type->structure.fields);
+        for (TypeInfo **field = type->structure.fields.ptr;
+             field != type->structure.fields.ptr + type->structure.fields.len;
              ++field)
         {
             uint32_t field_align = align_of_type(*field);
@@ -666,13 +668,13 @@ static uint32_t size_of_type(TypeInfo *type)
     case TYPE_STRUCT: {
         if (!type->structure.is_union)
         {
-            for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+            for (size_t i = 0; i < type->structure.fields.len; ++i)
             {
-                TypeInfo *field = type->structure.fields[i];
-                TypeInfo *next_field = type->structure.fields[i + 1];
-                if (i == (array_size(type->structure.fields) - 1))
+                TypeInfo *field = type->structure.fields.ptr[i];
+                TypeInfo *next_field = type->structure.fields.ptr[i + 1];
+                if (i == (type->structure.fields.len - 1))
                 {
-                    next_field = type->structure.fields[0];
+                    next_field = type->structure.fields.ptr[0];
                 }
 
                 uint32_t field_size = size_of_type(field);
@@ -686,9 +688,9 @@ static uint32_t size_of_type(TypeInfo *type)
         }
         else
         {
-            for (size_t i = 0; i < array_size(type->structure.fields); ++i)
+            for (size_t i = 0; i < type->structure.fields.len; ++i)
             {
-                TypeInfo *field = type->structure.fields[i];
+                TypeInfo *field = type->structure.fields.ptr[i];
                 uint32_t field_size = size_of_type(field);
                 if (field_size > size) size = field_size;
             }

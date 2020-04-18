@@ -1,9 +1,9 @@
 typedef struct Arguments
 {
-    char **in_paths;
+    ArrayOfCharPtr in_paths;
     char *out_path;
-    char **link_libraries;
-    char **library_paths;
+    ArrayOfCharPtr link_libraries;
+    ArrayOfCharPtr library_paths;
     bool should_run;
     bool print_llvm;
     uint32_t opt_level;
@@ -40,11 +40,11 @@ static void parse_args(Arguments *args, int argc, char **argv)
             case 'l': {
                 switch (argv[i][2])
                 {
-                case '=': array_push(args->link_libraries, &argv[i][3]); break;
+                case '=': array_push(&args->link_libraries, &argv[i][3]); break;
                 case 'p': {
                     if (argv[i][3] == '=')
                     {
-                        array_push(args->library_paths, &argv[i][4]);
+                        array_push(&args->library_paths, &argv[i][4]);
                     }
                     break;
                 }
@@ -73,7 +73,7 @@ static void parse_args(Arguments *args, int argc, char **argv)
         }
         else
         {
-            array_push(args->in_paths, argv[i]);
+            array_push(&args->in_paths, argv[i]);
         }
     }
 }

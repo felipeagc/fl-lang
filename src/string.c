@@ -4,6 +4,9 @@ typedef struct String
     size_t length;
 } String;
 
+typedef ARRAY_OF(String) ArrayOfString;
+typedef ARRAY_OF(char *) ArrayOfCharPtr;
+
 #define STR(lit)                                                               \
     ((String){                                                                 \
         .buf = lit,                                                            \
@@ -27,7 +30,8 @@ static inline bool string_equals(String a, String b)
 #if defined(_WIN32)
 static char *utf16_to_utf8(wchar_t *source)
 {
-    size_t required_size = WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
+    size_t required_size =
+        WideCharToMultiByte(CP_UTF8, 0, source, -1, NULL, 0, NULL, NULL);
     char *buf = calloc(required_size, sizeof(char));
     WideCharToMultiByte(CP_UTF8, 0, source, -1, buf, required_size, NULL, NULL);
     return buf;

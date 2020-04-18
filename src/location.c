@@ -21,3 +21,4 @@ typedef struct Error
     String message;
 } Error;
 
+typedef ARRAY_OF(Error) ArrayOfError;

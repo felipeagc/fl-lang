@@ -249,3 +249,5 @@ typedef struct Token
         char chr;
     };
 } Token;
+
+typedef ARRAY_OF(Token) ArrayOfToken;

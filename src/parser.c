@@ -8,29 +8,29 @@ typedef struct Parser
 
 static inline bool parser_is_at_end(Parser *p)
 {
-    return p->pos >= array_size(p->lexer->tokens);
+    return p->pos >= p->lexer->tokens.len;
 }
 
 static inline Token *parser_peek(Parser *p, size_t offset)
 {
-    if (p->pos + offset >= array_size(p->lexer->tokens))
+    if (p->pos + offset >= p->lexer->tokens.len)
     {
-        return &p->lexer->tokens[p->pos];
+        return &p->lexer->tokens.ptr[p->pos];
     }
-    return &p->lexer->tokens[p->pos + offset];
+    return &p->lexer->tokens.ptr[p->pos + offset];
 }
 
 static inline Token *parser_next(Parser *p, size_t count)
 {
     if (!parser_is_at_end(p)) p->pos += count;
-    return &p->lexer->tokens[p->pos - count];
+    return &p->lexer->tokens.ptr[p->pos - count];
 }
 
 static inline Token *parser_consume(Parser *p, TokenKind tok_type)
 {
     if (parser_is_at_end(p))
     {
-        Token *tok = &p->lexer->tokens[array_size(p->lexer->tokens) - 1];
+        Token *tok = &p->lexer->tokens.ptr[p->lexer->tokens.len - 1];
         compile_error(
             p->compiler,
             tok->loc,
@@ -130,7 +130,8 @@ bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
 
         ast->type = AST_TEMPLATE_INST;
         ast->template_inst.sub = sub;
-        ast->template_inst.params = NULL;
+        memset(
+            &ast->template_inst.params, 0, sizeof(ast->template_inst.params));
 
         if (!parser_consume(p, TOKEN_LPAREN)) res = false;
 
@@ -139,7 +140,7 @@ bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
             Ast param = {0};
             if (parse_expr(p, &param, true))
             {
-                array_push(ast->template_inst.params, param);
+                array_push(&ast->template_inst.params, param);
             }
             else
             {
@@ -288,7 +289,7 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 Ast param = {0};
                 if (parse_expr(p, &param, parsing_type))
-                    array_push(ast->intrinsic_call.params, param);
+                    array_push(&ast->intrinsic_call.params, param);
                 else
                     res = false;
 
@@ -317,7 +318,7 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
         {
             Ast param = {0};
             if (parse_expr(p, &param, parsing_type))
-                array_push(ast->proc_call.params, param);
+                array_push(&ast->proc_call.params, param);
             else
                 res = false;
 
@@ -483,7 +484,7 @@ bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
             Ast value = {0};
             if (parse_expr(p, &value, parsing_type))
             {
-                array_push(ast->compound.values, value);
+                array_push(&ast->compound.values, value);
             }
             else
             {
@@ -544,7 +545,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
-        ast->structure.fields = NULL;
+        memset(&ast->structure.fields, 0, sizeof(ast->structure.fields));
 
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
@@ -584,8 +585,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
             if (res)
             {
-                field.struct_field.index = array_size(ast->structure.fields);
-                array_push(ast->structure.fields, field);
+                field.struct_field.index = ast->structure.fields.len;
+                array_push(&ast->structure.fields, field);
             }
 
             if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
@@ -608,7 +609,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
-        ast->enumeration.fields = NULL;
+        memset(&ast->enumeration.fields, 0, sizeof(ast->enumeration.fields));
 
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
         {
@@ -641,7 +642,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
             if (res)
             {
-                array_push(ast->enumeration.fields, field);
+                array_push(&ast->enumeration.fields, field);
             }
 
             if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
@@ -752,7 +753,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             if (!parse_expr(p, param.proc_param.type_expr, parsing_type))
                 res = false;
 
-            array_push(ast->proc.params, param);
+            array_push(&ast->proc.params, param);
 
             if (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
@@ -1117,7 +1118,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     case TOKEN_HASH: {
         parser_next(p, 1);
 
-        AstAttribute *attributes = NULL;
+        ArrayOfAstAttribute attributes = {0};
         if (!parser_consume(p, TOKEN_LBRACK)) res = false;
 
         while (parser_peek(p, 0)->type != TOKEN_RBRACK)
@@ -1126,7 +1127,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             if (name_tok->type == TOKEN_IDENT)
             {
                 AstAttribute attr = {.name = name_tok->str};
-                array_push(attributes, attr);
+                array_push(&attributes, attr);
             }
             else
             {
@@ -1221,7 +1222,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
-            array_push(ast->block.stmts, stmt);
+            array_push(&ast->block.stmts, stmt);
         }
 
         if (!parser_consume(p, TOKEN_RCURLY)) res = false;
@@ -1346,7 +1347,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
                 {
-                    array_push(ast->proc.template_params, param_name->str);
+                    array_push(&ast->proc.template_params, param_name->str);
                 }
                 else
                 {
@@ -1404,7 +1405,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, param.proc_param.type_expr, true)) res = false;
 
-            array_push(ast->proc.params, param);
+            array_push(&ast->proc.params, param);
 
             if (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
@@ -1424,7 +1425,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             if (!parse_expr(p, ast->proc.return_type, true)) res = false;
         }
 
-        ast->proc.stmts = NULL;
+        memset(&ast->proc.stmts, 0, sizeof(ast->proc.stmts));
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
@@ -1435,7 +1436,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             {
                 Ast stmt = {0};
                 if (!parse_stmt(p, &stmt, true, true)) res = false;
-                array_push(ast->proc.stmts, stmt);
+                array_push(&ast->proc.stmts, stmt);
             }
 
             if (!parser_consume(p, TOKEN_RCURLY)) res = false;
@@ -1538,7 +1539,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
                 {
-                    array_push(ast->type_def.template_params, param_name->str);
+                    array_push(&ast->type_def.template_params, param_name->str);
                 }
                 else
                 {
@@ -1597,7 +1598,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
-            array_push(ast->version_block.stmts, stmt);
+            array_push(&ast->version_block.stmts, stmt);
         }
 
         if (!parser_consume(p, TOKEN_RCURLY)) res = false;
@@ -1650,8 +1651,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
-        ast->switch_stmt.vals = NULL;
-        ast->switch_stmt.stmts = NULL;
+        memset(&ast->switch_stmt.vals, 0, sizeof(ast->switch_stmt.vals));
+        memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
         ast->switch_stmt.else_stmt = NULL;
 
         while (parser_peek(p, 0)->type != TOKEN_RCURLY)
@@ -1683,8 +1684,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
                 if (res)
                 {
-                    array_push(ast->switch_stmt.vals, val);
-                    array_push(ast->switch_stmt.stmts, stmt);
+                    array_push(&ast->switch_stmt.vals, val);
+                    array_push(&ast->switch_stmt.stmts, stmt);
                 }
             }
         }
@@ -1835,7 +1836,7 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
         Ast stmt = {0};
         if (parse_stmt(p, &stmt, false, true))
         {
-            array_push(p->ast->block.stmts, stmt);
+            array_push(&p->ast->block.stmts, stmt);
         }
     }
 }

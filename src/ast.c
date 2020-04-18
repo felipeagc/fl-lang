@@ -116,7 +116,13 @@ typedef struct AstAttribute
     String name;
 } AstAttribute;
 
-typedef struct Ast
+typedef struct Ast Ast;
+
+typedef ARRAY_OF(AstAttribute) ArrayOfAstAttribute;
+typedef ARRAY_OF(Ast) ArrayOfAst;
+typedef ARRAY_OF(Ast *) ArrayOfAstPtr;
+
+struct Ast
 {
     AstType type;
     uint32_t flags;
@@ -126,7 +132,7 @@ typedef struct Ast
     struct Scope *scope;     // Scope this symbol owns
     struct Scope *sym_scope; // Scope this symbol belongs to
     struct Ast *alias_to;
-    /*array*/ AstAttribute *attributes;
+    ArrayOfAstAttribute attributes;
 
     union
     {
@@ -144,7 +150,7 @@ typedef struct Ast
         } import;
         struct
         {
-            /*array*/ struct Ast *stmts;
+            ArrayOfAst stmts;
         } block;
         struct
         {
@@ -152,10 +158,10 @@ typedef struct Ast
             String mangled_name;
             uint32_t flags;
             struct Ast *return_type;
-            /*array*/ struct Ast *params;
-            /*array*/ struct Ast *stmts;
+            ArrayOfAst params;
+            ArrayOfAst stmts;
 
-            /*array*/ String *template_params;
+            ArrayOfString template_params;
             HashMap *template_cache;
             bool returned; // helper
 
@@ -171,15 +177,15 @@ typedef struct Ast
         {
             struct Ast *expr;
 
-            /*array*/ struct Ast *vals;
-            /*array*/ struct Ast *stmts;
+            ArrayOfAst vals;
+            ArrayOfAst stmts;
 
             struct Ast *else_stmt;
         } switch_stmt;
         struct
         {
             String version;
-            /*array*/ struct Ast *stmts;
+            ArrayOfAst stmts;
         } version_block;
         struct
         {
@@ -196,34 +202,34 @@ typedef struct Ast
         } for_stmt;
         struct
         {
-            /*array*/ struct Ast *fields;
+            ArrayOfAst fields;
             bool is_union;
         } structure;
         struct
         {
             struct Ast *type_expr;
-            /*array*/ struct Ast *fields;
+            ArrayOfAst fields;
         } enumeration;
         struct
         {
             struct Ast *expr;
-            /*array*/ struct Ast *params;
+            ArrayOfAst params;
         } proc_call;
         struct
         {
             IntrinsicType type;
-            /*array*/ struct Ast *params;
+            ArrayOfAst params;
         } intrinsic_call;
         struct
         {
             struct Ast *type_expr;
-            /*array*/ struct Ast *values;
+            ArrayOfAst values;
         } compound;
         struct
         {
             String name;
             struct Ast *type_expr;
-            /*array*/ String *template_params;
+            ArrayOfString template_params;
             HashMap *template_cache;
         } type_def;
         struct
@@ -312,9 +318,9 @@ typedef struct Ast
         struct
         {
             struct Ast *sub;
-            /*array*/ struct Ast *params;
+            ArrayOfAst params;
 
             struct Ast *resolves_to; // filled in semantic analysis
         } template_inst;
     };
-} Ast;
+};

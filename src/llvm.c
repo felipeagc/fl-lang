@@ -5,14 +5,16 @@ typedef struct LLModule
     LLVMTargetDataRef data;
 } LLModule;
 
+typedef ARRAY_OF(LLVMBasicBlockRef) ArrayOfBasicBlock;
+
 typedef struct LLContext
 {
     Compiler *compiler;
     LLModule mod;
-    /*array*/ Scope **scope_stack;
-    /*array*/ Scope **operand_scope_stack;
-    /*array*/ LLVMBasicBlockRef *break_block_stack;
-    /*array*/ LLVMBasicBlockRef *continue_block_stack;
+    ArrayOfScopePtr scope_stack;
+    ArrayOfScopePtr operand_scope_stack;
+    ArrayOfBasicBlock break_block_stack;
+    ArrayOfBasicBlock continue_block_stack;
 } LLContext;
 
 static void llvm_codegen_ast(
@@ -83,12 +85,12 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
 
     case TYPE_PROC: {
-        size_t param_count = array_size(type->proc.params);
+        size_t param_count = type->proc.params.len;
         LLVMTypeRef *param_types =
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
         for (size_t i = 0; i < param_count; i++)
         {
-            TypeInfo *param_type = type->proc.params[i];
+            TypeInfo *param_type = type->proc.params.ptr[i];
             param_types[i] = llvm_type(l, param_type);
             if (is_type_compound(param_type))
             {
@@ -110,12 +112,12 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         if (!type->structure.is_union)
         {
             type->ref = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
-            size_t field_count = array_size(type->structure.fields);
+            size_t field_count = type->structure.fields.len;
             LLVMTypeRef *field_types = bump_alloc(
                 &l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
             for (size_t i = 0; i < field_count; i++)
             {
-                field_types[i] = llvm_type(l, type->structure.fields[i]);
+                field_types[i] = llvm_type(l, type->structure.fields.ptr[i]);
             }
             LLVMStructSetBody(type->ref, field_types, field_count, false);
         }
@@ -273,10 +275,10 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             {
                 // Generate instantiations
                 for (Ast **instantiation =
-                         (Ast **)ast->proc.template_cache->values;
+                         (Ast **)ast->proc.template_cache->values.ptr;
                      instantiation !=
-                     (Ast **)ast->proc.template_cache->values +
-                         array_size(ast->proc.template_cache->values);
+                     (Ast **)ast->proc.template_cache->values.ptr +
+                         ast->proc.template_cache->values.len;
                      ++instantiation)
                 {
                     llvm_add_proc(l, mod, *instantiation, 1);
@@ -302,8 +304,8 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             }
 
             bool is_inline = false;
-            for (AstAttribute *attrib = ast->attributes;
-                 attrib != ast->attributes + array_size(ast->attributes);
+            for (AstAttribute *attrib = ast->attributes.ptr;
+                 attrib != ast->attributes.ptr + ast->attributes.len;
                  ++attrib)
             {
                 if (string_equals(attrib->name, STR("inline")))
@@ -338,15 +340,15 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 static void
 llvm_codegen_deferred_stmts(LLContext *l, LLModule *mod, bool is_return)
 {
-    Scope *scope = *array_last(l->scope_stack);
+    Scope *scope = *array_last(&l->scope_stack);
 
     while (scope)
     {
-        while (array_size(scope->deferred_stmts) > 0)
+        while (scope->deferred_stmts.len > 0)
         {
-            Ast *stmt = *array_last(scope->deferred_stmts);
+            Ast *stmt = *array_last(&scope->deferred_stmts);
             llvm_codegen_ast(l, mod, stmt, false, NULL);
-            array_pop(scope->deferred_stmts);
+            array_pop(&scope->deferred_stmts);
         }
 
         if (is_return)
@@ -366,12 +368,12 @@ static void llvm_codegen_ast(
     {
     case AST_BLOCK:
     case AST_ROOT: {
-        array_push(l->scope_stack, ast->scope);
-        array_push(l->operand_scope_stack, ast->scope);
+        array_push(&l->scope_stack, ast->scope);
+        array_push(&l->operand_scope_stack, ast->scope);
         llvm_codegen_ast_children(
-            l, mod, ast->block.stmts, array_size(ast->block.stmts), is_const);
-        array_pop(l->operand_scope_stack);
-        array_pop(l->scope_stack);
+            l, mod, ast->block.stmts.ptr, ast->block.stmts.len, is_const);
+        array_pop(&l->operand_scope_stack);
+        array_pop(&l->scope_stack);
         break;
     }
 
@@ -381,8 +383,8 @@ static void llvm_codegen_ast(
             llvm_codegen_ast_children(
                 l,
                 mod,
-                ast->version_block.stmts,
-                array_size(ast->version_block.stmts),
+                ast->version_block.stmts.ptr,
+                ast->version_block.stmts.len,
                 is_const);
         }
 
@@ -393,10 +395,10 @@ static void llvm_codegen_ast(
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
         {
             // Generate instantiations
-            for (Ast **instantiation = (Ast **)ast->proc.template_cache->values;
-                 instantiation !=
-                 (Ast **)ast->proc.template_cache->values +
-                     array_size(ast->proc.template_cache->values);
+            for (Ast **instantiation =
+                     (Ast **)ast->proc.template_cache->values.ptr;
+                 instantiation != (Ast **)ast->proc.template_cache->values.ptr +
+                                      ast->proc.template_cache->values.len;
                  ++instantiation)
             {
                 llvm_codegen_ast(l, mod, *instantiation, false, NULL);
@@ -411,10 +413,10 @@ static void llvm_codegen_ast(
 
         if (ast->proc.flags & PROC_FLAG_HAS_BODY)
         {
-            size_t param_count = array_size(ast->proc.params);
+            size_t param_count = ast->proc.params.len;
             for (size_t i = 0; i < param_count; i++)
             {
-                Ast *param = &ast->proc.params[i];
+                Ast *param = &ast->proc.params.ptr[i];
                 param->proc_param.value.is_lvalue = false;
 
                 TypeInfo *param_type = param->proc_param.type_expr->as_type;
@@ -431,7 +433,7 @@ static void llvm_codegen_ast(
                 if (param->flags & AST_FLAG_USING)
                 {
                     Scope *expr_scope = get_expr_scope(
-                        l->compiler, *array_last(l->scope_stack), param);
+                        l->compiler, *array_last(&l->scope_stack), param);
                     assert(expr_scope);
 
                     expr_scope->value = param->proc_param.value;
@@ -581,7 +583,7 @@ static void llvm_codegen_ast(
 
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(
-                *array_last(l->scope_stack),
+                *array_last(&l->scope_stack),
                 ast->primary.tok->str,
                 ast->loc.file);
             assert(sym);
@@ -649,29 +651,29 @@ static void llvm_codegen_ast(
         llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);
         LLVMValueRef fun = load_val(mod, &function_value);
 
-        unsigned param_count = (unsigned)array_size(ast->proc_call.params);
+        unsigned param_count = (unsigned)(ast->proc_call.params.len);
         LLVMValueRef *params =
             bump_alloc(&l->compiler->bump, sizeof(LLVMValueRef) * param_count);
 
         TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
         TypeInfo *proc_ty = proc_ptr_ty->ptr.sub;
 
-        assert(array_size(l->operand_scope_stack) > 0);
+        assert(l->operand_scope_stack.len > 0);
 
-        array_push(l->scope_stack, *array_last(l->operand_scope_stack));
+        array_push(&l->scope_stack, *array_last(&l->operand_scope_stack));
         for (size_t i = 0; i < param_count; i++)
         {
             TypeInfo *param_expected_type = NULL;
-            if (i < array_size(proc_ty->proc.params))
+            if (i < (proc_ty->proc.params.len))
             {
-                param_expected_type = proc_ty->proc.params[i];
+                param_expected_type = proc_ty->proc.params.ptr[i];
             }
 
-            TypeInfo *param_type = ast->proc_call.params[i].type_info;
+            TypeInfo *param_type = ast->proc_call.params.ptr[i].type_info;
 
             AstValue param_value = {0};
             llvm_codegen_ast(
-                l, mod, &ast->proc_call.params[i], false, &param_value);
+                l, mod, &ast->proc_call.params.ptr[i], false, &param_value);
             if (is_type_compound(param_type))
             {
                 params[i] = param_value.value;
@@ -705,7 +707,7 @@ static void llvm_codegen_ast(
             }
             assert(params[i]);
         }
-        array_pop(l->scope_stack);
+        array_pop(&l->scope_stack);
 
         AstValue result_value = {0};
         result_value.value =
@@ -719,7 +721,7 @@ static void llvm_codegen_ast(
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_SIZEOF: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
             if (param->type_info->kind == TYPE_TYPE)
@@ -740,7 +742,7 @@ static void llvm_codegen_ast(
         }
 
         case INTRINSIC_ALIGNOF: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             TypeInfo *type = NULL;
 
@@ -762,7 +764,7 @@ static void llvm_codegen_ast(
         }
 
         case INTRINSIC_SQRT: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             AstValue param_val = {0};
             llvm_codegen_ast(l, mod, param, is_const, &param_val);
@@ -785,7 +787,7 @@ static void llvm_codegen_ast(
         }
 
         case INTRINSIC_COS: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             AstValue param_val = {0};
             llvm_codegen_ast(l, mod, param, is_const, &param_val);
@@ -808,7 +810,7 @@ static void llvm_codegen_ast(
         }
 
         case INTRINSIC_SIN: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             AstValue param_val = {0};
             llvm_codegen_ast(l, mod, param, is_const, &param_val);
@@ -881,7 +883,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_VAR_DECL: {
-        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+        Ast *proc = get_scope_procedure(*array_last(&l->scope_stack));
         LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
 
         if (ast->flags & AST_FLAG_EXTERN)
@@ -1018,7 +1020,7 @@ static void llvm_codegen_ast(
     case AST_RETURN: {
         llvm_codegen_deferred_stmts(l, mod, true);
 
-        Ast *proc = get_scope_procedure(*array_last(l->scope_stack));
+        Ast *proc = get_scope_procedure(*array_last(&l->scope_stack));
         assert(proc);
 
         if (ast->expr)
@@ -1224,10 +1226,10 @@ static void llvm_codegen_ast(
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript.left, false, &left_value);
 
-        array_push(l->scope_stack, *array_last(l->operand_scope_stack));
+        array_push(&l->scope_stack, *array_last(&l->operand_scope_stack));
         AstValue right_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript.right, false, &right_value);
-        array_pop(l->scope_stack);
+        array_pop(&l->scope_stack);
 
         assert(left_value.value);
         assert(right_value.value);
@@ -1316,7 +1318,7 @@ static void llvm_codegen_ast(
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript_slice.left, false, &left_value);
 
-        array_push(l->scope_stack, *array_last(l->operand_scope_stack));
+        array_push(&l->scope_stack, *array_last(&l->operand_scope_stack));
         AstValue lower_value = {0};
         AstValue upper_value = {0};
         if (ast->subscript_slice.lower && ast->subscript_slice.upper)
@@ -1326,7 +1328,7 @@ static void llvm_codegen_ast(
             llvm_codegen_ast(
                 l, mod, ast->subscript_slice.upper, false, &upper_value);
         }
-        array_pop(l->scope_stack);
+        array_pop(&l->scope_stack);
 
         assert(left_value.value);
 
@@ -1474,14 +1476,13 @@ static void llvm_codegen_ast(
             {
             case TYPE_VECTOR:
             case TYPE_ARRAY: {
-                if (array_size(ast->compound.values) !=
-                        compound_type->array.size &&
-                    array_size(ast->compound.values) == 1)
+                if (ast->compound.values.len != compound_type->array.size &&
+                    ast->compound.values.len == 1)
                 {
                     // Only got one value, replicate it
                     AstValue val = {0};
                     llvm_codegen_ast(
-                        l, mod, &ast->compound.values[0], is_const, &val);
+                        l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
                     for (size_t i = 0; i < compound_type->array.size; ++i)
                     {
@@ -1495,7 +1496,7 @@ static void llvm_codegen_ast(
                         LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
                     }
                 }
-                else if (array_size(ast->compound.values) == 0)
+                else if (ast->compound.values.len == 0)
                 {
                     LLVMBuildStore(
                         mod->builder,
@@ -1505,15 +1506,15 @@ static void llvm_codegen_ast(
                 else
                 {
                     assert(
-                        array_size(ast->compound.values) ==
-                        compound_type->array.size);
+                        ast->compound.values.len == compound_type->array.size);
 
-                    for (Ast *value = ast->compound.values;
-                         value != ast->compound.values +
-                                      array_size(ast->compound.values);
+                    for (Ast *value = ast->compound.values.ptr;
+                         value !=
+                         ast->compound.values.ptr + ast->compound.values.len;
                          ++value)
                     {
-                        size_t index = (size_t)(value - ast->compound.values);
+                        size_t index =
+                            (size_t)(value - ast->compound.values.ptr);
                         AstValue val = {0};
                         llvm_codegen_ast(l, mod, value, is_const, &val);
 
@@ -1532,7 +1533,7 @@ static void llvm_codegen_ast(
             }
 
             case TYPE_STRUCT: {
-                if (array_size(ast->compound.values) == 0)
+                if (ast->compound.values.len == 0)
                 {
                     LLVMBuildStore(
                         mod->builder,
@@ -1542,15 +1543,16 @@ static void llvm_codegen_ast(
                 else
                 {
                     assert(
-                        array_size(ast->compound.values) ==
-                        array_size(compound_type->structure.fields));
+                        (ast->compound.values.len) ==
+                        (compound_type->structure.fields.len));
 
-                    for (Ast *value = ast->compound.values;
-                         value != ast->compound.values +
-                                      array_size(ast->compound.values);
+                    for (Ast *value = ast->compound.values.ptr;
+                         value !=
+                         ast->compound.values.ptr + ast->compound.values.len;
                          ++value)
                     {
-                        size_t index = (size_t)(value - ast->compound.values);
+                        size_t index =
+                            (size_t)(value - ast->compound.values.ptr);
                         AstValue val = {0};
                         llvm_codegen_ast(l, mod, value, is_const, &val);
 
@@ -1578,16 +1580,15 @@ static void llvm_codegen_ast(
             case TYPE_VECTOR: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
-                    sizeof(LLVMValueRef) * array_size(ast->compound.values));
+                    sizeof(LLVMValueRef) * ast->compound.values.len);
 
-                if (array_size(ast->compound.values) !=
-                        compound_type->array.size &&
-                    array_size(ast->compound.values) == 1)
+                if ((ast->compound.values.len) != compound_type->array.size &&
+                    (ast->compound.values.len) == 1)
                 {
                     // Only got one value, replicate it
                     AstValue val = {0};
                     llvm_codegen_ast(
-                        l, mod, &ast->compound.values[0], is_const, &val);
+                        l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
                     for (size_t i = 0; i < compound_type->array.size; ++i)
                     {
@@ -1596,12 +1597,13 @@ static void llvm_codegen_ast(
                 }
                 else
                 {
-                    for (Ast *value = ast->compound.values;
-                         value != ast->compound.values +
-                                      array_size(ast->compound.values);
+                    for (Ast *value = ast->compound.values.ptr;
+                         value !=
+                         ast->compound.values.ptr + ast->compound.values.len;
                          ++value)
                     {
-                        size_t index = (size_t)(value - ast->compound.values);
+                        size_t index =
+                            (size_t)(value - ast->compound.values.ptr);
                         AstValue val = {0};
                         llvm_codegen_ast(l, mod, value, true, &val);
                         values[index] = val.value;
@@ -1617,16 +1619,15 @@ static void llvm_codegen_ast(
             case TYPE_ARRAY: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
-                    sizeof(LLVMValueRef) * array_size(ast->compound.values));
+                    sizeof(LLVMValueRef) * ast->compound.values.len);
 
-                if (array_size(ast->compound.values) !=
-                        compound_type->array.size &&
-                    array_size(ast->compound.values) == 1)
+                if ((ast->compound.values.len) != compound_type->array.size &&
+                    (ast->compound.values.len) == 1)
                 {
                     // Only got one value, replicate it
                     AstValue val = {0};
                     llvm_codegen_ast(
-                        l, mod, &ast->compound.values[0], is_const, &val);
+                        l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
                     for (size_t i = 0; i < compound_type->array.size; ++i)
                     {
@@ -1635,12 +1636,13 @@ static void llvm_codegen_ast(
                 }
                 else
                 {
-                    for (Ast *value = ast->compound.values;
-                         value != ast->compound.values +
-                                      array_size(ast->compound.values);
+                    for (Ast *value = ast->compound.values.ptr;
+                         value !=
+                         ast->compound.values.ptr + ast->compound.values.len;
                          ++value)
                     {
-                        size_t index = (size_t)(value - ast->compound.values);
+                        size_t index =
+                            (size_t)(value - ast->compound.values.ptr);
                         AstValue val = {0};
                         llvm_codegen_ast(l, mod, value, true, &val);
                         values[index] = val.value;
@@ -1658,14 +1660,14 @@ static void llvm_codegen_ast(
             case TYPE_STRUCT: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
-                    sizeof(LLVMValueRef) * array_size(ast->compound.values));
+                    sizeof(LLVMValueRef) * ast->compound.values.len);
 
-                for (Ast *value = ast->compound.values;
+                for (Ast *value = ast->compound.values.ptr;
                      value !=
-                     ast->compound.values + array_size(ast->compound.values);
+                     ast->compound.values.ptr + ast->compound.values.len;
                      ++value)
                 {
-                    size_t index = (size_t)(value - ast->compound.values);
+                    size_t index = (size_t)(value - ast->compound.values.ptr);
                     AstValue val = {0};
                     llvm_codegen_ast(l, mod, value, true, &val);
                     values[index] = val.value;
@@ -1674,7 +1676,7 @@ static void llvm_codegen_ast(
                 result_value.value = LLVMConstNamedStruct(
                     llvm_type(l, ast->type_info),
                     values,
-                    array_size(ast->compound.values));
+                    ast->compound.values.len);
 
                 break;
             }
@@ -1732,10 +1734,10 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_VEC_ACCESS: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
-        AstValue vec_value = (*array_last(l->scope_stack))->value;
+        AstValue vec_value = (*array_last(&l->scope_stack))->value;
 
         AstValue subscript_value = {0};
 
@@ -1754,7 +1756,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_PTR: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
         TypeInfo *type = scope->type_info;
@@ -1763,7 +1765,7 @@ static void llvm_codegen_ast(
         {
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
-            AstValue slice_value = (*array_last(l->scope_stack))->value;
+            AstValue slice_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
             uint32_t field_index = 0; // ptr index
@@ -1798,7 +1800,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_ARRAY: {
-            AstValue array_value = (*array_last(l->scope_stack))->value;
+            AstValue array_value = (*array_last(&l->scope_stack))->value;
 
             assert(array_value.is_lvalue);
 
@@ -1823,7 +1825,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_LEN: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
         TypeInfo *type = scope->type_info;
@@ -1832,7 +1834,7 @@ static void llvm_codegen_ast(
         {
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
-            AstValue slice_value = (*array_last(l->scope_stack))->value;
+            AstValue slice_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
             uint32_t field_index = 1; // len index
@@ -1884,7 +1886,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_CAP: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
         TypeInfo *type = scope->type_info;
@@ -1892,7 +1894,7 @@ static void llvm_codegen_ast(
         switch (type->kind)
         {
         case TYPE_DYNAMIC_ARRAY: {
-            AstValue arr_value = (*array_last(l->scope_stack))->value;
+            AstValue arr_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
             uint32_t field_index = 2; // cap index
@@ -1933,7 +1935,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_MAX: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -1997,7 +1999,7 @@ static void llvm_codegen_ast(
     }
 
     case AST_BUILTIN_MIN: {
-        Scope *scope = *array_last(l->scope_stack);
+        Scope *scope = *array_last(&l->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -2060,7 +2062,7 @@ static void llvm_codegen_ast(
             llvm_codegen_ast(l, mod, ast->expr, is_const, &value);
 
             Scope *expr_scope = get_expr_scope(
-                l->compiler, *array_last(l->scope_stack), ast->expr);
+                l->compiler, *array_last(&l->scope_stack), ast->expr);
 
             assert(value.value);
             expr_scope->value = value;
@@ -2069,10 +2071,10 @@ static void llvm_codegen_ast(
     }
 
     case AST_ACCESS: {
-        assert(array_size(l->scope_stack) > 0);
+        assert(l->scope_stack.len > 0);
 
         Scope *accessed_scope = get_expr_scope(
-            l->compiler, *array_last(l->scope_stack), ast->access.left);
+            l->compiler, *array_last(&l->scope_stack), ast->access.left);
         assert(accessed_scope);
 
         if (accessed_scope->type == SCOPE_INSTANCED)
@@ -2089,9 +2091,9 @@ static void llvm_codegen_ast(
             accessed_scope->value = accessed_value;
         }
 
-        array_push(l->scope_stack, accessed_scope);
+        array_push(&l->scope_stack, accessed_scope);
         llvm_codegen_ast(l, mod, ast->access.right, false, out_value);
-        array_pop(l->scope_stack);
+        array_pop(&l->scope_stack);
 
         break;
     }
@@ -2959,7 +2961,7 @@ static void llvm_codegen_ast(
             LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
         assert(fun);
 
-        size_t case_count = array_size(ast->switch_stmt.vals);
+        size_t case_count = ast->switch_stmt.vals.len;
 
         LLVMBasicBlockRef *case_bbs = bump_alloc(
             &l->compiler->bump, sizeof(LLVMBasicBlockRef) * case_count);
@@ -2987,7 +2989,7 @@ static void llvm_codegen_ast(
         {
             AstValue cond_val;
             llvm_codegen_ast(
-                l, mod, &ast->switch_stmt.vals[i], true, &cond_val);
+                l, mod, &ast->switch_stmt.vals.ptr[i], true, &cond_val);
             LLVMAddCase(switch_val, cond_val.value, case_bbs[i]);
         }
 
@@ -2995,9 +2997,10 @@ static void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, case_bbs[i]);
 
-            array_push(l->break_block_stack, merge_bb);
-            llvm_codegen_ast(l, mod, &ast->switch_stmt.stmts[i], false, NULL);
-            array_pop(l->break_block_stack);
+            array_push(&l->break_block_stack, merge_bb);
+            llvm_codegen_ast(
+                l, mod, &ast->switch_stmt.stmts.ptr[i], false, NULL);
+            array_pop(&l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
             {
@@ -3009,9 +3012,9 @@ static void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, default_bb);
 
-            array_push(l->break_block_stack, merge_bb);
+            array_push(&l->break_block_stack, merge_bb);
             llvm_codegen_ast(l, mod, ast->switch_stmt.else_stmt, false, NULL);
-            array_pop(l->break_block_stack);
+            array_pop(&l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
             {
@@ -3054,11 +3057,11 @@ static void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
 
-            array_push(l->break_block_stack, merge_bb);
-            array_push(l->continue_block_stack, cond_bb);
+            array_push(&l->break_block_stack, merge_bb);
+            array_push(&l->continue_block_stack, cond_bb);
             llvm_codegen_ast(l, mod, ast->while_stmt.stmt, false, NULL);
-            array_pop(l->continue_block_stack);
-            array_pop(l->break_block_stack);
+            array_pop(&l->continue_block_stack);
+            array_pop(&l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, cond_bb);
@@ -3071,8 +3074,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_FOR: {
-        array_push(l->scope_stack, ast->scope);
-        array_push(l->operand_scope_stack, ast->scope);
+        array_push(&l->scope_stack, ast->scope);
+        array_push(&l->operand_scope_stack, ast->scope);
 
         LLVMValueRef fun =
             LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
@@ -3116,11 +3119,11 @@ static void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
 
-            array_push(l->break_block_stack, merge_bb);
-            array_push(l->continue_block_stack, inc_bb);
+            array_push(&l->break_block_stack, merge_bb);
+            array_push(&l->continue_block_stack, inc_bb);
             llvm_codegen_ast(l, mod, ast->for_stmt.stmt, false, NULL);
-            array_pop(l->continue_block_stack);
-            array_pop(l->break_block_stack);
+            array_pop(&l->continue_block_stack);
+            array_pop(&l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, inc_bb);
@@ -3141,15 +3144,15 @@ static void llvm_codegen_ast(
         // Merge
         LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
 
-        array_pop(l->operand_scope_stack);
-        array_pop(l->scope_stack);
+        array_pop(&l->operand_scope_stack);
+        array_pop(&l->scope_stack);
         break;
     }
 
     case AST_BREAK: {
         llvm_codegen_deferred_stmts(l, mod, false);
 
-        LLVMBasicBlockRef *break_block = array_last(l->break_block_stack);
+        LLVMBasicBlockRef *break_block = array_last(&l->break_block_stack);
         assert(break_block);
         LLVMBuildBr(mod->builder, *break_block);
         break;
@@ -3158,7 +3161,8 @@ static void llvm_codegen_ast(
     case AST_CONTINUE: {
         llvm_codegen_deferred_stmts(l, mod, false);
 
-        LLVMBasicBlockRef *continue_block = array_last(l->continue_block_stack);
+        LLVMBasicBlockRef *continue_block =
+            array_last(&l->continue_block_stack);
         assert(continue_block);
         LLVMBuildBr(mod->builder, *continue_block);
         break;
@@ -3190,8 +3194,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_DEFER: {
-        Scope *last_scope = *array_last(l->scope_stack);
-        array_push(last_scope->deferred_stmts, ast->stmt);
+        Scope *last_scope = *array_last(&l->scope_stack);
+        array_push(&last_scope->deferred_stmts, ast->stmt);
         break;
     }
 
@@ -3208,9 +3212,9 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
     if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
     {
         // Generate instantiations
-        for (Ast **instantiation = (Ast **)ast->proc.template_cache->values;
-             instantiation != (Ast **)ast->proc.template_cache->values +
-                                  array_size(ast->proc.template_cache->values);
+        for (Ast **instantiation = (Ast **)ast->proc.template_cache->values.ptr;
+             instantiation != (Ast **)ast->proc.template_cache->values.ptr +
+                                  ast->proc.template_cache->values.len;
              ++instantiation)
         {
             llvm_codegen_proc_stmts(l, mod, *instantiation);
@@ -3236,12 +3240,12 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
 
     LLVMPositionBuilderAtEnd(mod->builder, entry);
 
-    array_push(l->scope_stack, ast->scope);
-    array_push(l->operand_scope_stack, ast->scope);
+    array_push(&l->scope_stack, ast->scope);
+    array_push(&l->operand_scope_stack, ast->scope);
     llvm_codegen_ast_children(
-        l, mod, ast->proc.stmts, array_size(ast->proc.stmts), false);
-    array_pop(l->operand_scope_stack);
-    array_pop(l->scope_stack);
+        l, mod, ast->proc.stmts.ptr, ast->proc.stmts.len, false);
+    array_pop(&l->operand_scope_stack);
+    array_pop(&l->scope_stack);
 
     if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
     {

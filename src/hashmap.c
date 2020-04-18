@@ -1,5 +1,7 @@
 #define DEFAULT_HASHMAP_SIZE 32
 
+typedef ARRAY_OF(void *) ArrayOfVoidPtr;
+
 typedef struct HashMap
 {
     String *keys;
@@ -7,7 +9,7 @@ typedef struct HashMap
     uint64_t *indices;
     uint64_t size;
 
-    void **values;
+    ArrayOfVoidPtr values;
 } HashMap;
 
 static void hash_grow(HashMap *map);
@@ -49,7 +51,7 @@ static void hash_init(HashMap *map, uint64_t size)
     map->hashes = malloc(sizeof(*map->hashes) * map->size);
     map->indices = malloc(sizeof(*map->indices) * map->size);
 
-    map->values = NULL;
+    memset(&map->values, 0, sizeof(map->values));
 
     memset(map->keys, 0, sizeof(*map->keys) * map->size);
     memset(map->hashes, 0, sizeof(*map->hashes) * map->size);
@@ -90,10 +92,10 @@ static uint64_t hash_set_internal(HashMap *map, String key, uint64_t index)
 
 static inline void *hash_set(HashMap *map, String key, void *value)
 {
-    size_t index = array_size(map->values);
-    array_push(map->values, value);
+    size_t index = map->values.len;
+    array_push(&map->values, value);
     hash_set_internal(map, key, index);
-    return map->values[index];
+    return map->values.ptr[index];
 }
 
 static bool hash_get(HashMap *map, String key, void **result)
@@ -114,7 +116,7 @@ static bool hash_get(HashMap *map, String key, void **result)
 
     if (map->hashes[i] != 0)
     {
-        if (result) *result = map->values[map->indices[i]];
+        if (result) *result = map->values.ptr[map->indices[i]];
         return true;
     }
 
@@ -177,5 +179,5 @@ static void hash_destroy(HashMap *map)
     free(map->hashes);
     free(map->indices);
     free(map->keys);
-    array_free(map->values);
+    array_free(&map->values);
 }

@@ -32,6 +32,15 @@ static inline void sb_grow(StringBuilder *sb)
     sb->scratch = realloc(sb->scratch, sb->cap);
 }
 
+static inline void sb_append_char(StringBuilder *sb, char c)
+{
+    if (sb->len + 1 >= sb->cap)
+    {
+        sb_grow(sb);
+    }
+    sb->buf[sb->len++] = c;
+}
+
 static inline void sb_append(StringBuilder *sb, String str)
 {
     if (str.length + sb->len >= sb->cap)

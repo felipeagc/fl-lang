@@ -1,10 +1,10 @@
 typedef struct Analyzer
 {
     Compiler *compiler;
-    /*array*/ Scope **scope_stack;
-    /*array*/ Scope **operand_scope_stack;
-    /*array*/ Ast **break_stack;
-    /*array*/ Ast **continue_stack;
+    ArrayOfScopePtr scope_stack;
+    ArrayOfScopePtr operand_scope_stack;
+    ArrayOfAstPtr break_stack;
+    ArrayOfAstPtr continue_stack;
 } Analyzer;
 
 static TypeInfo *
@@ -35,14 +35,14 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 #define INSTANTIATE_ARRAY(ARRAY)                                               \
     do                                                                         \
     {                                                                          \
-        clone_into->ARRAY = NULL;                                              \
-        array_add(clone_into->ARRAY, array_size(ast->ARRAY));                  \
-        for (size_t i = 0; i < array_size(ast->ARRAY); ++i)                    \
+        memset(&clone_into->ARRAY, 0, sizeof(clone_into->ARRAY));              \
+        array_add(&clone_into->ARRAY, ast->ARRAY.len);                         \
+        for (size_t i = 0; i < ast->ARRAY.len; ++i)                            \
         {                                                                      \
             instantiate_template(                                              \
                 compiler,                                                      \
-                &clone_into->ARRAY[i],                                         \
-                &ast->ARRAY[i],                                                \
+                &clone_into->ARRAY.ptr[i],                                     \
+                &ast->ARRAY.ptr[i],                                            \
                 names_to_replace,                                              \
                 replacements);                                                 \
         }                                                                      \
@@ -52,13 +52,13 @@ static void instantiate_template(
     Compiler *compiler,
     Ast *clone_into,
     Ast *ast,
-    /*array*/ String *names_to_replace,
-    /*array*/ Ast *replacements)
+    ArrayOfString names_to_replace,
+    ArrayOfAst replacements)
 {
     if (ast == NULL) return;
 
     assert(!ast->scope);
-    assert(array_size(names_to_replace) == array_size(replacements));
+    assert((names_to_replace.len) == (replacements.len));
 
     *clone_into = *ast;
     clone_into->flags &= ~AST_FLAG_IS_TEMPLATE; // turn off bit
@@ -69,11 +69,12 @@ static void instantiate_template(
         switch (ast->primary.tok->type)
         {
         case TOKEN_IDENT: {
-            for (size_t i = 0; i < array_size(names_to_replace); ++i)
+            for (size_t i = 0; i < names_to_replace.len; ++i)
             {
-                if (string_equals(ast->primary.tok->str, names_to_replace[i]))
+                if (string_equals(
+                        ast->primary.tok->str, names_to_replace.ptr[i]))
                 {
-                    *clone_into = replacements[i];
+                    *clone_into = replacements.ptr[i];
                     break;
                 }
             }
@@ -382,8 +383,8 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
 
     case AST_COMPOUND_LIT: {
         res = true;
-        for (Ast *value = ast->compound.values;
-             value != ast->compound.values + array_size(ast->compound.values);
+        for (Ast *value = ast->compound.values.ptr;
+             value != ast->compound.values.ptr + ast->compound.values.len;
              ++value)
         {
             if (!is_expr_const(compiler, scope, value))
@@ -605,7 +606,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_SIZEOF: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
             if (param->type_info && param->type_info->kind == TYPE_TYPE)
@@ -623,7 +624,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
         }
 
         case INTRINSIC_ALIGNOF: {
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
             if (param->type_info && param->type_info->kind == TYPE_TYPE)
@@ -729,16 +730,16 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (sym && sym->type == AST_TYPEDEF)
         {
-            if (array_size(sym->type_def.template_params) !=
-                array_size(ast->template_inst.params))
+            if ((sym->type_def.template_params.len) !=
+                (ast->template_inst.params.len))
                 break;
 
             assert(sym->type_def.template_cache);
 
             sb_reset(&a->compiler->sb);
-            for (size_t i = 0; i < array_size(ast->template_inst.params); ++i)
+            for (size_t i = 0; i < ast->template_inst.params.len; ++i)
             {
-                Ast *param = &ast->template_inst.params[i];
+                Ast *param = &ast->template_inst.params.ptr[i];
                 sb_append(&a->compiler->sb, STR("$"));
                 print_mangled_type(
                     &a->compiler->sb, ast_as_type(a, scope, param, false));
@@ -851,7 +852,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_STRUCT: {
-        TypeInfo **fields = NULL;
+        ArrayOfTypeInfoPtr fields = {0};
         bool res = true;
 
         // We need to set the type here in advance because of recursive type
@@ -860,15 +861,15 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         memset(ty, 0, sizeof(*ty));
         ast->as_type = ty;
 
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
+        for (Ast *field = ast->structure.fields.ptr;
+             field != ast->structure.fields.ptr + ast->structure.fields.len;
              ++field)
         {
             if (!ast_as_type(a, scope, field->struct_field.type_expr, false))
             {
                 res = false;
             }
-            array_push(fields, field->struct_field.type_expr->as_type);
+            array_push(&fields, field->struct_field.type_expr->as_type);
         }
 
         if (res)
@@ -921,8 +922,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         bool valid = true;
 
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
              ++param)
         {
             TypeInfo *param_as_type =
@@ -940,7 +941,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 break;
             }
 
-            array_push(ty->proc.params, param_as_type);
+            array_push(&ty->proc.params, param_as_type);
         }
 
         if (ast->proc.return_type)
@@ -975,10 +976,10 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_VECTOR_TYPE: {
-            if (array_size(ast->intrinsic_call.params) != 2) break;
+            if (ast->intrinsic_call.params.len != 2) break;
 
-            Ast *elem_type = &ast->intrinsic_call.params[0];
-            Ast *vec_width = &ast->intrinsic_call.params[1];
+            Ast *elem_type = &ast->intrinsic_call.params.ptr[0];
+            Ast *vec_width = &ast->intrinsic_call.params.ptr[1];
 
             ast_as_type(a, scope, elem_type, false);
             if (!elem_type->as_type) break;
@@ -1143,26 +1144,22 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
         memset(ast->scope, 0, sizeof(*ast->scope));
         scope_init(
-            ast->scope,
-            a->compiler,
-            SCOPE_DEFAULT,
-            array_size(ast->block.stmts),
-            ast);
-        if (array_size(a->scope_stack) > 0)
+            ast->scope, a->compiler, SCOPE_DEFAULT, ast->block.stmts.len, ast);
+        if (a->scope_stack.len > 0)
         {
-            ast->scope->parent = *array_last(a->scope_stack);
+            ast->scope->parent = *array_last(&a->scope_stack);
         }
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *stmt = ast->block.stmts;
-             stmt != ast->block.stmts + array_size(ast->block.stmts);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *stmt = ast->block.stmts.ptr;
+             stmt != ast->block.stmts.ptr + ast->block.stmts.len;
              ++stmt)
         {
             create_scopes_ast(a, stmt);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
 
         break;
     }
@@ -1170,9 +1167,9 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_VERSION_BLOCK: {
         if (compiler_has_version(a->compiler, ast->version_block.version))
         {
-            for (Ast *stmt = ast->version_block.stmts;
-                 stmt != ast->version_block.stmts +
-                             array_size(ast->version_block.stmts);
+            for (Ast *stmt = ast->version_block.stmts.ptr;
+                 stmt !=
+                 ast->version_block.stmts.ptr + ast->version_block.stmts.len;
                  ++stmt)
             {
                 create_scopes_ast(a, stmt);
@@ -1209,20 +1206,20 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
             ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
-            array_size(ast->proc.stmts) + array_size(ast->proc.params),
+            (ast->proc.stmts.len) + (ast->proc.params.len),
             ast);
-        ast->scope->parent = *array_last(a->scope_stack);
+        ast->scope->parent = *array_last(&a->scope_stack);
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *stmt = ast->proc.stmts;
-             stmt != ast->proc.stmts + array_size(ast->proc.stmts);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *stmt = ast->proc.stmts.ptr;
+             stmt != ast->proc.stmts.ptr + ast->proc.stmts.len;
              ++stmt)
         {
             create_scopes_ast(a, stmt);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
 
         break;
     }
@@ -1230,8 +1227,8 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_COMPOUND_LIT: {
         create_scopes_ast(a, ast->compound.type_expr);
 
-        for (Ast *value = ast->compound.values;
-             value != ast->compound.values + array_size(ast->compound.values);
+        for (Ast *value = ast->compound.values.ptr;
+             value != ast->compound.values.ptr + ast->compound.values.len;
              ++value)
         {
             create_scopes_ast(a, value);
@@ -1269,16 +1266,15 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_SWITCH: {
         create_scopes_ast(a, ast->switch_stmt.expr);
 
-        for (Ast *val = ast->switch_stmt.vals;
-             val != ast->switch_stmt.vals + array_size(ast->switch_stmt.vals);
+        for (Ast *val = ast->switch_stmt.vals.ptr;
+             val != ast->switch_stmt.vals.ptr + ast->switch_stmt.vals.len;
              ++val)
         {
             create_scopes_ast(a, val);
         }
 
-        for (Ast *stmt = ast->switch_stmt.stmts;
-             stmt !=
-             ast->switch_stmt.stmts + array_size(ast->switch_stmt.stmts);
+        for (Ast *stmt = ast->switch_stmt.stmts.ptr;
+             stmt != ast->switch_stmt.stmts.ptr + ast->switch_stmt.stmts.len;
              ++stmt)
         {
             create_scopes_ast(a, stmt);
@@ -1308,24 +1304,24 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
             5, // Small number, because there's only gonna be 2 declarations
                // max
             ast);
-        if (array_size(a->scope_stack) > 0)
+        if (a->scope_stack.len > 0)
         {
-            ast->scope->parent = *array_last(a->scope_stack);
+            ast->scope->parent = *array_last(&a->scope_stack);
         }
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
         if (ast->for_stmt.init) create_scopes_ast(a, ast->for_stmt.init);
         if (ast->for_stmt.cond) create_scopes_ast(a, ast->for_stmt.cond);
         if (ast->for_stmt.inc) create_scopes_ast(a, ast->for_stmt.inc);
         create_scopes_ast(a, ast->for_stmt.stmt);
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
     case AST_TYPEDEF: {
-        if (array_size(ast->type_def.template_params) == 0)
+        if (ast->type_def.template_params.len == 0)
         {
             create_scopes_ast(a, ast->type_def.type_expr);
         }
@@ -1383,19 +1379,19 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
             ast->scope,
             a->compiler,
             SCOPE_INSTANCED,
-            array_size(ast->structure.fields),
+            ast->structure.fields.len,
             ast);
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *field = ast->structure.fields.ptr;
+             field != ast->structure.fields.ptr + ast->structure.fields.len;
              ++field)
         {
             create_scopes_ast(a, field);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -1407,20 +1403,19 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
             ast->scope,
             a->compiler,
             SCOPE_DEFAULT,
-            array_size(ast->enumeration.fields),
+            ast->enumeration.fields.len,
             ast);
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *field = ast->enumeration.fields;
-             field !=
-             ast->enumeration.fields + array_size(ast->enumeration.fields);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *field = ast->enumeration.fields.ptr;
+             field != ast->enumeration.fields.ptr + ast->enumeration.fields.len;
              ++field)
         {
             create_scopes_ast(a, field);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -1456,7 +1451,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
 
 static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 {
-    Scope *scope = *array_last(a->scope_stack);
+    Scope *scope = *array_last(&a->scope_stack);
     assert(scope);
     String sym_name = {0};
 
@@ -1499,7 +1494,7 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
     }
 
     case AST_PROC_DECL: {
-        if (array_size(ast->proc.template_params) > 0 &&
+        if (ast->proc.template_params.len > 0 &&
             ((ast->flags & AST_FLAG_IS_TEMPLATE) != AST_FLAG_IS_TEMPLATE))
         {
             break;
@@ -1514,7 +1509,7 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 
     if (sym_name.length > 0)
     {
-        if (scope_get_local(*array_last(a->scope_stack), sym_name))
+        if (scope_get_local(*array_last(&a->scope_stack), sym_name))
         {
             compile_error(
                 a->compiler,
@@ -1531,26 +1526,26 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 
 static void register_symbol_ast(Analyzer *a, Ast *ast)
 {
-    Scope *scope = *array_last(a->scope_stack);
+    Scope *scope = *array_last(&a->scope_stack);
     assert(scope);
 
     switch (ast->type)
     {
     case AST_ROOT: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        register_symbol_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
     case AST_BLOCK: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        register_symbol_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        register_symbol_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -1558,9 +1553,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         if (compiler_has_version(a->compiler, ast->version_block.version))
         {
             register_symbol_asts(
-                a,
-                ast->version_block.stmts,
-                array_size(ast->version_block.stmts));
+                a, ast->version_block.stmts.ptr, ast->version_block.stmts.len);
         }
 
         break;
@@ -1607,7 +1600,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_TYPEDEF: {
         register_symbol_ast_leaf(a, ast, &ast->loc);
-        if (array_size(ast->type_def.template_params) == 0)
+        if (ast->type_def.template_params.len == 0)
         {
             register_symbol_ast(a, ast->type_def.type_expr);
         }
@@ -1625,28 +1618,27 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_STRUCT: {
-        array_push(a->scope_stack, ast->scope);
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
+        array_push(&a->scope_stack, ast->scope);
+        for (Ast *field = ast->structure.fields.ptr;
+             field != ast->structure.fields.ptr + ast->structure.fields.len;
              ++field)
         {
             register_symbol_ast(a, field);
         }
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
 
         break;
     }
 
     case AST_ENUM: {
-        array_push(a->scope_stack, ast->scope);
-        for (Ast *field = ast->enumeration.fields;
-             field !=
-             ast->enumeration.fields + array_size(ast->enumeration.fields);
+        array_push(&a->scope_stack, ast->scope);
+        for (Ast *field = ast->enumeration.fields.ptr;
+             field != ast->enumeration.fields.ptr + ast->enumeration.fields.len;
              ++field)
         {
             register_symbol_ast(a, field);
         }
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
 
         break;
     }
@@ -1677,14 +1669,14 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_FOR: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
         if (ast->for_stmt.init) register_symbol_ast(a, ast->for_stmt.init);
         if (ast->for_stmt.cond) register_symbol_ast(a, ast->for_stmt.cond);
         if (ast->for_stmt.inc) register_symbol_ast(a, ast->for_stmt.inc);
         register_symbol_ast(a, ast->for_stmt.stmt);
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -1696,16 +1688,16 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
             break;
         }
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
              ++param)
         {
             register_symbol_ast(a, param);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
 
         break;
     }
@@ -1724,7 +1716,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_UNINITIALIZED: assert(0); break;
 
     case AST_RETURN: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
 
         Ast *proc = get_scope_procedure(scope);
         if (!proc)
@@ -1769,20 +1761,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_ROOT: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        analyze_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
     case AST_BLOCK: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        analyze_asts(a, ast->block.stmts, array_size(ast->block.stmts));
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        analyze_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -1790,16 +1782,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (compiler_has_version(a->compiler, ast->version_block.version))
         {
             analyze_asts(
-                a,
-                ast->version_block.stmts,
-                array_size(ast->version_block.stmts));
+                a, ast->version_block.stmts.ptr, ast->version_block.stmts.len);
         }
 
         break;
     }
 
     case AST_TYPEDEF: {
-        if (array_size(ast->type_def.template_params) == 0)
+        if (ast->type_def.template_params.len == 0)
         {
             analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
         }
@@ -1809,8 +1799,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_USING: {
         analyze_ast(a, ast->expr, NULL);
 
-        Scope *expr_scope =
-            get_expr_scope(a->compiler, *array_last(a->scope_stack), ast->expr);
+        Scope *expr_scope = get_expr_scope(
+            a->compiler, *array_last(&a->scope_stack), ast->expr);
 
         if (!expr_scope)
         {
@@ -1821,9 +1811,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        for (size_t i = 0; i < array_size(expr_scope->map->values); ++i)
+        for (size_t i = 0; i < expr_scope->map->values.len; ++i)
         {
-            Ast *sym = expr_scope->map->values[i];
+            Ast *sym = expr_scope->map->values.ptr[i];
 
             Scope *old_scope = sym->sym_scope;
             assert(old_scope);
@@ -1848,7 +1838,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.type_expr->as_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -1872,7 +1862,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         if (!is_expr_const(
-                a->compiler, *array_last(a->scope_stack), ast->decl.value_expr))
+                a->compiler,
+                *array_last(&a->scope_stack),
+                ast->decl.value_expr))
         {
             compile_error(
                 a->compiler,
@@ -1891,7 +1883,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.type_expr->as_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -1944,7 +1936,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->flags & AST_FLAG_USING)
         {
             Scope *expr_scope =
-                get_expr_scope(a->compiler, *array_last(a->scope_stack), ast);
+                get_expr_scope(a->compiler, *array_last(&a->scope_stack), ast);
 
             if (!expr_scope)
             {
@@ -1955,9 +1947,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            for (size_t i = 0; i < array_size(expr_scope->map->values); ++i)
+            for (size_t i = 0; i < expr_scope->map->values.len; ++i)
             {
-                Ast *sym = expr_scope->map->values[i];
+                Ast *sym = expr_scope->map->values.ptr[i];
                 Scope *old_scope = sym->sym_scope;
                 assert(old_scope);
 
@@ -1985,7 +1977,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->flags & AST_FLAG_USING)
         {
             Scope *expr_scope =
-                get_expr_scope(a->compiler, *array_last(a->scope_stack), ast);
+                get_expr_scope(a->compiler, *array_last(&a->scope_stack), ast);
 
             if (!expr_scope)
             {
@@ -1996,7 +1988,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            array_push(a->scope_stack, ast->sym_scope);
+            array_push(&a->scope_stack, ast->sym_scope);
             for (size_t i = 0; i < expr_scope->map->size; ++i)
             {
                 if (expr_scope->map->hashes[i] != 0)
@@ -2016,7 +2008,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     register_symbol_ast_leaf(a, field_alias, &ast->loc);
                 }
             }
-            array_pop(a->scope_stack);
+            array_pop(&a->scope_stack);
         }
 
         break;
@@ -2025,7 +2017,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_ENUM_FIELD: {
         if (!is_expr_const(
                 a->compiler,
-                *array_last(a->scope_stack),
+                *array_last(&a->scope_stack),
                 ast->enum_field.value_expr))
         {
             compile_error(
@@ -2047,7 +2039,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         TypeInfo *enum_type = enum_ast->as_type;
         if (!enum_type)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -2089,7 +2081,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!is_expr_assignable(
                 a->compiler,
-                *array_last(a->scope_stack),
+                *array_last(&a->scope_stack),
                 ast->assign.assigned_expr))
         {
             compile_error(
@@ -2130,8 +2122,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         bool valid_type = true;
 
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
              ++param)
         {
             analyze_ast(a, param, NULL);
@@ -2150,7 +2142,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "extern functions cannot have compound parameters");
             }
 
-            array_push(ty->proc.params, param->decl.type_expr->as_type);
+            array_push(&ty->proc.params, param->decl.type_expr->as_type);
         }
 
         if (ast->proc.return_type)
@@ -2188,12 +2180,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     &a->compiler->sb, STR("_F")); // mangled function prefix
                 sb_append(&a->compiler->sb, ast->proc.name);
 
-                if (array_size(ast->proc.template_params) > 0)
+                if (ast->proc.template_params.len > 0)
                 {
-                    for (size_t i = 0; i < array_size(proc_type->proc.params);
-                         ++i)
+                    for (size_t i = 0; i < proc_type->proc.params.len; ++i)
                     {
-                        TypeInfo *param_type = proc_type->proc.params[i];
+                        TypeInfo *param_type = proc_type->proc.params.ptr[i];
                         sb_append(&a->compiler->sb, STR("$"));
                         print_mangled_type(&a->compiler->sb, param_type);
                     }
@@ -2216,7 +2207,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->if_stmt.cond_expr->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -2258,24 +2249,22 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        assert(
-            array_size(ast->switch_stmt.vals) ==
-            array_size(ast->switch_stmt.stmts));
+        assert((ast->switch_stmt.vals.len) == (ast->switch_stmt.stmts.len));
 
-        for (size_t i = 0; i < array_size(ast->switch_stmt.vals); ++i)
+        for (size_t i = 0; i < ast->switch_stmt.vals.len; ++i)
         {
-            analyze_ast(a, &ast->switch_stmt.vals[i], val_type);
+            analyze_ast(a, &ast->switch_stmt.vals.ptr[i], val_type);
 
-            array_push(a->break_stack, ast);
-            analyze_ast(a, &ast->switch_stmt.stmts[i], NULL);
-            array_pop(a->break_stack);
+            array_push(&a->break_stack, ast);
+            analyze_ast(a, &ast->switch_stmt.stmts.ptr[i], NULL);
+            array_pop(&a->break_stack);
         }
 
         if (ast->switch_stmt.else_stmt)
         {
-            array_push(a->break_stack, ast);
+            array_push(&a->break_stack, ast);
             analyze_ast(a, ast->switch_stmt.else_stmt, NULL);
-            array_pop(a->break_stack);
+            array_pop(&a->break_stack);
         }
 
         break;
@@ -2284,15 +2273,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_WHILE: {
         analyze_ast(a, ast->while_stmt.cond, NULL);
 
-        array_push(a->break_stack, ast);
-        array_push(a->continue_stack, ast);
+        array_push(&a->break_stack, ast);
+        array_push(&a->continue_stack, ast);
         analyze_ast(a, ast->while_stmt.stmt, NULL);
-        array_pop(a->continue_stack);
-        array_pop(a->break_stack);
+        array_pop(&a->continue_stack);
+        array_pop(&a->break_stack);
 
         if (!ast->while_stmt.cond->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -2313,27 +2302,27 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_FOR: {
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
 
         if (ast->for_stmt.init) analyze_ast(a, ast->for_stmt.init, NULL);
         if (ast->for_stmt.cond) analyze_ast(a, ast->for_stmt.cond, NULL);
         if (ast->for_stmt.inc) analyze_ast(a, ast->for_stmt.inc, NULL);
 
-        array_push(a->break_stack, ast);
-        array_push(a->continue_stack, ast);
+        array_push(&a->break_stack, ast);
+        array_push(&a->continue_stack, ast);
         analyze_ast(a, ast->for_stmt.stmt, NULL);
-        array_pop(a->continue_stack);
-        array_pop(a->break_stack);
+        array_pop(&a->continue_stack);
+        array_pop(&a->break_stack);
 
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
 
         if (ast->for_stmt.cond)
         {
             if (!ast->for_stmt.cond->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -2355,7 +2344,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BREAK: {
-        if (array_size(a->break_stack) == 0)
+        if (a->break_stack.len == 0)
         {
             compile_error(
                 a->compiler, ast->loc, "'break' outside control structure");
@@ -2365,7 +2354,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_CONTINUE: {
-        if (array_size(a->continue_stack) == 0)
+        if (a->continue_stack.len == 0)
         {
             compile_error(
                 a->compiler, ast->loc, "'continue' outside control structure");
@@ -2385,7 +2374,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         return;
     }
 
-    ast_as_type(a, *array_last(a->scope_stack), ast, false);
+    ast_as_type(a, *array_last(&a->scope_stack), ast, false);
 
     switch (ast->type)
     {
@@ -2494,7 +2483,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(
-                *array_last(a->scope_stack),
+                *array_last(&a->scope_stack),
                 ast->primary.tok->str,
                 ast->loc.file);
 
@@ -2590,7 +2579,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_TEMPLATE_INST: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
 
         if (ast->template_inst.sub->type != AST_PRIMARY ||
             ast->template_inst.sub->primary.tok->type != TOKEN_IDENT)
@@ -2616,9 +2605,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        for (Ast *param = ast->template_inst.params;
+        for (Ast *param = ast->template_inst.params.ptr;
              param !=
-             ast->template_inst.params + array_size(ast->template_inst.params);
+             ast->template_inst.params.ptr + ast->template_inst.params.len;
              ++param)
         {
             analyze_ast(a, param, &TYPE_OF_TYPE);
@@ -2627,15 +2616,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (sym->type)
         {
         case AST_TYPEDEF: {
-            if (array_size(sym->type_def.template_params) == 0)
+            if (sym->type_def.template_params.len == 0)
             {
                 compile_error(
                     a->compiler, ast->loc, "typedef is not a template");
                 break;
             }
 
-            if (array_size(sym->type_def.template_params) !=
-                array_size(ast->template_inst.params))
+            if ((sym->type_def.template_params.len) !=
+                (ast->template_inst.params.len))
             {
                 compile_error(
                     a->compiler,
@@ -2665,8 +2654,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (array_size(sym->proc.template_params) !=
-                array_size(ast->template_inst.params))
+            if ((sym->proc.template_params.len) !=
+                (ast->template_inst.params.len))
             {
                 compile_error(
                     a->compiler,
@@ -2678,9 +2667,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             assert(sym->proc.template_cache);
 
             sb_reset(&a->compiler->sb);
-            for (size_t i = 0; i < array_size(ast->template_inst.params); ++i)
+            for (size_t i = 0; i < ast->template_inst.params.len; ++i)
             {
-                Ast *param = &ast->template_inst.params[i];
+                Ast *param = &ast->template_inst.params.ptr[i];
                 sb_append(&a->compiler->sb, STR("$"));
                 print_mangled_type(
                     &a->compiler->sb, ast_as_type(a, scope, param, false));
@@ -2743,7 +2732,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BUILTIN_VEC_ACCESS: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
         TypeInfo *type = scope->type_info;
 
         switch (type->kind)
@@ -2757,7 +2746,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BUILTIN_LEN: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -2775,7 +2764,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BUILTIN_CAP: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -2790,7 +2779,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_BUILTIN_PTR: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -2813,7 +2802,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_BUILTIN_MIN:
     case AST_BUILTIN_MAX: {
-        Scope *scope = *array_last(a->scope_stack);
+        Scope *scope = *array_last(&a->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
 
@@ -2838,7 +2827,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->proc_call.expr, NULL);
         if (!ast->proc_call.expr->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -2859,8 +2848,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if ((proc_ty->flags & TYPE_FLAG_C_VARARGS) != TYPE_FLAG_C_VARARGS)
         {
-            if (array_size(ast->proc_call.params) !=
-                array_size(proc_ty->proc.params))
+            if ((ast->proc_call.params.len) != (proc_ty->proc.params.len))
             {
                 compile_error(
                     a->compiler,
@@ -2871,8 +2859,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         else
         {
-            if (array_size(ast->proc_call.params) <
-                array_size(proc_ty->proc.params))
+            if ((ast->proc_call.params.len) < (proc_ty->proc.params.len))
             {
                 compile_error(
                     a->compiler,
@@ -2882,19 +2869,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
         }
 
-        assert(array_size(a->operand_scope_stack) > 0);
+        assert(a->operand_scope_stack.len > 0);
 
-        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
-        for (size_t i = 0; i < array_size(ast->proc_call.params); ++i)
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
+        for (size_t i = 0; i < ast->proc_call.params.len; ++i)
         {
             TypeInfo *param_expected_type = NULL;
-            if (i < array_size(proc_ty->proc.params))
+            if (i < proc_ty->proc.params.len)
             {
-                param_expected_type = proc_ty->proc.params[i];
+                param_expected_type = proc_ty->proc.params.ptr[i];
             }
-            analyze_ast(a, &ast->proc_call.params[i], param_expected_type);
+            analyze_ast(a, &ast->proc_call.params.ptr[i], param_expected_type);
         }
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -2902,19 +2889,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (ast->intrinsic_call.type)
         {
         case INTRINSIC_SIZEOF: {
-            if (array_size(ast->intrinsic_call.params) != 1)
+            if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
                     a->compiler, ast->loc, "@sizeof takes one parameter");
                 break;
             }
 
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             analyze_ast(a, param, NULL);
 
             if (!param->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -2934,19 +2921,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case INTRINSIC_ALIGNOF: {
-            if (array_size(ast->intrinsic_call.params) != 1)
+            if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
                     a->compiler, ast->loc, "@alignof takes one parameter");
                 break;
             }
 
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             analyze_ast(a, param, NULL);
 
             if (!param->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -2968,7 +2955,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case INTRINSIC_COS:
         case INTRINSIC_SIN:
         case INTRINSIC_SQRT: {
-            if (array_size(ast->intrinsic_call.params) != 1)
+            if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
                     a->compiler, ast->loc, "intrinsic takes one parameter");
@@ -2976,12 +2963,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            Ast *param = &ast->intrinsic_call.params[0];
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
             analyze_ast(a, param, NULL);
 
             if (!param->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3000,7 +2987,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case INTRINSIC_VECTOR_TYPE: {
-            if (array_size(ast->intrinsic_call.params) != 2)
+            if (ast->intrinsic_call.params.len != 2)
             {
                 compile_error(
                     a->compiler, ast->loc, "intrinsic takes 2 parameters");
@@ -3008,20 +2995,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            Ast *elem_type = &ast->intrinsic_call.params[0];
-            Ast *vec_width = &ast->intrinsic_call.params[1];
+            Ast *elem_type = &ast->intrinsic_call.params.ptr[0];
+            Ast *vec_width = &ast->intrinsic_call.params.ptr[1];
             analyze_ast(a, elem_type, &TYPE_OF_TYPE);
             analyze_ast(a, vec_width, &UINT_TYPE);
 
             if (!elem_type->type_info || !vec_width->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
             if (!elem_type->as_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3044,8 +3031,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_TYPE: {
-        for (Ast *param = ast->proc.params;
-             param != ast->proc.params + array_size(ast->proc.params);
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
              ++param)
         {
             analyze_ast(a, param, NULL);
@@ -3109,7 +3096,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         else
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3139,7 +3126,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->unop.sub->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3238,7 +3225,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!left_type || !right_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3318,7 +3305,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!left_type || !right_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3370,7 +3357,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!left_type || !right_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3415,7 +3402,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!left_type || !right_type)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3459,7 +3446,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             memset(tok, 0, sizeof(Token));
             tok->type = TOKEN_INT_LIT;
             tok->loc = ast->compound.type_expr->loc;
-            tok->i64 = (int64_t)array_size(ast->compound.values);
+            tok->i64 = (int64_t)ast->compound.values.len;
 
             Ast *size = bump_alloc(&a->compiler->bump, sizeof(Ast));
             memset(size, 0, sizeof(Ast));
@@ -3474,7 +3461,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->compound.type_expr->as_type)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3485,9 +3472,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
         case TYPE_VECTOR:
         case TYPE_ARRAY: {
-            if (array_size(ast->compound.values) != compound_type->array.size &&
-                array_size(ast->compound.values) != 1 &&
-                array_size(ast->compound.values) != 0)
+            if ((ast->compound.values.len) != compound_type->array.size &&
+                (ast->compound.values.len) != 1 &&
+                (ast->compound.values.len) != 0)
             {
                 compile_error(
                     a->compiler,
@@ -3495,9 +3482,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "compound literal has wrong number of values");
             }
 
-            for (Ast *value = ast->compound.values;
-                 value !=
-                 ast->compound.values + array_size(ast->compound.values);
+            for (Ast *value = ast->compound.values.ptr;
+                 value != ast->compound.values.ptr + ast->compound.values.len;
                  ++value)
             {
                 analyze_ast(a, value, compound_type->array.sub);
@@ -3507,9 +3493,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TYPE_STRUCT: {
-            if (array_size(ast->compound.values) !=
-                    array_size(compound_type->structure.fields) &&
-                array_size(ast->compound.values) != 0)
+            if ((ast->compound.values.len) !=
+                    (compound_type->structure.fields.len) &&
+                (ast->compound.values.len) != 0)
             {
                 compile_error(
                     a->compiler,
@@ -3517,12 +3503,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "compound literal has wrong number of values");
             }
 
-            for (size_t i = 0; i < array_size(ast->compound.values); ++i)
+            for (size_t i = 0; i < ast->compound.values.len; ++i)
             {
                 analyze_ast(
                     a,
-                    &ast->compound.values[i],
-                    compound_type->structure.fields[i]);
+                    &ast->compound.values.ptr[i],
+                    compound_type->structure.fields.ptr[i]);
             }
 
             break;
@@ -3543,19 +3529,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_SUBSCRIPT: {
         analyze_ast(a, ast->subscript.left, NULL);
 
-        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
         analyze_ast(a, ast->subscript.right, NULL);
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
 
         if (!ast->subscript.left->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
         if (!ast->subscript.right->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3600,7 +3586,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_SUBSCRIPT_SLICE: {
         analyze_ast(a, ast->subscript_slice.left, NULL);
-        array_push(a->scope_stack, *array_last(a->operand_scope_stack));
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
         if (ast->subscript_slice.lower)
         {
             analyze_ast(a, ast->subscript_slice.lower, &UINT_TYPE);
@@ -3609,11 +3595,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             analyze_ast(a, ast->subscript_slice.upper, &UINT_TYPE);
         }
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
 
         if (!ast->subscript_slice.left->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3622,7 +3608,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (!ast->subscript_slice.lower->type_info ||
                 !ast->subscript_slice.upper->type_info)
             {
-                assert(array_size(a->compiler->errors) > 0);
+                assert(a->compiler->errors.len > 0);
                 break;
             }
 
@@ -3691,7 +3677,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         TypeInfo *size_type = get_inner_type(ast->array_type.size->type_info);
         if (!size_type)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3703,7 +3689,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         // Recompute as_type after getting the size's type
-        ast_as_type(a, *array_last(a->scope_stack), ast, false);
+        ast_as_type(a, *array_last(&a->scope_stack), ast, false);
 
         if (!ast->as_type)
         {
@@ -3716,13 +3702,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
         if (!ast->array_type.size->type_info)
         {
-            assert(array_size(a->compiler->errors) > 0);
+            assert(a->compiler->errors.len > 0);
             break;
         }
 
@@ -3740,8 +3726,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_STRUCT: {
         ast->type_info = &TYPE_OF_TYPE;
 
-        for (Ast *field = ast->structure.fields;
-             field != ast->structure.fields + array_size(ast->structure.fields);
+        for (Ast *field = ast->structure.fields.ptr;
+             field != ast->structure.fields.ptr + ast->structure.fields.len;
              ++field)
         {
             analyze_ast(a, field, NULL);
@@ -3754,17 +3740,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         analyze_ast(a, ast->enumeration.type_expr, &TYPE_OF_TYPE);
 
-        array_push(a->scope_stack, ast->scope);
-        array_push(a->operand_scope_stack, ast->scope);
-        for (Ast *field = ast->enumeration.fields;
-             field !=
-             ast->enumeration.fields + array_size(ast->enumeration.fields);
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *field = ast->enumeration.fields.ptr;
+             field != ast->enumeration.fields.ptr + ast->enumeration.fields.len;
              ++field)
         {
             analyze_ast(a, field, NULL);
         }
-        array_pop(a->operand_scope_stack);
-        array_pop(a->scope_stack);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
         break;
     }
 
@@ -3798,7 +3783,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         Scope *accessed_scope = get_expr_scope(
-            a->compiler, *array_last(a->scope_stack), ast->access.left);
+            a->compiler, *array_last(&a->scope_stack), ast->access.left);
 
         if (!accessed_scope)
         {
@@ -3809,9 +3794,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        array_push(a->scope_stack, accessed_scope);
+        array_push(&a->scope_stack, accessed_scope);
         analyze_ast(a, ast->access.right, NULL);
-        array_pop(a->scope_stack);
+        array_pop(&a->scope_stack);
 
         if (!ast->access.right->type_info)
         {
@@ -3922,12 +3907,11 @@ static void register_symbol_asts(Analyzer *a, Ast *asts, size_t ast_count)
                 break;
             }
 
-            array_push(a->scope_stack, ast->scope);
-            array_push(a->operand_scope_stack, ast->scope);
-            register_symbol_asts(
-                a, ast->proc.stmts, array_size(ast->proc.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
+            array_push(&a->scope_stack, ast->scope);
+            array_push(&a->operand_scope_stack, ast->scope);
+            register_symbol_asts(a, ast->proc.stmts.ptr, ast->proc.stmts.len);
+            array_pop(&a->operand_scope_stack);
+            array_pop(&a->scope_stack);
             break;
         }
 
@@ -3981,11 +3965,11 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
                 break;
             }
 
-            array_push(a->scope_stack, ast->scope);
-            array_push(a->operand_scope_stack, ast->scope);
-            analyze_asts(a, ast->proc.stmts, array_size(ast->proc.stmts));
-            array_pop(a->operand_scope_stack);
-            array_pop(a->scope_stack);
+            array_push(&a->scope_stack, ast->scope);
+            array_push(&a->operand_scope_stack, ast->scope);
+            analyze_asts(a, ast->proc.stmts.ptr, ast->proc.stmts.len);
+            array_pop(&a->operand_scope_stack);
+            array_pop(&a->scope_stack);
 
             TypeInfo *proc_type = ast->type_info;
 

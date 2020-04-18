@@ -3,19 +3,23 @@ typedef enum ScopeType {
     SCOPE_INSTANCED,
 } ScopeType;
 
-typedef struct Scope
+typedef struct Scope Scope;
+
+typedef ARRAY_OF(Scope *) ArrayOfScopePtr;
+
+struct Scope
 {
     ScopeType type;
     HashMap *map;
     struct Scope *parent;
-    /*array*/ struct Scope **siblings;
+    ArrayOfScopePtr siblings;
     struct AstValue value;
 
     struct Ast *ast;
     struct TypeInfo *type_info;
 
-    /*array*/ struct Ast **deferred_stmts;
-} Scope;
+    ArrayOfAstPtr deferred_stmts;
+};
 
 static void scope_init(
     Scope *scope,
@@ -67,16 +71,16 @@ static Scope *scope_clone(Compiler *compiler, Scope *scope, Ast *owning_ast)
         scope->map->indices,
         sizeof(*new_map->indices) * scope->map->size);
 
-    new_map->values = NULL;
-    array_add(new_map->values, array_size(scope->map->values));
+    memset(&new_map->values, 0, sizeof(new_map->values));
+    array_add(&new_map->values, scope->map->values.len);
     memcpy(
-        new_map->values,
-        scope->map->values,
-        sizeof(*new_map->values) * array_size(scope->map->values));
+        new_map->values.ptr,
+        scope->map->values.ptr,
+        sizeof(*new_map->values.ptr) * scope->map->values.len);
 
-    for (size_t i = 0; i < array_size(new_map->values); ++i)
+    for (size_t i = 0; i < new_map->values.len; ++i)
     {
-        Ast *sym = new_map->values[i];
+        Ast *sym = new_map->values.ptr[i];
 
         Scope *new_subscope = new_scope;
         if (sym->sym_scope != scope)
@@ -88,7 +92,7 @@ static Scope *scope_clone(Compiler *compiler, Scope *scope, Ast *owning_ast)
         Ast *new_sym = bump_alloc(&compiler->bump, sizeof(Ast));
         *new_sym = *sym;
         new_sym->sym_scope = new_subscope;
-        new_map->values[i] = new_sym;
+        new_map->values.ptr[i] = new_sym;
     }
 
     new_scope->map = new_map;
@@ -114,8 +118,8 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
         return sym;
     }
 
-    for (Scope **sibling = scope->siblings;
-         sibling != scope->siblings + array_size(scope->siblings);
+    for (Scope **sibling = scope->siblings.ptr;
+         sibling != scope->siblings.ptr + scope->siblings.len;
          ++sibling)
     {
         sym = get_symbol(*sibling, name, from_file);
