@@ -185,6 +185,175 @@ static void compiler_init(Compiler *compiler)
     // Initialize builtin module
     compiler->builtin_module = create_module_ast(compiler);
 
+    Ast *type_kind_enum = create_enum_ast(compiler, compiler->builtin_module);
+    add_enum_field(compiler, type_kind_enum, STR("TYPE"), TYPE_TYPE);
+    add_enum_field(compiler, type_kind_enum, STR("PROC"), TYPE_PROC);
+    add_enum_field(compiler, type_kind_enum, STR("STRUCT"), TYPE_STRUCT);
+    add_enum_field(compiler, type_kind_enum, STR("ENUM"), TYPE_ENUM);
+    add_enum_field(compiler, type_kind_enum, STR("POINTER"), TYPE_POINTER);
+    add_enum_field(compiler, type_kind_enum, STR("VECTOR"), TYPE_VECTOR);
+    add_enum_field(compiler, type_kind_enum, STR("ARRAY"), TYPE_ARRAY);
+    add_enum_field(compiler, type_kind_enum, STR("SLICE"), TYPE_SLICE);
+    add_enum_field(
+        compiler, type_kind_enum, STR("DYNAMIC_ARRAY"), TYPE_DYNAMIC_ARRAY);
+    add_enum_field(compiler, type_kind_enum, STR("INT"), TYPE_INT);
+    add_enum_field(compiler, type_kind_enum, STR("FLOAT"), TYPE_FLOAT);
+    add_enum_field(compiler, type_kind_enum, STR("BOOL"), TYPE_BOOL);
+    add_enum_field(compiler, type_kind_enum, STR("VOID"), TYPE_VOID);
+    add_enum_field(compiler, type_kind_enum, STR("NAMESPACE"), TYPE_NAMESPACE);
+    add_module_typedef(
+        compiler, compiler->builtin_module, STR("TypeKind"), type_kind_enum);
+
+    Ast *type_flags_enum = create_enum_ast(compiler, compiler->builtin_module);
+    add_enum_field(
+        compiler, type_flags_enum, STR("IS_DISTINCT"), TYPE_FLAG_DISTINCT);
+    add_enum_field(
+        compiler, type_flags_enum, STR("IS_EXTERN"), TYPE_FLAG_EXTERN);
+    add_enum_field(
+        compiler, type_flags_enum, STR("IS_C_VARARGS"), TYPE_FLAG_C_VARARGS);
+    add_module_typedef(
+        compiler, compiler->builtin_module, STR("TypeFlags"), type_flags_enum);
+
+    Ast *type_info_structure =
+        create_struct_ast(compiler, compiler->builtin_module, false);
+    add_struct_field(
+        compiler,
+        type_info_structure,
+        STR("kind"),
+        create_ident_ast(compiler, STR("TypeKind")));
+    add_struct_field(
+        compiler,
+        type_info_structure,
+        STR("flags"),
+        create_token_ast(compiler, TOKEN_U32));
+    add_struct_field(
+        compiler,
+        type_info_structure,
+        STR("align"),
+        create_token_ast(compiler, TOKEN_U32));
+    add_struct_field(
+        compiler,
+        type_info_structure,
+        STR("size"),
+        create_token_ast(compiler, TOKEN_U32));
+
+    Ast *info_union =
+        create_struct_ast(compiler, compiler->builtin_module, true);
+
+    {
+        Ast *integer_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            integer_struct,
+            STR("num_bits"),
+            create_token_ast(compiler, TOKEN_U8));
+        add_struct_field(
+            compiler,
+            integer_struct,
+            STR("is_signed"),
+            create_token_ast(compiler, TOKEN_BOOL));
+        add_struct_field(compiler, info_union, STR("integer"), integer_struct);
+    }
+
+    {
+        Ast *floating_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            floating_struct,
+            STR("num_bits"),
+            create_token_ast(compiler, TOKEN_U8));
+        add_struct_field(
+            compiler, info_union, STR("floating"), floating_struct);
+    }
+
+    {
+        Ast *ptr_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            ptr_struct,
+            STR("sub"),
+            create_deref_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(compiler, info_union, STR("pointer"), ptr_struct);
+    }
+
+    {
+        Ast *array_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            array_struct,
+            STR("sub"),
+            create_deref_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(
+            compiler,
+            array_struct,
+            STR("size"),
+            create_token_ast(compiler, TOKEN_UINT));
+        add_struct_field(compiler, info_union, STR("array"), array_struct);
+    }
+
+    {
+        Ast *func_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            func_struct,
+            STR("return_type"),
+            create_deref_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(
+            compiler,
+            func_struct,
+            STR("parameters"),
+            create_slice_type_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(compiler, info_union, STR("function"), func_struct);
+    }
+
+    {
+        Ast *structure_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            structure_struct,
+            STR("fields"),
+            create_slice_type_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(
+            compiler,
+            structure_struct,
+            STR("is_union"),
+            create_token_ast(compiler, TOKEN_BOOL));
+        add_struct_field(
+            compiler, info_union, STR("structure"), structure_struct);
+    }
+
+    {
+        Ast *enumeration_struct =
+            create_struct_ast(compiler, compiler->builtin_module, false);
+        add_struct_field(
+            compiler,
+            enumeration_struct,
+            STR("underlying_type"),
+            create_deref_ast(
+                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
+        add_struct_field(
+            compiler, info_union, STR("enumeration"), enumeration_struct);
+    }
+
+    add_struct_field(compiler, type_info_structure, STR("info"), info_union);
+
+    add_module_typedef(
+        compiler,
+        compiler->builtin_module,
+        STR("TypeInfo"),
+        type_info_structure);
+
 #if defined(__linux__)
     hash_set(&compiler->versions, STR("linux"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);

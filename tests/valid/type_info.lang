@@ -1,0 +1,43 @@
+import builtin "core:builtin";
+import "core:c";
+
+typedef TypeInfo struct {
+    kind: builtin.TypeKind,
+    align: u32,
+    size: u32,
+    flags: u32,
+    info: union {
+        integer: struct {
+            num_bits: u8,
+            is_signed: bool,
+        },
+        floating: struct {
+            num_bits: u8,
+        },
+        pointer: struct {
+            sub: *TypeInfo,
+        },
+        array: struct {
+            sub: *TypeInfo,
+            size: uint,
+        },
+        func: struct {
+            return_type: *TypeInfo,
+            params: [_]TypeInfo,
+        },
+        structure: struct {
+            fields: [_]TypeInfo,
+            is_union: bool,
+        },
+        enumeration: struct {
+            underlying_type: *TypeInfo,
+        },
+    },
+};
+
+extern fn main() -> i32 {
+    var a: builtin.TypeInfo = builtin.TypeInfo{};
+    if (@sizeof(builtin.TypeInfo) != @sizeof(TypeInfo)) abort();
+
+    return 0;
+}

@@ -13,6 +13,8 @@ Multiple return values
 
 Key/val struct literal
 
+Proper module/package system
+
 TODO:
 - attributes with values
 - #[link_name="blabla"]
@@ -52,3 +54,5 @@ Bugs:
 - Circular imports
 - Circular structs
 - Circular typedefs
+- Assigning to struct type field
+	Repro: MyStructType.field = 123;
