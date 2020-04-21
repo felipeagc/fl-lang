@@ -112,10 +112,23 @@ struct Ast *scope_get_local(Scope *scope, String name)
 struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
 {
     struct Ast *sym = scope_get_local(scope, name);
-    if (sym && (sym->loc.file == from_file ||
-                ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
+    if (sym)
     {
-        return sym;
+        if (sym->type == AST_ENUM_FIELD || sym->type == AST_STRUCT_FIELD ||
+            sym->type == AST_BUILTIN_VEC_ACCESS ||
+            sym->type == AST_BUILTIN_CAP || sym->type == AST_BUILTIN_LEN ||
+            sym->type == AST_BUILTIN_PTR || sym->type == AST_BUILTIN_MIN ||
+            sym->type == AST_BUILTIN_MAX)
+        {
+            // These are always public
+            return sym;
+        }
+
+        if ((sym->loc.file == from_file ||
+             ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
+        {
+            return sym;
+        }
     }
 
     for (Scope **sibling = scope->siblings.ptr;
