@@ -717,6 +717,10 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_TYPEDEF: {
         ast->as_type = ast_as_type(a, scope, ast->type_def.type_expr, false);
+        if (ast->type_def.type_expr->as_type)
+        {
+            ast->type_def.type_expr->as_type->type_def = ast;
+        }
         break;
     }
 
@@ -1526,9 +1530,6 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
 
 static void register_symbol_ast(Analyzer *a, Ast *ast)
 {
-    Scope *scope = *array_last(&a->scope_stack);
-    assert(scope);
-
     switch (ast->type)
     {
     case AST_ROOT: {
@@ -1792,6 +1793,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->type_def.template_params.len == 0)
         {
             analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
+            if (ast->type_def.type_expr->as_type)
+            {
+                ast->type_def.type_expr->as_type->type_def = ast;
+            }
         }
         break;
     }

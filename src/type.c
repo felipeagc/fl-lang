@@ -36,6 +36,7 @@ struct TypeInfo
     uint32_t align;
     LLVMTypeRef ref;
     struct Scope *scope;
+    struct Ast *type_def;
 
     union
     {
@@ -214,20 +215,31 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     }
 
     case TYPE_STRUCT: {
-        if ((received->structure.fields.len) !=
-            (expected->structure.fields.len))
-            return NULL;
-
-        size_t field_count = expected->structure.fields.len;
-        for (size_t i = 0; i < field_count; ++i)
+        if (received->type_def || expected->type_def)
         {
-            if (!exact_types(
-                    received->structure.fields.ptr[i],
-                    expected->structure.fields.ptr[i]))
+            if (received->type_def != expected->type_def)
             {
                 return NULL;
             }
         }
+        else
+        {
+            if ((received->structure.fields.len) !=
+                (expected->structure.fields.len))
+                return NULL;
+
+            size_t field_count = expected->structure.fields.len;
+            for (size_t i = 0; i < field_count; ++i)
+            {
+                if (!exact_types(
+                        received->structure.fields.ptr[i],
+                        expected->structure.fields.ptr[i]))
+                {
+                    return NULL;
+                }
+            }
+        }
+
         break;
     }
 
@@ -470,6 +482,12 @@ create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
 
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
+    if (type->type_def)
+    {
+        sb_sprintf(sb, "T%p", type->type_def);
+        return;
+    }
+
     switch (type->kind)
     {
     case TYPE_TYPE: sb_append(sb, STR("t")); break;
