@@ -1,8 +1,6 @@
 typedef MyInt distinct int;
 
-extern fn main() -> i32 {
+fn main() {
     var a: int = 123;
     var b: MyInt = a;
-
-    return 0;
 }

@@ -2,7 +2,7 @@ import "sdl.lang";
 import c "core:c";
 import fmt "core:fmt";
 
-extern fn main() -> i32 {
+fn main() {
     SDL_Init(SDL_INIT_EVERYTHING);
     defer SDL_Quit();
 
@@ -33,6 +33,4 @@ extern fn main() -> i32 {
         SDL_RenderClear(ren);
         SDL_RenderPresent(ren);
     }
-
-    return 0;
 }

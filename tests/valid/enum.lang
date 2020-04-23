@@ -13,7 +13,7 @@ typedef MyEnum2 enum u32 {
     five_again = five
 };
 
-extern fn main() -> i32 {
+fn main() {
     var enum1: MyEnum = MyEnum.two;
     var enum2 = MyEnum.two_again;
     var my_uint: u32 = MyEnum.one;
@@ -26,6 +26,4 @@ extern fn main() -> i32 {
     var hello: u32 = MyEnum2.five;
 
     if (MyEnum2.five_again != hello) abort();
-
-    return 0;
 }

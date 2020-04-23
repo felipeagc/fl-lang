@@ -1,3 +1,4 @@
+#if 0
 static Ast *create_module_ast(Compiler *compiler)
 {
     Ast *module = bump_alloc(&compiler->bump, sizeof(Ast));
@@ -29,10 +30,14 @@ static Ast *create_struct_ast(Compiler *compiler, Ast *module, bool is_union)
 }
 
 static void add_struct_field(
-    Compiler *compiler, Ast *structure, String name, Ast *type_expr)
+    Compiler *compiler, Ast *structure, String name, Ast *type_expr, bool using)
 {
     Ast field = {0};
     field.type = AST_STRUCT_FIELD;
+    if (using)
+    {
+        field.flags = AST_FLAG_USING;
+    }
     field.struct_field.name = name;
     field.struct_field.index = structure->structure.fields.len;
     field.struct_field.type_expr = type_expr;
@@ -98,7 +103,6 @@ static Ast *create_token_ast(Compiler *compiler, TokenKind type)
     return token_node;
 }
 
-#if 0
 static Ast *create_access_ast(Compiler *compiler, Ast *left, Ast *right)
 {
     Ast *expr = bump_alloc(&compiler->bump, sizeof(Ast));
@@ -108,7 +112,6 @@ static Ast *create_access_ast(Compiler *compiler, Ast *left, Ast *right)
     expr->access.right = right;
     return expr;
 }
-#endif
 
 static Ast *create_deref_ast(Compiler *compiler, Ast *right)
 {
@@ -129,7 +132,6 @@ static Ast *create_slice_type_ast(Compiler *compiler, Ast *right)
     return expr;
 }
 
-#if 0
 static Ast *
 add_module_constant(Compiler *compiler, Ast *module, String name, Ast *value)
 {

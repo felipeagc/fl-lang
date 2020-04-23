@@ -3,6 +3,10 @@ typedef struct LLModule
     LLVMModuleRef mod;
     LLVMBuilderRef builder;
     LLVMTargetDataRef data;
+    LLVMValueRef main_fun;
+    LLVMValueRef main_wrapper_fun;
+    LLVMValueRef runtime_statup_fun;
+    LLVMValueRef rtti_type_infos;
 } LLModule;
 
 typedef ARRAY_OF(LLVMBasicBlockRef) ArrayOfBasicBlock;
@@ -21,6 +25,27 @@ static void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value);
 static void llvm_codegen_ast_children(
     LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
+
+static String mangle_function_name(LLContext *l, Ast *ast)
+{
+    TypeInfo *proc_type = ast->type_info->ptr.sub;
+
+    sb_reset(&l->compiler->sb);
+    sb_append(&l->compiler->sb, STR("_F")); // mangled function prefix
+    sb_append(&l->compiler->sb, ast->proc.name);
+
+    if (ast->proc.template_params.len > 0)
+    {
+        for (size_t i = 0; i < proc_type->proc.params.len; ++i)
+        {
+            TypeInfo *param_type = proc_type->proc.params.ptr[i];
+            sb_append(&l->compiler->sb, STR("$"));
+            print_mangled_type(&l->compiler->sb, param_type);
+        }
+    }
+
+    return sb_build(&l->compiler->sb, &l->compiler->bump);
+}
 
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 {
@@ -140,6 +165,312 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
 
     return type->ref;
+}
+
+static void
+generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
+{
+    TypeInfo *type_info = l->compiler->rtti_type_infos.ptr[rtti_index];
+    TypeInfo *type_info_type = l->compiler->type_info_type;
+
+    LLVMValueRef indices[2] = {
+        LLVMConstInt(LLVMInt32Type(), 0, false),
+        LLVMConstInt(LLVMInt32Type(), type_info->rtti_index, false),
+    };
+    LLVMValueRef ptr =
+        LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+    LLVMValueRef kind_value = LLVMConstInt(
+        llvm_type(l, type_info_type->structure.fields.ptr[0]),
+        type_info->kind,
+        false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+    LLVMBuildStore(
+        mod->builder,
+        kind_value,
+        LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
+
+    LLVMValueRef align_value = LLVMConstInt(
+        llvm_type(l, type_info_type->structure.fields.ptr[1]),
+        type_info->align,
+        false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+    LLVMBuildStore(
+        mod->builder,
+        align_value,
+        LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
+
+    LLVMValueRef size_value = LLVMConstInt(
+        llvm_type(l, type_info_type->structure.fields.ptr[2]),
+        type_info->size,
+        false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), 2, false);
+    LLVMBuildStore(
+        mod->builder,
+        size_value,
+        LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
+
+    LLVMValueRef flags_value = LLVMConstInt(
+        llvm_type(l, type_info_type->structure.fields.ptr[3]),
+        type_info->flags,
+        false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), 3, false);
+    LLVMBuildStore(
+        mod->builder,
+        flags_value,
+        LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
+
+    indices[1] = LLVMConstInt(LLVMInt32Type(), 4, false);
+    LLVMValueRef union_ptr = LLVMBuildGEP(mod->builder, ptr, indices, 2, "");
+
+    TypeInfo *info_union = type_info_type->structure.fields.ptr[4];
+
+    TypeInfo *field = NULL;
+    LLVMValueRef *info_values = NULL;
+
+    switch (type_info->kind)
+    {
+    case TYPE_INT: {
+        field = info_union->structure.fields.ptr[0];
+
+        assert(field->structure.fields.len == 2);
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        info_values[0] = LLVMConstInt(
+            llvm_type(l, field->structure.fields.ptr[0]),
+            type_info->integer.num_bits,
+            false);
+
+        info_values[1] = LLVMConstInt(
+            llvm_type(l, field->structure.fields.ptr[1]),
+            type_info->integer.is_signed,
+            false);
+
+        break;
+    }
+
+    case TYPE_FLOAT: {
+        field = info_union->structure.fields.ptr[1];
+
+        assert(field->structure.fields.len == 1);
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        info_values[0] = LLVMConstInt(
+            llvm_type(l, field->structure.fields.ptr[0]),
+            type_info->floating.num_bits,
+            false);
+
+        break;
+    }
+
+    case TYPE_POINTER: {
+        field = info_union->structure.fields.ptr[2];
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        assert(field->structure.fields.len == 1);
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            LLVMConstInt(
+                LLVMInt32Type(), type_info->ptr.sub->rtti_index, false),
+        };
+
+        info_values[0] =
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+        break;
+    }
+
+    case TYPE_SLICE:
+    case TYPE_DYNAMIC_ARRAY:
+    case TYPE_ARRAY: {
+        field = info_union->structure.fields.ptr[3];
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        assert(field->structure.fields.len == 2);
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            LLVMConstInt(
+                LLVMInt32Type(), type_info->array.sub->rtti_index, false),
+        };
+
+        info_values[0] =
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+        info_values[1] = LLVMConstInt(
+            llvm_type(l, field->structure.fields.ptr[1]),
+            type_info->array.size,
+            false);
+
+        break;
+    }
+
+    case TYPE_PROC: {
+        field = info_union->structure.fields.ptr[4];
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        assert(field->structure.fields.len == 2);
+
+        LLVMTypeRef rtti_ptr_array_type = LLVMArrayType(
+            LLVMPointerType(llvm_type(l, l->compiler->type_info_type), 0),
+            type_info->proc.params.len);
+        LLVMValueRef sub_ptrs =
+            LLVMAddGlobal(mod->mod, rtti_ptr_array_type, "");
+        LLVMSetLinkage(sub_ptrs, LLVMInternalLinkage);
+        LLVMSetGlobalConstant(sub_ptrs, false);
+        LLVMSetExternallyInitialized(sub_ptrs, false);
+        LLVMSetInitializer(sub_ptrs, LLVMConstNull(rtti_ptr_array_type));
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            NULL,
+        };
+
+        for (size_t i = 0; i < type_info->proc.params.len; ++i)
+        {
+            indices[1] = LLVMConstInt(LLVMInt32Type(), i, false);
+            LLVMValueRef sub_ptr_ptr =
+                LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, "");
+            indices[1] = LLVMConstInt(
+                LLVMInt32Type(),
+                type_info->proc.params.ptr[i]->rtti_index,
+                false);
+            LLVMBuildStore(
+                mod->builder,
+                LLVMBuildGEP(
+                    mod->builder, mod->rtti_type_infos, indices, 2, ""),
+                sub_ptr_ptr);
+        }
+
+        LLVMValueRef slice_values[2] = {
+            sub_ptrs,
+            LLVMConstInt(LLVMInt64Type(), type_info->proc.params.len, false),
+        };
+
+        LLVMTypeRef slice_type = llvm_type(l, field->structure.fields.ptr[0]);
+        LLVMValueRef slice_value =
+            LLVMConstNamedStruct(slice_type, slice_values, 2);
+
+        info_values[0] = slice_value;
+
+        indices[1] = LLVMConstInt(
+            LLVMInt32Type(), type_info->proc.return_type->rtti_index, false);
+        info_values[1] =
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        field = info_union->structure.fields.ptr[5];
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        assert(field->structure.fields.len == 2);
+
+        LLVMTypeRef rtti_ptr_array_type = LLVMArrayType(
+            LLVMPointerType(llvm_type(l, l->compiler->type_info_type), 0),
+            type_info->structure.fields.len);
+        LLVMValueRef sub_ptrs =
+            LLVMAddGlobal(mod->mod, rtti_ptr_array_type, "");
+        LLVMSetLinkage(sub_ptrs, LLVMInternalLinkage);
+        LLVMSetGlobalConstant(sub_ptrs, false);
+        LLVMSetExternallyInitialized(sub_ptrs, false);
+        LLVMSetInitializer(sub_ptrs, LLVMConstNull(rtti_ptr_array_type));
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            NULL,
+        };
+
+        for (size_t i = 0; i < type_info->structure.fields.len; ++i)
+        {
+            indices[1] = LLVMConstInt(LLVMInt32Type(), i, false);
+            LLVMValueRef sub_ptr_ptr =
+                LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, "");
+            indices[1] = LLVMConstInt(
+                LLVMInt32Type(),
+                type_info->structure.fields.ptr[i]->rtti_index,
+                false);
+            LLVMBuildStore(
+                mod->builder,
+                LLVMBuildGEP(
+                    mod->builder, mod->rtti_type_infos, indices, 2, ""),
+                sub_ptr_ptr);
+        }
+
+        LLVMValueRef slice_values[2] = {
+            sub_ptrs,
+            LLVMConstInt(
+                LLVMInt64Type(), type_info->structure.fields.len, false),
+        };
+
+        LLVMTypeRef slice_type = llvm_type(l, field->structure.fields.ptr[0]);
+        LLVMValueRef slice_value =
+            LLVMConstNamedStruct(slice_type, slice_values, 2);
+
+        info_values[0] = slice_value;
+
+        info_values[1] = LLVMConstInt(
+            llvm_type(l, field->structure.fields.ptr[1]),
+            type_info->structure.is_union,
+            false);
+
+        break;
+    }
+
+    case TYPE_ENUM: {
+        field = info_union->structure.fields.ptr[6];
+
+        info_values = bump_alloc(
+            &l->compiler->bump,
+            sizeof(LLVMValueRef) * field->structure.fields.len);
+
+        assert(field->structure.fields.len == 1);
+
+        LLVMValueRef indices[2] = {
+            LLVMConstInt(LLVMInt32Type(), 0, false),
+            LLVMConstInt(
+                LLVMInt32Type(),
+                type_info->enumeration.underlying_type->rtti_index,
+                false),
+        };
+
+        info_values[0] =
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+        break;
+    }
+
+    default: return;
+    }
+
+    LLVMTypeRef info_type = llvm_type(l, field);
+    union_ptr = LLVMBuildPointerCast(
+        mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
+
+    LLVMValueRef info_value = LLVMConstNamedStruct(
+        info_type, info_values, field->structure.fields.len);
+
+    LLVMBuildStore(mod->builder, info_value, union_ptr);
 }
 
 static inline LLVMValueRef load_val(LLModule *mod, AstValue *val)
@@ -286,16 +617,25 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                 break;
             }
 
+            String mangled_name = ast->proc.name;
+            if ((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN)
+            {
+                mangled_name = mangle_function_name(l, ast);
+            }
+
             TypeInfo *fun_type = ast->type_info->ptr.sub;
             LLVMTypeRef llvm_fun_type = llvm_type(l, fun_type);
 
-            String fun_name = ast->proc.mangled_name;
-
-            char *fun_name_c = bump_c_str(&l->compiler->bump, fun_name);
+            char *fun_name_c = bump_c_str(&l->compiler->bump, mangled_name);
 
             LLVMValueRef fun =
                 LLVMAddFunction(mod->mod, fun_name_c, llvm_fun_type);
             ast->proc.value.value = fun;
+
+            if (string_equals(ast->proc.name, STR("main")))
+            {
+                mod->main_fun = fun;
+            }
 
             LLVMSetLinkage(fun, LLVMInternalLinkage);
             if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN)
@@ -720,7 +1060,7 @@ static void llvm_codegen_ast(
     case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
-        case INTRINSIC_SIZEOF: {
+        case INTRINSIC_SIZE_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
@@ -741,7 +1081,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_ALIGNOF: {
+        case INTRINSIC_ALIGN_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             TypeInfo *type = NULL;
@@ -829,6 +1169,26 @@ static void llvm_codegen_ast(
             val.value =
                 LLVMBuildCall(mod->builder, intrinsic, &param_ref, 1, "");
             if (out_value) *out_value = val;
+            break;
+        }
+
+        case INTRINSIC_TYPE_INFO_OF: {
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
+
+            AstValue type_info_value = {0};
+            type_info_value.is_lvalue = true;
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(
+                    LLVMInt32Type(), param->as_type->rtti_index, false),
+            };
+
+            type_info_value.value = LLVMBuildGEP(
+                mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+            if (out_value) *out_value = type_info_value;
+
             break;
         }
 
@@ -3329,6 +3689,74 @@ static void llvm_codegen_ast_children(
         }
 
         default: break;
+        }
+    }
+}
+
+static void llvm_generate_runtime_variables(LLContext *l, LLModule *mod)
+{
+    LLVMTypeRef rtti_array_type = LLVMArrayType(
+        llvm_type(l, l->compiler->type_info_type),
+        l->compiler->rtti_type_infos.len);
+    mod->rtti_type_infos =
+        LLVMAddGlobal(mod->mod, rtti_array_type, "__type_infos");
+    LLVMSetLinkage(mod->rtti_type_infos, LLVMInternalLinkage);
+    LLVMSetGlobalConstant(mod->rtti_type_infos, false);
+    LLVMSetExternallyInitialized(mod->rtti_type_infos, false);
+    LLVMSetInitializer(mod->rtti_type_infos, LLVMConstNull(rtti_array_type));
+}
+
+static void llvm_generate_runtime_functions(LLContext *l, LLModule *mod)
+{
+    {
+        LLVMTypeRef llvm_fun_type =
+            LLVMFunctionType(LLVMVoidType(), NULL, 0, false);
+
+        mod->runtime_statup_fun =
+            LLVMAddFunction(mod->mod, "__startup_runtime", llvm_fun_type);
+        LLVMSetLinkage(mod->runtime_statup_fun, LLVMInternalLinkage);
+
+        LLVMBasicBlockRef entry =
+            LLVMAppendBasicBlock(mod->runtime_statup_fun, "entry");
+        LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+        // Important to start from 1
+        for (size_t i = 1; i < l->compiler->rtti_type_infos.len; ++i)
+        {
+            generate_type_info_value(l, mod, i);
+        }
+
+        if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+        {
+            LLVMBuildRetVoid(mod->builder); // Add void return
+        }
+    }
+
+    {
+        LLVMTypeRef arg_types[2] = {
+            LLVMInt32Type(),
+            LLVMPointerType(LLVMPointerType(LLVMInt8Type(), 0), 0)};
+
+        LLVMTypeRef llvm_fun_type =
+            LLVMFunctionType(LLVMInt32Type(), arg_types, 2, false);
+
+        mod->main_wrapper_fun =
+            LLVMAddFunction(mod->mod, "main", llvm_fun_type);
+        LLVMSetLinkage(mod->main_wrapper_fun, LLVMExternalLinkage);
+
+        LLVMBasicBlockRef entry =
+            LLVMAppendBasicBlock(mod->main_wrapper_fun, "entry");
+        LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+        LLVMBuildCall(mod->builder, mod->runtime_statup_fun, NULL, 0, "");
+        if (mod->main_fun)
+        {
+            LLVMBuildCall(mod->builder, mod->main_fun, NULL, 0, "");
+        }
+
+        if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+        {
+            LLVMBuildRet(mod->builder, LLVMConstInt(LLVMInt32Type(), 0, false));
         }
     }
 }

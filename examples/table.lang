@@ -45,9 +45,9 @@ pub fn table_init!(V)(table: *Table!(V), size: u64) {
     table.size += 1;
 
     // Init memory
-    table.hashes = calloc(table.size, @sizeof(table.hashes[0]));
-    table.values = calloc(table.size, @sizeof(table.values[0]));
-    table.keys = calloc(table.size, @sizeof(table.keys[0]));
+    table.hashes = calloc(table.size, @size_of(table.hashes[0]));
+    table.values = calloc(table.size, @size_of(table.values[0]));
+    table.keys = calloc(table.size, @size_of(table.keys[0]));
 }
 
 pub fn table_deinit!(V)(table: *Table!(V)) {
@@ -111,9 +111,9 @@ fn table_grow!(V)(table: *Table!(V)) {
     var old_values = table.values;
 
     table.size *= 2;
-    table.hashes = calloc(table.size, @sizeof(table.hashes[0]));
-    table.values = calloc(table.size, @sizeof(table.values[0]));
-    table.keys = calloc(table.size, @sizeof(table.keys[0]));
+    table.hashes = calloc(table.size, @size_of(table.hashes[0]));
+    table.values = calloc(table.size, @size_of(table.values[0]));
+    table.keys = calloc(table.size, @size_of(table.keys[0]));
 
     for (var i: u64 = 0; i < old_size; i += 1) {
         if (old_hashes[i] != 0) {
@@ -126,7 +126,7 @@ fn table_grow!(V)(table: *Table!(V)) {
     free(old_values);
 }
 
-extern fn main() -> i32 {
+fn main() {
     {
         var table: Table!(int);
         table_init!(int)(&table, 5);
@@ -156,6 +156,4 @@ extern fn main() -> i32 {
             printf(c"table[\"hello\"] = %hu\n", result);
         }
     }
-
-    return 0;
 }

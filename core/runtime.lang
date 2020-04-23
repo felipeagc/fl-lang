@@ -1,0 +1,56 @@
+pub typedef TypeKind enum u32 {
+    Type = 2,
+    Function = 3,
+    Struct = 4,
+    Enum = 5,
+    Pointer = 6,
+    Vector = 7,
+    Array = 8,
+    Slice = 9,
+    DynamicArray = 10,
+    Int = 11,
+    Float = 12,
+    Bool = 13,
+    Void = 14,
+    Namespace = 15,
+};
+
+pub typedef TypeFlags enum u32 {
+    Distinct = 1 << 0,
+    Extern = 1 << 1,
+    CVarArgs = 1 << 2,
+};
+
+pub typedef TypeInfo struct {
+    kind: TypeKind,
+    align: u32,
+    size: u32,
+    flags: u32,
+    using info: union {
+        integer: struct {
+            num_bits: u8,
+            is_signed: bool,
+        },
+        floating: struct {
+            num_bits: u8,
+        },
+        pointer: struct {
+            sub: *TypeInfo,
+        },
+        array: struct {
+            sub: *TypeInfo,
+            size: uint,
+        },
+        function: struct {
+            parameters: [_]*TypeInfo,
+            return_type: *TypeInfo,
+        },
+        structure: struct {
+            fields: [_]*TypeInfo,
+            is_union: bool,
+        },
+        enumeration: struct {
+            underlying_type: *TypeInfo,
+        },
+    },
+};

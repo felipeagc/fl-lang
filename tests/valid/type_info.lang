@@ -1,43 +1,41 @@
-import builtin "core:builtin";
+import runtime "core:runtime";
 import "core:c";
 
-typedef TypeInfo struct {
-    kind: builtin.TypeKind,
-    align: u32,
-    size: u32,
-    flags: u32,
-    info: union {
-        integer: struct {
-            num_bits: u8,
-            is_signed: bool,
-        },
-        floating: struct {
-            num_bits: u8,
-        },
-        pointer: struct {
-            sub: *TypeInfo,
-        },
-        array: struct {
-            sub: *TypeInfo,
-            size: uint,
-        },
-        func: struct {
-            return_type: *TypeInfo,
-            params: [_]TypeInfo,
-        },
-        structure: struct {
-            fields: [_]TypeInfo,
-            is_union: bool,
-        },
-        enumeration: struct {
-            underlying_type: *TypeInfo,
-        },
-    },
-};
+fn main() {
+    // Integer
+    var a: runtime.TypeInfo = @type_info_of(i32);
+    if (a.kind != runtime.TypeKind.Int) abort();
+    if (a.integer.num_bits != 32) abort();
+    if (a.integer.is_signed != true) abort();
 
-extern fn main() -> i32 {
-    var a: builtin.TypeInfo = builtin.TypeInfo{};
-    if (@sizeof(builtin.TypeInfo) != @sizeof(TypeInfo)) abort();
+    // Pointer
+    var b = @type_info_of(*i32);
+    if (b.kind != runtime.TypeKind.Pointer) abort();
+    if (b.pointer.sub.kind != runtime.TypeKind.Int) abort();
 
-    return 0;
+    // Array
+    var c = @type_info_of([2]i32);
+    if (c.kind != runtime.TypeKind.Array) abort();
+    if (c.array.size != 2) abort();
+    if (c.array.sub.kind != runtime.TypeKind.Int) abort();
+
+    // Struct
+    var d = @type_info_of(runtime.TypeInfo);
+    if (d.kind != runtime.TypeKind.Struct) abort();
+    if (d.structure.fields.len != 5) abort();
+
+    // Function
+    var e = @type_info_of(fn* (a: i32, b: [_]char) -> i32);
+    if (e.kind != runtime.TypeKind.Pointer) abort();
+    if (e.pointer.sub.kind != runtime.TypeKind.Function) abort();
+    if (e.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();
+    if (e.pointer.sub.function.parameters.len != 2) abort();
+    if (e.pointer.sub.function.parameters[0].kind != runtime.TypeKind.Int) abort();
+    if (e.pointer.sub.function.parameters[1].kind != runtime.TypeKind.Slice) abort();
+    if (e.pointer.sub.function.parameters[1].array.sub.kind != runtime.TypeKind.Int) abort();
+
+    // Enum
+    var f = @type_info_of(runtime.TypeKind);
+    if (f.kind != runtime.TypeKind.Enum) abort();
+    if (f.enumeration.underlying_type.kind != runtime.TypeKind.Int) abort();
 }

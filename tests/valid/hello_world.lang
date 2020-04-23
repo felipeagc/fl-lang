@@ -4,13 +4,11 @@ fn add(a: i32, b: i32) {
 
 }
 
-extern fn main() -> i32 {
+fn main() {
     var a: i32 = 123;
     const b: i32 = 321;
     a = b;
     const c: i32 = b;
     puts(c"Hello, world!");
     add(1, 2);
-
-    return 0;
 }

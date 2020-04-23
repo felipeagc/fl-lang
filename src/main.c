@@ -65,6 +65,9 @@ VSFindResult find_visual_studio_and_windows_sdk();
 #include "ast.c"
 #include "cli_args.c"
 
+typedef struct TypeInfo TypeInfo;
+typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
+
 typedef struct Compiler
 {
     BumpAlloc bump;
@@ -80,8 +83,13 @@ typedef struct Compiler
 
     Arguments args;
 
-    Ast *builtin_module;
+    Ast *runtime_module;
+
+    struct TypeInfo *type_info_type;
+    ArrayOfTypeInfoPtr rtti_type_infos;
 } Compiler;
+
+static SourceFile *process_file(Compiler *compiler, String absolute_path);
 
 static void
 compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
@@ -156,6 +164,10 @@ static void compiler_init(Compiler *compiler)
     memset(compiler->backend, 0, sizeof(*compiler->backend));
     llvm_init(compiler->backend, compiler);
 
+    static TypeInfo blank_type_info = {0};
+    array_push(
+        &compiler->rtti_type_infos, &blank_type_info); // Reserve the 0 index
+
     char *c_compiler_path = get_exe_path();
     char *c_compiler_dir = get_file_dir(c_compiler_path);
     compiler->compiler_path = CSTR(c_compiler_path);
@@ -163,7 +175,7 @@ static void compiler_init(Compiler *compiler)
     compiler->corelib_dir =
         bump_str_join(&compiler->bump, compiler->compiler_dir, STR("core/"));
 
-    // Initialize builtin scopes
+    // Initialize runtime scopes
     {
         init_numeric_type(compiler, &U8_TYPE);
         init_numeric_type(compiler, &U16_TYPE);
@@ -182,178 +194,6 @@ static void compiler_init(Compiler *compiler)
         init_numeric_type(compiler, &DOUBLE_TYPE);
     }
 
-    // Initialize builtin module
-    compiler->builtin_module = create_module_ast(compiler);
-
-    Ast *type_kind_enum = create_enum_ast(compiler, compiler->builtin_module);
-    add_enum_field(compiler, type_kind_enum, STR("TYPE"), TYPE_TYPE);
-    add_enum_field(compiler, type_kind_enum, STR("PROC"), TYPE_PROC);
-    add_enum_field(compiler, type_kind_enum, STR("STRUCT"), TYPE_STRUCT);
-    add_enum_field(compiler, type_kind_enum, STR("ENUM"), TYPE_ENUM);
-    add_enum_field(compiler, type_kind_enum, STR("POINTER"), TYPE_POINTER);
-    add_enum_field(compiler, type_kind_enum, STR("VECTOR"), TYPE_VECTOR);
-    add_enum_field(compiler, type_kind_enum, STR("ARRAY"), TYPE_ARRAY);
-    add_enum_field(compiler, type_kind_enum, STR("SLICE"), TYPE_SLICE);
-    add_enum_field(
-        compiler, type_kind_enum, STR("DYNAMIC_ARRAY"), TYPE_DYNAMIC_ARRAY);
-    add_enum_field(compiler, type_kind_enum, STR("INT"), TYPE_INT);
-    add_enum_field(compiler, type_kind_enum, STR("FLOAT"), TYPE_FLOAT);
-    add_enum_field(compiler, type_kind_enum, STR("BOOL"), TYPE_BOOL);
-    add_enum_field(compiler, type_kind_enum, STR("VOID"), TYPE_VOID);
-    add_enum_field(compiler, type_kind_enum, STR("NAMESPACE"), TYPE_NAMESPACE);
-    add_module_typedef(
-        compiler, compiler->builtin_module, STR("TypeKind"), type_kind_enum);
-
-    Ast *type_flags_enum = create_enum_ast(compiler, compiler->builtin_module);
-    add_enum_field(
-        compiler, type_flags_enum, STR("IS_DISTINCT"), TYPE_FLAG_DISTINCT);
-    add_enum_field(
-        compiler, type_flags_enum, STR("IS_EXTERN"), TYPE_FLAG_EXTERN);
-    add_enum_field(
-        compiler, type_flags_enum, STR("IS_C_VARARGS"), TYPE_FLAG_C_VARARGS);
-    add_module_typedef(
-        compiler, compiler->builtin_module, STR("TypeFlags"), type_flags_enum);
-
-    Ast *type_info_structure =
-        create_struct_ast(compiler, compiler->builtin_module, false);
-    add_struct_field(
-        compiler,
-        type_info_structure,
-        STR("kind"),
-        create_ident_ast(compiler, STR("TypeKind")));
-    add_struct_field(
-        compiler,
-        type_info_structure,
-        STR("flags"),
-        create_token_ast(compiler, TOKEN_U32));
-    add_struct_field(
-        compiler,
-        type_info_structure,
-        STR("align"),
-        create_token_ast(compiler, TOKEN_U32));
-    add_struct_field(
-        compiler,
-        type_info_structure,
-        STR("size"),
-        create_token_ast(compiler, TOKEN_U32));
-
-    Ast *info_union =
-        create_struct_ast(compiler, compiler->builtin_module, true);
-
-    {
-        Ast *integer_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            integer_struct,
-            STR("num_bits"),
-            create_token_ast(compiler, TOKEN_U8));
-        add_struct_field(
-            compiler,
-            integer_struct,
-            STR("is_signed"),
-            create_token_ast(compiler, TOKEN_BOOL));
-        add_struct_field(compiler, info_union, STR("integer"), integer_struct);
-    }
-
-    {
-        Ast *floating_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            floating_struct,
-            STR("num_bits"),
-            create_token_ast(compiler, TOKEN_U8));
-        add_struct_field(
-            compiler, info_union, STR("floating"), floating_struct);
-    }
-
-    {
-        Ast *ptr_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            ptr_struct,
-            STR("sub"),
-            create_deref_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(compiler, info_union, STR("pointer"), ptr_struct);
-    }
-
-    {
-        Ast *array_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            array_struct,
-            STR("sub"),
-            create_deref_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(
-            compiler,
-            array_struct,
-            STR("size"),
-            create_token_ast(compiler, TOKEN_UINT));
-        add_struct_field(compiler, info_union, STR("array"), array_struct);
-    }
-
-    {
-        Ast *func_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            func_struct,
-            STR("return_type"),
-            create_deref_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(
-            compiler,
-            func_struct,
-            STR("parameters"),
-            create_slice_type_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(compiler, info_union, STR("function"), func_struct);
-    }
-
-    {
-        Ast *structure_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            structure_struct,
-            STR("fields"),
-            create_slice_type_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(
-            compiler,
-            structure_struct,
-            STR("is_union"),
-            create_token_ast(compiler, TOKEN_BOOL));
-        add_struct_field(
-            compiler, info_union, STR("structure"), structure_struct);
-    }
-
-    {
-        Ast *enumeration_struct =
-            create_struct_ast(compiler, compiler->builtin_module, false);
-        add_struct_field(
-            compiler,
-            enumeration_struct,
-            STR("underlying_type"),
-            create_deref_ast(
-                compiler, create_ident_ast(compiler, STR("TypeInfo"))));
-        add_struct_field(
-            compiler, info_union, STR("enumeration"), enumeration_struct);
-    }
-
-    add_struct_field(compiler, type_info_structure, STR("info"), info_union);
-
-    add_module_typedef(
-        compiler,
-        compiler->builtin_module,
-        STR("TypeInfo"),
-        type_info_structure);
-
 #if defined(__linux__)
     hash_set(&compiler->versions, STR("linux"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
@@ -369,14 +209,19 @@ static void compiler_init(Compiler *compiler)
     hash_set(&compiler->versions, STR("x86_64"), NULL);
     hash_set(&compiler->versions, STR("debug"), NULL);
 
-    String core_builtin_path = STR("core:builtin");
+    // Initialize runtime module
+    String runtime_abs_path = bump_str_join(
+        &compiler->bump,
+        compiler->corelib_dir,
+        STR("runtime" LANG_FILE_EXTENSION));
+    SourceFile *runtime_file = process_file(compiler, runtime_abs_path);
+    compiler->runtime_module = runtime_file->root;
 
-    SourceFile *file = bump_alloc(&compiler->bump, sizeof(*file));
-    memset(file, 0, sizeof(*file));
-    file->root = compiler->builtin_module;
-    hash_set(&compiler->files, core_builtin_path, file);
-
-    process_ast(compiler, file, compiler->builtin_module);
+    Ast *type_info_structure = get_symbol(
+        compiler->runtime_module->scope, STR("TypeInfo"), runtime_file);
+    assert(type_info_structure);
+    compiler->type_info_type = type_info_structure->as_type;
+    assert(compiler->type_info_type);
 }
 
 static void compiler_destroy(Compiler *compiler)
@@ -412,8 +257,6 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
     fread(file->content.buf, 1, file->content.length, f);
     fclose(f);
 }
-
-static SourceFile *process_file(Compiler *compiler, String absolute_path);
 
 static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast)
 {
@@ -475,23 +318,16 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
         {
             // Core import
 
-            if (strcmp(c_imported, "core:builtin") == 0)
-            {
-                abs_path = STR("core:builtin");
-            }
-            else
-            {
-                char *file_name_without_extension =
-                    c_imported + strlen(core_prefix);
+            char *file_name_without_extension =
+                c_imported + strlen(core_prefix);
 
-                String import_file_name = bump_str_join(
-                    &compiler->bump,
-                    CSTR(file_name_without_extension),
-                    CSTR(LANG_FILE_EXTENSION));
+            String import_file_name = bump_str_join(
+                &compiler->bump,
+                CSTR(file_name_without_extension),
+                CSTR(LANG_FILE_EXTENSION));
 
-                abs_path = bump_str_join(
-                    &compiler->bump, compiler->corelib_dir, import_file_name);
-            }
+            abs_path = bump_str_join(
+                &compiler->bump, compiler->corelib_dir, import_file_name);
         }
         else
         {
@@ -566,9 +402,13 @@ static void compile_file(Compiler *compiler, String filepath)
 {
     SourceFile *file = process_file(compiler, filepath);
 
+    llvm_generate_runtime_variables(compiler->backend, &compiler->backend->mod);
+
     file->did_codegen = true;
     llvm_codegen_ast(
         compiler->backend, &compiler->backend->mod, file->root, false, NULL);
+
+    llvm_generate_runtime_functions(compiler->backend, &compiler->backend->mod);
 
     llvm_verify_module(compiler->backend);
     llvm_optimize_module(compiler->backend);

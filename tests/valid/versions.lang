@@ -1,6 +1,6 @@
 import "core:c";
 
-extern fn main() -> i32 {
+fn main() {
     version (linux) {
         printf(c"I'm on linux\n");
     }
@@ -8,6 +8,4 @@ extern fn main() -> i32 {
     version (win32) {
         printf(c"I'm on windows\n");
     }
-
-    return 0;
 }

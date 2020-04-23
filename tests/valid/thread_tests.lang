@@ -16,7 +16,7 @@ fn thread_start(arg: *void) -> *void {
     return null;
 }
 
-extern fn main() -> i32 {
+fn main() {
     mutex_init(&mtx);
 
     var thread = thread_create(thread_start, null);
@@ -28,6 +28,4 @@ extern fn main() -> i32 {
 
     thread_wait(thread);
     mutex_destroy(&mtx);
-
-    return 0;
 }

@@ -1,7 +1,7 @@
 import fmt "core:fmt";
 import "core:c";
 
-extern fn main() -> i32 {
+fn main() {
     switch (4) {
         1 => abort();
         2 => abort();
@@ -19,6 +19,4 @@ extern fn main() -> i32 {
             abort();
         }
     }
-
-    return 0;
 }

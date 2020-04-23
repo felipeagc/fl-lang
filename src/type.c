@@ -24,16 +24,13 @@ typedef enum TypeFlags {
     TYPE_FLAG_CAN_CHANGE = 1 << 10,
 } TypeFlags;
 
-typedef struct TypeInfo TypeInfo;
-
-typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
-
 struct TypeInfo
 {
     TypeKind kind;
     uint32_t flags;
     uint32_t size;
     uint32_t align;
+    uint32_t rtti_index;
     LLVMTypeRef ref;
     struct Scope *scope;
     struct Ast *type_def;

@@ -7,7 +7,7 @@ typedef Hello struct {
     },
 };
 
-extern fn main() -> i32 {
+fn main() {
     using c;
 
     var h: Hello;
@@ -26,6 +26,4 @@ extern fn main() -> i32 {
     printf(c"h.b.c = %s\n", h.b.c);
 
     printf(c"c = %s\n", c);
-
-    return 0;
 }

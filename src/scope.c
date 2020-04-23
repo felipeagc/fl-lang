@@ -114,7 +114,9 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
     struct Ast *sym = scope_get_local(scope, name);
     if (sym)
     {
-        if (sym->type == AST_ENUM_FIELD || sym->type == AST_STRUCT_FIELD ||
+        if (sym->type == AST_ENUM_FIELD ||
+            sym->type == AST_STRUCT_FIELD_ALIAS ||
+            sym->type == AST_STRUCT_FIELD ||
             sym->type == AST_BUILTIN_VEC_ACCESS ||
             sym->type == AST_BUILTIN_CAP || sym->type == AST_BUILTIN_LEN ||
             sym->type == AST_BUILTIN_PTR || sym->type == AST_BUILTIN_MIN ||

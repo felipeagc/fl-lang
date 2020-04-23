@@ -20,7 +20,7 @@ fn add(a: i32, b: i32) -> i32 {
     return 0;
 }
 
-extern fn main() -> i32 {
+fn main() {
     var hey: i32 = 2;
     var yo: *i32 = (&hey);
     var a_int: i32 = yo[0];
@@ -56,6 +56,4 @@ extern fn main() -> i32 {
 
     printf(c"a_struct.a = %d\n", a_struct.a);
     printf(c"b_struct.a = %d\n", b_struct.a);
-
-    return 0;
 }

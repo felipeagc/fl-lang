@@ -10,10 +10,10 @@ typedef Struct struct {
 
 
 fn test() -> *Struct {
-    return malloc(@sizeof(Struct));
+    return malloc(@size_of(Struct));
 }
 
-extern fn main() {
+fn main() {
     var func: fn* () -> *Struct = test;
     test().array[0].a = 123;
     func().array[0].a = 123;

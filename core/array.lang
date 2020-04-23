@@ -8,7 +8,7 @@ fn array_grow!(V)(arr: *[dyn]V, cap: uint) {
         arr.cap = cap;
         if (arr.cap == 0) arr.cap = DEFAULT_ARRAY_CAP;
 
-        arr.ptr = malloc(@sizeof(V) * cast(c_size)arr.cap);
+        arr.ptr = malloc(@size_of(V) * cast(c_size)arr.cap);
         return;
     }
 
@@ -16,7 +16,7 @@ fn array_grow!(V)(arr: *[dyn]V, cap: uint) {
     if (new_cap == 0) new_cap = arr.cap * 2;
     arr.cap = new_cap;
 
-    arr.ptr = realloc(arr.ptr, @sizeof(V) * cast(c_size)arr.cap);
+    arr.ptr = realloc(arr.ptr, @size_of(V) * cast(c_size)arr.cap);
 }
 
 #[inline]

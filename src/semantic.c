@@ -48,6 +48,58 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
         }                                                                      \
     } while (0)
 
+static void add_rtti_type_info(Compiler *compiler, TypeInfo *type_info)
+{
+    if (type_info->rtti_index > 0) return;
+
+    array_push(&compiler->rtti_type_infos, type_info);
+    type_info->rtti_index = compiler->rtti_type_infos.len;
+
+    switch (type_info->kind)
+    {
+    case TYPE_POINTER: {
+        TypeInfo *sub = type_info->ptr.sub;
+        add_rtti_type_info(compiler, sub);
+        break;
+    }
+
+    case TYPE_SLICE:
+    case TYPE_DYNAMIC_ARRAY:
+    case TYPE_ARRAY: {
+        TypeInfo *sub = type_info->array.sub;
+        add_rtti_type_info(compiler, sub);
+        break;
+    }
+
+    case TYPE_PROC: {
+        for (size_t i = 0; i < type_info->proc.params.len; ++i)
+        {
+            TypeInfo *sub = type_info->proc.params.ptr[i];
+            add_rtti_type_info(compiler, sub);
+        }
+        add_rtti_type_info(compiler, type_info->proc.return_type);
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        for (size_t i = 0; i < type_info->structure.fields.len; ++i)
+        {
+            TypeInfo *sub = type_info->structure.fields.ptr[i];
+            add_rtti_type_info(compiler, sub);
+        }
+        break;
+    }
+
+    case TYPE_ENUM: {
+        TypeInfo *sub = type_info->enumeration.underlying_type;
+        add_rtti_type_info(compiler, sub);
+        break;
+    }
+
+    default: break;
+    }
+}
+
 static void instantiate_template(
     Compiler *compiler,
     Ast *clone_into,
@@ -319,8 +371,10 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
     case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
-        case INTRINSIC_SIZEOF:
-        case INTRINSIC_ALIGNOF: res = true; break;
+        case INTRINSIC_SIZE_OF:
+        case INTRINSIC_ALIGN_OF: res = true; break;
+
+        case INTRINSIC_TYPE_INFO_OF: res = false; break;
 
         case INTRINSIC_SQRT:
         case INTRINSIC_COS:
@@ -605,7 +659,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
     case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
-        case INTRINSIC_SIZEOF: {
+        case INTRINSIC_SIZE_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
@@ -623,7 +677,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
             break;
         }
 
-        case INTRINSIC_ALIGNOF: {
+        case INTRINSIC_ALIGN_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
@@ -2109,8 +2163,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        ast->proc.mangled_name = ast->proc.name;
-
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
@@ -2175,29 +2227,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ptr_ty->kind = TYPE_POINTER;
             ptr_ty->ptr.sub = ty;
             ast->type_info = ptr_ty;
-
-            TypeInfo *proc_type = ast->type_info->ptr.sub;
-
-            if ((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN)
-            {
-                sb_reset(&a->compiler->sb);
-                sb_append(
-                    &a->compiler->sb, STR("_F")); // mangled function prefix
-                sb_append(&a->compiler->sb, ast->proc.name);
-
-                if (ast->proc.template_params.len > 0)
-                {
-                    for (size_t i = 0; i < proc_type->proc.params.len; ++i)
-                    {
-                        TypeInfo *param_type = proc_type->proc.params.ptr[i];
-                        sb_append(&a->compiler->sb, STR("$"));
-                        print_mangled_type(&a->compiler->sb, param_type);
-                    }
-                }
-
-                ast->proc.mangled_name =
-                    sb_build(&a->compiler->sb, &a->compiler->bump);
-            }
         }
         break;
     }
@@ -2893,11 +2922,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
-        case INTRINSIC_SIZEOF: {
+        case INTRINSIC_SIZE_OF: {
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
-                    a->compiler, ast->loc, "@sizeof takes one parameter");
+                    a->compiler, ast->loc, "@size_of takes 1 parameter");
                 break;
             }
 
@@ -2916,7 +2945,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "@sizeof does not apply for this type");
+                    "@size_of does not apply for this type");
                 break;
             }
 
@@ -2925,11 +2954,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        case INTRINSIC_ALIGNOF: {
+        case INTRINSIC_ALIGN_OF: {
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
-                    a->compiler, ast->loc, "@alignof takes one parameter");
+                    a->compiler, ast->loc, "@align_of takes 1 parameter");
                 break;
             }
 
@@ -2948,11 +2977,45 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "@alignof does not apply for this type");
+                    "@align_of does not apply for this type");
                 break;
             }
 
             ast->type_info = &UINT_TYPE;
+
+            break;
+        }
+
+        case INTRINSIC_TYPE_INFO_OF: {
+            if (ast->intrinsic_call.params.len != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "@type_info_of takes 1 parameter");
+                break;
+            }
+
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, param, NULL);
+
+            if (!param->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (param->type_info->kind != TYPE_TYPE)
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "@type_info_of takes a type as a parameter");
+                break;
+            }
+
+            assert(a->compiler->type_info_type);
+            ast->type_info = a->compiler->type_info_type;
+
+            add_rtti_type_info(a->compiler, param->as_type);
 
             break;
         }

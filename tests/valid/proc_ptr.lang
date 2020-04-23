@@ -6,7 +6,7 @@ fn callback() {
     fmt.print("Hey!\n");
 }
 
-extern fn main() {
+fn main() {
     var my_func: MyFunc = callback;
     my_func();
 }

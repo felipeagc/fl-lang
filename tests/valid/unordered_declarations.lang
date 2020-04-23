@@ -1,11 +1,9 @@
-extern fn main() -> i32 {
+fn main() {
     puts_fn(c"Hello");
 
     printf(c"other_int: %d\n", other_int);
 
     const other_int = some_int;
-
-    return 0;
 }
 
 import "core:c";

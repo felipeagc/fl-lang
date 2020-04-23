@@ -66,7 +66,7 @@ fn ray_color(ray: Ray) -> Vec3 {
     return (1.0-t) * Vec3{1.0} + t * Vec3{0.5, 0.7, 1.0};
 }
 
-extern fn main() -> i32 {
+fn main() {
     const width = 400;
     const height = 200;
 
@@ -94,6 +94,4 @@ extern fn main() -> i32 {
                 cast(i32)(255.999 * col.b));
         }
     }
-
-    return 0;
 }

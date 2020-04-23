@@ -1,7 +1,7 @@
 import hello "imported.lang";
 import fmt "core:fmt";
 
-extern fn main() {
+fn main() {
     hello.say_hello();
     var a: i32 = hello.some_const;
     var b: i32 = hello.some_var;

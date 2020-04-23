@@ -8,7 +8,7 @@ typedef Struct struct {
 const const_struct = Struct{321, c"Yo"};
 const const_array = []i32{3, 4};
 
-extern fn main() -> i32 {
+fn main() {
     var my_array = [2]i32{1, 2};
     for (var i: uint = 0; i < my_array.len; i += 1) {
         printf(c"my_array[%lu] = %d\n", i, my_array[i]);
@@ -58,7 +58,5 @@ extern fn main() -> i32 {
         printf(c"const_struct.a = %d\n", const_struct.a);
         printf(c"const_struct.b = \"%s\"\n", const_struct.b);
     }
-
-    return 0;
 }
 

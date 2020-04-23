@@ -5,17 +5,15 @@ typedef MyUnion union {
     b: float,
 };
 
-extern fn main() -> i32 {
+fn main() {
     var u: MyUnion;
     u.b = 123133.1258;
 
-    if (@sizeof(u) != @sizeof(u64)) abort();
-    if (@alignof(u) != @alignof(u64)) abort();
+    if (@size_of(u) != @size_of(u64)) abort();
+    if (@align_of(u) != @align_of(u64)) abort();
 
     printf(c"%f\n", u.b);
     printf(c"%lu\n", u.a);
 
     if (cast(*void)&u.a != cast(*void)&u.b) abort();
-
-    return 0;
 }

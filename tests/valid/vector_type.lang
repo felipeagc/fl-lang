@@ -4,7 +4,7 @@ typedef Vec3 @vector_type(float, 3);
 
 const a = Vec3{50} + 5;
 
-extern fn main() -> i32 {
+fn main() {
     var v = Vec3{1, 2, 3};
     v[0] = 123;
 
@@ -26,6 +26,4 @@ extern fn main() -> i32 {
     printf(c"%f %f %f\n", v[0], v[1], v[2]);
     printf(c"%f %f %f\n", v.x, v.y, v.z);
     printf(c"%f %f %f\n", v.r, v.g, v.b);
-
-    return 0;
 }

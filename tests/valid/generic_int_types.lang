@@ -1,7 +1,5 @@
 import c "core:c";
 
-extern fn main() -> i32 {
-    if (@sizeof(int) != @sizeof(*void)) c.abort();
-
-    return 0;
+fn main() {
+    if (@size_of(int) != @size_of(*void)) c.abort();
 }

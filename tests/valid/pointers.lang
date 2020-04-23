@@ -4,7 +4,7 @@ fn some_func(a: *void) {
     printf(c"Ptr: %p\n", a);
 }
 
-extern fn main() {
+fn main() {
     var my_int: i32 = 123;
     var ptr: *i32 = &my_int;
     var ptr2: *i64 = &123;

@@ -31,12 +31,13 @@ typedef enum BinOpType {
 } BinOpType;
 
 typedef enum IntrinsicType {
-    INTRINSIC_SIZEOF,
-    INTRINSIC_ALIGNOF,
+    INTRINSIC_SIZE_OF,
+    INTRINSIC_ALIGN_OF,
     INTRINSIC_SQRT,
     INTRINSIC_SIN,
     INTRINSIC_COS,
     INTRINSIC_VECTOR_TYPE,
+    INTRINSIC_TYPE_INFO_OF,
 } IntrinsicType;
 
 typedef enum AstType {
@@ -155,7 +156,6 @@ struct Ast
         struct
         {
             String name;
-            String mangled_name;
             uint32_t flags;
             struct Ast *return_type;
             ArrayOfAst params;

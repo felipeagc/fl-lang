@@ -247,13 +247,13 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             // Intrinsic call
 
             ast->type = AST_INTRINSIC_CALL;
-            if (string_equals(expr.primary.tok->str, STR("sizeof")))
+            if (string_equals(expr.primary.tok->str, STR("size_of")))
             {
-                ast->intrinsic_call.type = INTRINSIC_SIZEOF;
+                ast->intrinsic_call.type = INTRINSIC_SIZE_OF;
             }
-            else if (string_equals(expr.primary.tok->str, STR("alignof")))
+            else if (string_equals(expr.primary.tok->str, STR("align_of")))
             {
-                ast->intrinsic_call.type = INTRINSIC_ALIGNOF;
+                ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
             }
             else if (string_equals(expr.primary.tok->str, STR("sqrt")))
             {
@@ -270,6 +270,10 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             else if (string_equals(expr.primary.tok->str, STR("vector_type")))
             {
                 ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("type_info_of")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
             }
             else
             {
@@ -552,7 +556,6 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
             field.type = AST_STRUCT_FIELD;
-            field.flags |= AST_FLAG_PUBLIC;
 
             if (parser_peek(p, 0)->type == TOKEN_USING)
             {

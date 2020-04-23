@@ -4,8 +4,6 @@ typedef Struct struct {
 
 const const_struct = Struct {12};
 
-extern fn main() -> i32 {
+fn main() {
     const_struct.a = 123;
-
-    return 0;
 }

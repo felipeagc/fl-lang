@@ -6,7 +6,7 @@ typedef Yo!(T) T;
 
 typedef HelloInt Hello!(i32);
 
-extern fn main() -> i32 {
+fn main() {
     var h: Hello!(i32);
     h = Hello!(i32) {123};
     h = HelloInt {123};
@@ -17,5 +17,4 @@ extern fn main() -> i32 {
 
     var c: Yo!(i32) = 123;
     var d: i32 = c;
-    return 0;
 }

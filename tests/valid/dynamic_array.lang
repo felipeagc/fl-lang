@@ -1,7 +1,7 @@
 import "core:c";
 import "core:array";
 
-extern fn main() -> i32 {
+fn main() {
     var arr: [dyn]i32;
 
     array_push!(i32)(&arr, 1);
@@ -10,6 +10,4 @@ extern fn main() -> i32 {
     if (arr.len != 2) abort();
 
     array_free!(i32)(&arr);
-
-    return 0;
 }

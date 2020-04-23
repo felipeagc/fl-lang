@@ -1,5 +1,5 @@
-const my_const: u64 = @sizeof(i32);
+const my_const: u64 = @size_of(i32);
 
-extern fn main() {
+fn main() {
 
 }

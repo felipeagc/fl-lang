@@ -9,7 +9,7 @@ var global_array4: [2][3]i32;
 
 extern fn printf(fmt: *char, ...);
 
-extern fn main() -> i32 {
+fn main() {
     global_array1[1] = 321;
     printf(c"global_array1[1] = %d\n", global_array1[1]);
 
@@ -28,10 +28,8 @@ extern fn main() -> i32 {
     var local_array1: [3]i32 = global_array4[0];
     printf(c"local_array1[1] = %d\n", local_array1[1]);
 
-    var local_array3: [@sizeof(const_array)]u8;
-    var local_array4: [@sizeof(const_array[1])]u8;
+    var local_array3: [@size_of(const_array)]u8;
+    var local_array4: [@size_of(const_array[1])]u8;
 
-    const const_array: [@sizeof(i64)]u8 = [8]u8{1, 2, 3, 4, 5, 6, 7, 8};
-
-    return 0;
+    const const_array: [@size_of(i64)]u8 = [8]u8{1, 2, 3, 4, 5, 6, 7, 8};
 }

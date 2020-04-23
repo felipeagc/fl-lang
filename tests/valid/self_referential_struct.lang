@@ -4,8 +4,8 @@ pub typedef Test struct {
     test: *Test,
 };
 
-extern fn main() {
+fn main() {
     var a: Test;
-    a.test = malloc(@sizeof(Test));
+    a.test = malloc(@size_of(Test));
     free(a.test);
 }

@@ -1,6 +1,6 @@
 import c "core:c";
 
-extern fn main() -> i32 {
+fn main() {
     {
         // Slicing arrays
 
@@ -27,7 +27,7 @@ extern fn main() -> i32 {
     {
         // Slicing pointers
 
-        var my_array: *i32 = c.malloc(@sizeof(i32) * 10);
+        var my_array: *i32 = c.malloc(@size_of(i32) * 10);
         my_array[1] = 3;
         my_array[2] = 4;
 
@@ -54,7 +54,7 @@ extern fn main() -> i32 {
     {
         // Slicing slices
 
-        var my_array: *i32 = c.malloc(@sizeof(i32) * 10);
+        var my_array: *i32 = c.malloc(@size_of(i32) * 10);
         my_array[2] = 3;
         my_array[3] = 4;
 
@@ -91,6 +91,4 @@ extern fn main() -> i32 {
             c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
-
-    return 0;
 }

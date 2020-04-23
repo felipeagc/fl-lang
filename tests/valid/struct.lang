@@ -25,7 +25,7 @@ fn print_nested(n: *NestedStruct) {
     printf(c"n.sub.s[4].a = %d\n", n.sub.s[4].a);
 }
 
-extern fn main() -> i32 {
+fn main() {
     var a_struct: MyStruct;
     a_struct.a = 32;
     var b_struct: *MyStruct = &a_struct;
@@ -46,15 +46,15 @@ extern fn main() -> i32 {
     printf(c"nested.name = %s\n", nested.name);
     print_nested(&nested);
 
-    printf(c"@sizeof(NestedStruct) = %lu\n", @sizeof(NestedStruct));
-    printf(c"@sizeof(nested) = %lu\n", @sizeof(nested));
-    printf(c"@alignof(NestedStruct) = %lu\n", @alignof(NestedStruct));
-    printf(c"@alignof(nested) = %lu\n", @alignof(nested));
+    printf(c"@size_of(NestedStruct) = %lu\n", @size_of(NestedStruct));
+    printf(c"@size_of(nested) = %lu\n", @size_of(nested));
+    printf(c"@align_of(NestedStruct) = %lu\n", @align_of(NestedStruct));
+    printf(c"@align_of(nested) = %lu\n", @align_of(nested));
 
-    var ptr: *NestedStruct = malloc(@sizeof(*ptr));
+    var ptr: *NestedStruct = malloc(@size_of(*ptr));
     free(ptr);
 
-    printf(c"@sizeof(*ptr) = %lu\n", @sizeof(*ptr));
+    printf(c"@size_of(*ptr) = %lu\n", @size_of(*ptr));
 
     var my_u32: u32 = 123;
     printf(c"my_u32 = %u\n", my_u32);
@@ -67,6 +67,4 @@ extern fn main() -> i32 {
 
     var my_float: float = cast(float) my_u32;
     printf(c"my_float = %f\n", my_float);
-
-    return 0;
 }

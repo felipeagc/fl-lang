@@ -12,11 +12,9 @@ fn my_func(using str: Struct) {
     printf(c"%d\n", b.c);
 }
 
-extern fn main() -> i32 {
+fn main() {
     var str: Struct;
     str.a = 123;
     str.b.c = 321;
     my_func(str);
-
-    return 0;
 }
