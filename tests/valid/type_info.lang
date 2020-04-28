@@ -23,6 +23,10 @@ fn main() {
     var d = @type_info_of(runtime.TypeInfo);
     if (d.kind != runtime.TypeKind.Struct) abort();
     if (d.structure.fields.len != 5) abort();
+    if (d.structure.fields[0].kind != runtime.TypeKind.Enum) abort();
+    if (d.structure.fields[1].kind != runtime.TypeKind.Int) abort();
+    if (d.structure.fields[2].kind != runtime.TypeKind.Int) abort();
+    if (d.structure.fields[3].kind != runtime.TypeKind.Int) abort();
 
     // Function
     var e = @type_info_of(fn* (a: i32, b: [_]char) -> i32);

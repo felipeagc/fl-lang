@@ -52,8 +52,8 @@ static void add_rtti_type_info(Compiler *compiler, TypeInfo *type_info)
 {
     if (type_info->rtti_index > 0) return;
 
-    array_push(&compiler->rtti_type_infos, type_info);
     type_info->rtti_index = compiler->rtti_type_infos.len;
+    array_push(&compiler->rtti_type_infos, type_info);
 
     switch (type_info->kind)
     {

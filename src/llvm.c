@@ -91,7 +91,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
-            LLVMInt64Type(),                                   // len
+            llvm_type(l, &UINT_TYPE),                          // len
         };
 
         type->ref = LLVMStructType(field_types, 2, false);
@@ -101,8 +101,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_DYNAMIC_ARRAY: {
         LLVMTypeRef field_types[3] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
-            LLVMInt64Type(),                                   // len
-            LLVMInt64Type(),                                   // cap
+            llvm_type(l, &UINT_TYPE),                          // len
+            llvm_type(l, &UINT_TYPE),                          // cap
         };
 
         type->ref = LLVMStructType(field_types, 3, false);
@@ -173,10 +173,10 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
     TypeInfo *type_info = l->compiler->rtti_type_infos.ptr[rtti_index];
     TypeInfo *type_info_type = l->compiler->type_info_type;
 
-    LLVMValueRef indices[2] = {
-        LLVMConstInt(LLVMInt32Type(), 0, false),
-        LLVMConstInt(LLVMInt32Type(), type_info->rtti_index, false),
-    };
+    LLVMValueRef indices[3] = {0};
+
+    indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), type_info->rtti_index, false);
     LLVMValueRef ptr =
         LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
 
@@ -226,66 +226,84 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
     TypeInfo *info_union = type_info_type->structure.fields.ptr[4];
 
     TypeInfo *field = NULL;
-    LLVMValueRef *info_values = NULL;
+    LLVMValueRef value_ptr = NULL;
 
     switch (type_info->kind)
     {
     case TYPE_INT: {
         field = info_union->structure.fields.ptr[0];
-
         assert(field->structure.fields.len == 2);
 
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
 
-        info_values[0] = LLVMConstInt(
-            llvm_type(l, field->structure.fields.ptr[0]),
-            type_info->integer.num_bits,
-            false);
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, field->structure.fields.ptr[0]),
+                type_info->integer.num_bits,
+                false),
+            value_ptr);
 
-        info_values[1] = LLVMConstInt(
-            llvm_type(l, field->structure.fields.ptr[1]),
-            type_info->integer.is_signed,
-            false);
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, field->structure.fields.ptr[1]),
+                type_info->integer.is_signed,
+                false),
+            value_ptr);
 
         break;
     }
 
     case TYPE_FLOAT: {
         field = info_union->structure.fields.ptr[1];
-
         assert(field->structure.fields.len == 1);
 
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
 
-        info_values[0] = LLVMConstInt(
-            llvm_type(l, field->structure.fields.ptr[0]),
-            type_info->floating.num_bits,
-            false);
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, field->structure.fields.ptr[0]),
+                type_info->floating.num_bits,
+                false),
+            value_ptr);
 
         break;
     }
 
     case TYPE_POINTER: {
         field = info_union->structure.fields.ptr[2];
-
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
-
         assert(field->structure.fields.len == 1);
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
-            LLVMConstInt(
-                LLVMInt32Type(), type_info->ptr.sub->rtti_index, false),
-        };
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
 
-        info_values[0] =
-            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(
+            LLVMInt32Type(), type_info->ptr.sub->rtti_index, false);
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, ""),
+            value_ptr);
 
         break;
     }
@@ -294,37 +312,38 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
     case TYPE_DYNAMIC_ARRAY:
     case TYPE_ARRAY: {
         field = info_union->structure.fields.ptr[3];
-
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
-
         assert(field->structure.fields.len == 2);
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(
+            LLVMInt32Type(), type_info->array.sub->rtti_index, false);
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, ""),
+            value_ptr);
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
             LLVMConstInt(
-                LLVMInt32Type(), type_info->array.sub->rtti_index, false),
-        };
-
-        info_values[0] =
-            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
-
-        info_values[1] = LLVMConstInt(
-            llvm_type(l, field->structure.fields.ptr[1]),
-            type_info->array.size,
-            false);
+                llvm_type(l, &UINT_TYPE), type_info->array.size, false),
+            value_ptr);
 
         break;
     }
 
     case TYPE_PROC: {
         field = info_union->structure.fields.ptr[4];
-
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
-
         assert(field->structure.fields.len == 2);
 
         LLVMTypeRef rtti_ptr_array_type = LLVMArrayType(
@@ -337,16 +356,14 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMSetExternallyInitialized(sub_ptrs, false);
         LLVMSetInitializer(sub_ptrs, LLVMConstNull(rtti_ptr_array_type));
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
-            NULL,
-        };
-
         for (size_t i = 0; i < type_info->proc.params.len; ++i)
         {
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
             indices[1] = LLVMConstInt(LLVMInt32Type(), i, false);
             LLVMValueRef sub_ptr_ptr =
                 LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
             indices[1] = LLVMConstInt(
                 LLVMInt32Type(),
                 type_info->proc.params.ptr[i]->rtti_index,
@@ -358,31 +375,51 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
                 sub_ptr_ptr);
         }
 
-        LLVMValueRef slice_values[2] = {
-            sub_ptrs,
-            LLVMConstInt(LLVMInt64Type(), type_info->proc.params.len, false),
-        };
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
 
-        LLVMTypeRef slice_type = llvm_type(l, field->structure.fields.ptr[0]);
-        LLVMValueRef slice_value =
-            LLVMConstNamedStruct(slice_type, slice_values, 2);
+        // Paramteter slice pointer
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[2] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 3, "");
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, ""),
+            value_ptr);
 
-        info_values[0] = slice_value;
+        // Paramteter slice length
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[2] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 3, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, &UINT_TYPE), type_info->proc.params.len, false),
+            value_ptr);
 
+        // Return type
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
         indices[1] = LLVMConstInt(
             LLVMInt32Type(), type_info->proc.return_type->rtti_index, false);
-        info_values[1] =
-            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, ""),
+            value_ptr);
 
         break;
     }
 
     case TYPE_STRUCT: {
         field = info_union->structure.fields.ptr[5];
-
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
 
         assert(field->structure.fields.len == 2);
 
@@ -396,16 +433,14 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMSetExternallyInitialized(sub_ptrs, false);
         LLVMSetInitializer(sub_ptrs, LLVMConstNull(rtti_ptr_array_type));
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
-            NULL,
-        };
-
         for (size_t i = 0; i < type_info->structure.fields.len; ++i)
         {
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
             indices[1] = LLVMConstInt(LLVMInt32Type(), i, false);
             LLVMValueRef sub_ptr_ptr =
                 LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
             indices[1] = LLVMConstInt(
                 LLVMInt32Type(),
                 type_info->structure.fields.ptr[i]->rtti_index,
@@ -417,60 +452,77 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
                 sub_ptr_ptr);
         }
 
-        LLVMValueRef slice_values[2] = {
-            sub_ptrs,
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
+
+        // Field slice pointer
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[2] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 3, "");
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, sub_ptrs, indices, 2, ""),
+            value_ptr);
+
+        // Field slice length
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[2] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 3, "");
+        LLVMBuildStore(
+            mod->builder,
             LLVMConstInt(
-                LLVMInt64Type(), type_info->structure.fields.len, false),
-        };
+                llvm_type(l, &UINT_TYPE),
+                type_info->structure.fields.len,
+                false),
+            value_ptr);
 
-        LLVMTypeRef slice_type = llvm_type(l, field->structure.fields.ptr[0]);
-        LLVMValueRef slice_value =
-            LLVMConstNamedStruct(slice_type, slice_values, 2);
-
-        info_values[0] = slice_value;
-
-        info_values[1] = LLVMConstInt(
-            llvm_type(l, field->structure.fields.ptr[1]),
-            type_info->structure.is_union,
-            false);
+        // is_union
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, field->structure.fields.ptr[1]),
+                type_info->structure.is_union,
+                false),
+            value_ptr);
 
         break;
     }
 
     case TYPE_ENUM: {
         field = info_union->structure.fields.ptr[6];
-
-        info_values = bump_alloc(
-            &l->compiler->bump,
-            sizeof(LLVMValueRef) * field->structure.fields.len);
-
         assert(field->structure.fields.len == 1);
 
-        LLVMValueRef indices[2] = {
-            LLVMConstInt(LLVMInt32Type(), 0, false),
-            LLVMConstInt(
-                LLVMInt32Type(),
-                type_info->enumeration.underlying_type->rtti_index,
-                false),
-        };
+        LLVMTypeRef info_type = llvm_type(l, field);
+        union_ptr = LLVMBuildPointerCast(
+            mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
 
-        info_values[0] =
-            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, "");
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        value_ptr = LLVMBuildGEP(mod->builder, union_ptr, indices, 2, "");
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(
+            LLVMInt32Type(),
+            type_info->enumeration.underlying_type->rtti_index,
+            false);
+        LLVMBuildStore(
+            mod->builder,
+            LLVMBuildGEP(mod->builder, mod->rtti_type_infos, indices, 2, ""),
+            value_ptr);
 
         break;
     }
 
-    default: return;
+    default: break;
     }
-
-    LLVMTypeRef info_type = llvm_type(l, field);
-    union_ptr = LLVMBuildPointerCast(
-        mod->builder, union_ptr, LLVMPointerType(info_type, 0), "");
-
-    LLVMValueRef info_value = LLVMConstNamedStruct(
-        info_type, info_values, field->structure.fields.len);
-
-    LLVMBuildStore(mod->builder, info_value, union_ptr);
 }
 
 static inline LLVMValueRef load_val(LLModule *mod, AstValue *val)
@@ -1614,7 +1666,7 @@ static void llvm_codegen_ast(
             AstValue subscript_value = {0};
 
             LLVMValueRef indices[2] = {
-                LLVMConstInt(LLVMInt64Type(), 0, false),
+                LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false),
                 load_val(mod, &right_value),
             };
 
