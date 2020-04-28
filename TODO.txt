@@ -23,10 +23,9 @@ TODO:
 - replace test script with an actual program
 - windows support in core library
 
-- typeinfo type
-- @memset, @memcmp
 - any type
 - aligned type
+- @memset, @memcmp
 
 Small things:
 - import files as byte arrays

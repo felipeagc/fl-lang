@@ -3,43 +3,63 @@ import "core:c";
 
 fn main() {
     // Integer
-    var a: runtime.TypeInfo = @type_info_of(i32);
-    if (a.kind != runtime.TypeKind.Int) abort();
-    if (a.integer.num_bits != 32) abort();
-    if (a.integer.is_signed != true) abort();
+    {
+        var t: runtime.TypeInfo = @type_info_of(i32);
+        if (t.kind != runtime.TypeKind.Int) abort();
+        if (t.integer.num_bits != 32) abort();
+        if (t.integer.is_signed != true) abort();
+    }
 
     // Pointer
-    var b = @type_info_of(*i32);
-    if (b.kind != runtime.TypeKind.Pointer) abort();
-    if (b.pointer.sub.kind != runtime.TypeKind.Int) abort();
+    {
+        var t = @type_info_of(*i32);
+        if (t.kind != runtime.TypeKind.Pointer) abort();
+        if (t.pointer.sub.kind != runtime.TypeKind.Int) abort();
+    }
 
     // Array
-    var c = @type_info_of([2]i32);
-    if (c.kind != runtime.TypeKind.Array) abort();
-    if (c.array.size != 2) abort();
-    if (c.array.sub.kind != runtime.TypeKind.Int) abort();
+    {
+        var t = @type_info_of([2]i32);
+        if (t.kind != runtime.TypeKind.Array) abort();
+        if (t.array.size != 2) abort();
+        if (t.array.sub.kind != runtime.TypeKind.Int) abort();
+    }
+
+    // Slice
+    {
+        var t = @type_info_of([_]i32);
+        if (t.kind != runtime.TypeKind.Slice) abort();
+        if (t.array.size != 0) abort();
+        if (t.array.sub.kind != runtime.TypeKind.Int) abort();
+    }
 
     // Struct
-    var d = @type_info_of(runtime.TypeInfo);
-    if (d.kind != runtime.TypeKind.Struct) abort();
-    if (d.structure.fields.len != 5) abort();
-    if (d.structure.fields[0].kind != runtime.TypeKind.Enum) abort();
-    if (d.structure.fields[1].kind != runtime.TypeKind.Int) abort();
-    if (d.structure.fields[2].kind != runtime.TypeKind.Int) abort();
-    if (d.structure.fields[3].kind != runtime.TypeKind.Int) abort();
+    {
+        var t = @type_info_of(runtime.TypeInfo);
+        if (t.kind != runtime.TypeKind.Struct) abort();
+        if (t.structure.fields.len != 5) abort();
+        if (t.structure.fields[0].kind != runtime.TypeKind.Enum) abort();
+        if (t.structure.fields[1].kind != runtime.TypeKind.Int) abort();
+        if (t.structure.fields[2].kind != runtime.TypeKind.Int) abort();
+        if (t.structure.fields[3].kind != runtime.TypeKind.Int) abort();
+    }
 
     // Function
-    var e = @type_info_of(fn* (a: i32, b: [_]char) -> i32);
-    if (e.kind != runtime.TypeKind.Pointer) abort();
-    if (e.pointer.sub.kind != runtime.TypeKind.Function) abort();
-    if (e.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();
-    if (e.pointer.sub.function.parameters.len != 2) abort();
-    if (e.pointer.sub.function.parameters[0].kind != runtime.TypeKind.Int) abort();
-    if (e.pointer.sub.function.parameters[1].kind != runtime.TypeKind.Slice) abort();
-    if (e.pointer.sub.function.parameters[1].array.sub.kind != runtime.TypeKind.Int) abort();
+    {
+        var t = @type_info_of(fn* (a: i32, b: [_]char) -> i32);
+        if (t.kind != runtime.TypeKind.Pointer) abort();
+        if (t.pointer.sub.kind != runtime.TypeKind.Function) abort();
+        if (t.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();
+        if (t.pointer.sub.function.parameters.len != 2) abort();
+        if (t.pointer.sub.function.parameters[0].kind != runtime.TypeKind.Int) abort();
+        if (t.pointer.sub.function.parameters[1].kind != runtime.TypeKind.Slice) abort();
+        if (t.pointer.sub.function.parameters[1].array.sub.kind != runtime.TypeKind.Int) abort();
+    }
 
     // Enum
-    var f = @type_info_of(runtime.TypeKind);
-    if (f.kind != runtime.TypeKind.Enum) abort();
-    if (f.enumeration.underlying_type.kind != runtime.TypeKind.Int) abort();
+    {
+        var t = @type_info_of(runtime.TypeKind);
+        if (t.kind != runtime.TypeKind.Enum) abort();
+        if (t.enumeration.underlying_type.kind != runtime.TypeKind.Int) abort();
+    }
 }
