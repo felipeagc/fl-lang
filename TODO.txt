@@ -47,7 +47,6 @@ Safety:
 - bounds checking
 
 Bugs:
-- I think struct fields don't have location information
 - Duplicate extern declarations
 - Circular imports
 - Circular structs

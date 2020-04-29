@@ -139,7 +139,7 @@ bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
             return res;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
         {
             Ast param = {0};
             if (parse_expr(p, &param, true))
@@ -240,7 +240,7 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while (parser_peek(p, 0)->type == TOKEN_LPAREN)
+    while (parser_peek(p, 0)->type == TOKEN_LPAREN && !parser_is_at_end(p))
     {
         Ast expr = *ast;
         memset(&ast->proc_call, 0, sizeof(ast->proc_call));
@@ -358,7 +358,7 @@ bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while (parser_peek(p, 0)->type == TOKEN_LBRACK)
+    while (parser_peek(p, 0)->type == TOKEN_LBRACK && !parser_is_at_end(p))
     {
         Ast expr = *ast;
 
@@ -444,7 +444,7 @@ bool parse_access(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while (parser_peek(p, 0)->type == TOKEN_DOT)
+    while (parser_peek(p, 0)->type == TOKEN_DOT && !parser_is_at_end(p))
     {
         Ast expr = *ast;
         memset(&ast->access, 0, sizeof(ast->access));
@@ -494,7 +494,7 @@ bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
         memset(&ast->compound, 0, sizeof(ast->compound));
         ast->compound.type_expr = type_expr;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
 
             Ast value = {0};
@@ -559,11 +559,15 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             ast->structure.is_union = true;
         }
 
-        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
 
         memset(&ast->structure.fields, 0, sizeof(ast->structure.fields));
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
@@ -622,11 +626,15 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->enumeration.type_expr, true)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
 
         memset(&ast->enumeration.fields, 0, sizeof(ast->enumeration.fields));
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
@@ -740,7 +748,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             break;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
         {
             if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
             {
@@ -831,9 +839,10 @@ bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_ASTERISK) ||
-           (parser_peek(p, 0)->type == TOKEN_SLASH) ||
-           (parser_peek(p, 0)->type == TOKEN_PERCENT))
+    while (((parser_peek(p, 0)->type == TOKEN_ASTERISK) ||
+            (parser_peek(p, 0)->type == TOKEN_SLASH) ||
+            (parser_peek(p, 0)->type == TOKEN_PERCENT)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -871,8 +880,9 @@ bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_PLUS) ||
-           (parser_peek(p, 0)->type == TOKEN_MINUS))
+    while (((parser_peek(p, 0)->type == TOKEN_PLUS) ||
+            (parser_peek(p, 0)->type == TOKEN_MINUS)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -909,8 +919,9 @@ bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_RSHIFT) ||
-           (parser_peek(p, 0)->type == TOKEN_LSHIFT))
+    while (((parser_peek(p, 0)->type == TOKEN_RSHIFT) ||
+            (parser_peek(p, 0)->type == TOKEN_LSHIFT)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -947,9 +958,10 @@ bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_PIPE) ||
-           (parser_peek(p, 0)->type == TOKEN_AMPERSAND) ||
-           (parser_peek(p, 0)->type == TOKEN_HAT))
+    while (((parser_peek(p, 0)->type == TOKEN_PIPE) ||
+            (parser_peek(p, 0)->type == TOKEN_AMPERSAND) ||
+            (parser_peek(p, 0)->type == TOKEN_HAT)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -987,12 +999,13 @@ bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_EQUAL) ||
-           (parser_peek(p, 0)->type == TOKEN_NOTEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_LESS) ||
-           (parser_peek(p, 0)->type == TOKEN_LESSEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_GREATER) ||
-           (parser_peek(p, 0)->type == TOKEN_GREATEREQ))
+    while (((parser_peek(p, 0)->type == TOKEN_EQUAL) ||
+            (parser_peek(p, 0)->type == TOKEN_NOTEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_LESS) ||
+            (parser_peek(p, 0)->type == TOKEN_LESSEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_GREATER) ||
+            (parser_peek(p, 0)->type == TOKEN_GREATEREQ)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1033,8 +1046,9 @@ bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_AND) ||
-           (parser_peek(p, 0)->type == TOKEN_OR))
+    while (((parser_peek(p, 0)->type == TOKEN_AND) ||
+            (parser_peek(p, 0)->type == TOKEN_OR)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1071,16 +1085,17 @@ bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while ((parser_peek(p, 0)->type == TOKEN_PLUSEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_MINUSEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_MULEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_DIVEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_MODEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_ANDEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_OREQ) ||
-           (parser_peek(p, 0)->type == TOKEN_XOREQ) ||
-           (parser_peek(p, 0)->type == TOKEN_LSHIFTEQ) ||
-           (parser_peek(p, 0)->type == TOKEN_RSHIFTEQ))
+    while (((parser_peek(p, 0)->type == TOKEN_PLUSEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_MINUSEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_MULEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_DIVEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_MODEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_ANDEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_OREQ) ||
+            (parser_peek(p, 0)->type == TOKEN_XOREQ) ||
+            (parser_peek(p, 0)->type == TOKEN_LSHIFTEQ) ||
+            (parser_peek(p, 0)->type == TOKEN_RSHIFTEQ)) &&
+           !parser_is_at_end(p))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1144,7 +1159,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ArrayOfAstAttribute attributes = {0};
         if (!parser_consume(p, TOKEN_LBRACK)) res = false;
 
-        while (parser_peek(p, 0)->type != TOKEN_RBRACK)
+        while (parser_peek(p, 0)->type != TOKEN_RBRACK && !parser_is_at_end(p))
         {
             Token *name_tok = parser_next(p, 1);
             if (name_tok->type == TOKEN_IDENT)
@@ -1241,7 +1256,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         ast->type = AST_BLOCK;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
@@ -1369,7 +1384,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 break;
             }
 
-            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                   !parser_is_at_end(p))
             {
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
@@ -1396,7 +1412,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             break;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
         {
             Ast param = {0};
             param.type = AST_PROC_PARAM;
@@ -1460,10 +1476,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
+            parser_next(p, 1);
             ast->proc.flags |= PROC_FLAG_HAS_BODY;
-            if (!parser_consume(p, TOKEN_LCURLY)) res = false;
 
-            while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                   !parser_is_at_end(p))
             {
                 Ast stmt = {0};
                 if (!parse_stmt(p, &stmt, true, true)) res = false;
@@ -1569,7 +1586,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 break;
             }
 
-            while (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                   !parser_is_at_end(p))
             {
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
@@ -1631,9 +1649,13 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
@@ -1696,13 +1718,17 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY)) res = false;
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
 
         memset(&ast->switch_stmt.vals, 0, sizeof(ast->switch_stmt.vals));
         memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
         ast->switch_stmt.else_stmt = NULL;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY)
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
         {
             if (parser_peek(p, 0)->type == TOKEN_ELSE)
             {
