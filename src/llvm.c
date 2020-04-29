@@ -645,9 +645,6 @@ build_alloca(LLContext *l, LLModule *mod, TypeInfo *type)
     return alloca;
 }
 
-static void llvm_codegen_ast_children(
-    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const);
-
 static void
 llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 {
@@ -738,11 +735,9 @@ llvm_codegen_deferred_stmts(LLContext *l, LLModule *mod, bool is_return)
 
     while (scope)
     {
-        while (scope->deferred_stmts.len > 0)
+        for (size_t i = scope->deferred_stmts.len; i-- > 0;)
         {
-            Ast *stmt = *array_last(&scope->deferred_stmts);
-            llvm_codegen_ast(l, mod, stmt, false, NULL);
-            array_pop(&scope->deferred_stmts);
+            llvm_codegen_ast(l, mod, scope->deferred_stmts.ptr[i], false, NULL);
         }
 
         if (is_return)
