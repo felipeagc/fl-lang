@@ -1439,7 +1439,6 @@ static void llvm_codegen_ast(
     }
 
     case AST_RETURN: {
-        llvm_codegen_deferred_stmts(l, mod, true);
 
         Ast *proc = get_scope_procedure(*array_last(&l->scope_stack));
         assert(proc);
@@ -1456,10 +1455,13 @@ static void llvm_codegen_ast(
                 ast->expr->type_info,
                 proc->proc.return_type->as_type,
                 ref);
+
+            llvm_codegen_deferred_stmts(l, mod, true);
             LLVMBuildRet(mod->builder, ref);
         }
         else
         {
+            llvm_codegen_deferred_stmts(l, mod, true);
             LLVMBuildRetVoid(mod->builder);
         }
 
