@@ -1,6 +1,6 @@
 import c "core:c";
 
-fn main() {
+func main() {
     {
         // Slicing arrays
 

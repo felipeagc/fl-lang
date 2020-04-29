@@ -4,7 +4,7 @@ typedef Vec3 @vector_type(float, 3);
 
 const a = Vec3{50} + 5;
 
-fn main() {
+func main() {
     var v = Vec3{1, 2, 3};
     v[0] = 123;
 

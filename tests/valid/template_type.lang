@@ -6,7 +6,7 @@ typedef Yo(T) T;
 
 typedef HelloInt Hello(i32);
 
-fn main() {
+func main() {
     var h: Hello(i32);
     h = Hello(i32) {123};
     h = HelloInt {123};

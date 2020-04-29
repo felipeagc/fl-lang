@@ -1,14 +1,14 @@
 import c "core:c";
 import os "core:os";
 
-pub fn print(str: [_]char) {
+pub func print(str: [_]char) {
     var buf: [_]byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stdout(), buf);
 }
 
-pub fn eprint(str: [_]char) {
+pub func eprint(str: [_]char) {
     var buf: [_]byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;

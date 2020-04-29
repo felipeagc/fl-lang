@@ -48,7 +48,7 @@ static void print_ident(StringBuilder *sb, String ident)
 {
     sb_append(sb, ident);
 
-    if (string_equals(ident, STR("fn")))
+    if (string_equals(ident, STR("func")))
         sb_append(sb, STR("_"));
     else if (string_equals(ident, STR("version")))
         sb_append(sb, STR("_"));
@@ -249,7 +249,7 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
     case CXType_FunctionProto: {
         CXCursor decl = clang_getTypeDeclaration(type);
 
-        sb_append(sb, STR("fn* ("));
+        sb_append(sb, STR("func* ("));
         size_t arg_count = clang_getNumArgTypes(type);
         for (int i = 0; i < arg_count; ++i)
         {
@@ -459,7 +459,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (hash_get(&g_symbol_map, fun_name, NULL)) break;
         hash_set(&g_symbol_map, fun_name, NULL);
 
-        sb_append(sb, STR("pub extern fn "));
+        sb_append(sb, STR("pub extern func "));
         sb_append(sb, fun_name);
         sb_append(sb, STR("("));
 

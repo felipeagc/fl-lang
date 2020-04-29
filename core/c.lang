@@ -1,26 +1,26 @@
 pub typedef c_int i32;
 pub typedef c_size uint;
-pub typedef FILE distinct struct {};
+pub typedef FILE struct {};
 
-pub extern fn printf(fmt: *char, ...) -> c_int;
-pub extern fn sprintf(str: *char, fmt: *char, ...) -> c_int;
-pub extern fn snprintf(str: *char, size: c_size, fmt: *char, ...) -> c_int;
+pub extern func printf(fmt: *char, ...) -> c_int;
+pub extern func sprintf(str: *char, fmt: *char, ...) -> c_int;
+pub extern func snprintf(str: *char, size: c_size, fmt: *char, ...) -> c_int;
 
-pub extern fn puts(_: *char) -> c_int;
+pub extern func puts(_: *char) -> c_int;
 
-pub extern fn fopen(pathname: *char, mode: *char) -> *FILE;
-pub extern fn fread(ptr: *void, size: c_size, nmemb: c_size, stream: *FILE) -> c_size;
-pub extern fn fwrite(ptr: *void, size: c_size, nmemb: c_size, stream: *FILE) -> c_size;
+pub extern func fopen(pathname: *char, mode: *char) -> *FILE;
+pub extern func fread(ptr: *void, size: c_size, nmemb: c_size, stream: *FILE) -> c_size;
+pub extern func fwrite(ptr: *void, size: c_size, nmemb: c_size, stream: *FILE) -> c_size;
 
-pub extern fn exit(code: c_int);
-pub extern fn abort();
+pub extern func exit(code: c_int);
+pub extern func abort();
 
-pub extern fn malloc(size: c_size) -> *void;
-pub extern fn calloc(nmemb: c_size, size: c_size) -> *void;
-pub extern fn realloc(ptr: *void, size: c_size) -> *void;
-pub extern fn free(ptr: *void);
+pub extern func malloc(size: c_size) -> *void;
+pub extern func calloc(nmemb: c_size, size: c_size) -> *void;
+pub extern func realloc(ptr: *void, size: c_size) -> *void;
+pub extern func free(ptr: *void);
 
-pub extern fn strlen(_: *char) -> c_size;
-pub extern fn strdup(_: *char) -> *char;
-pub extern fn strcmp(_: *char, _: *char) -> c_int;
-pub extern fn strncmp(_: *char, _: *char, n: c_size) -> c_int;
+pub extern func strlen(_: *char) -> c_size;
+pub extern func strdup(_: *char) -> *char;
+pub extern func strcmp(_: *char, _: *char) -> c_int;
+pub extern func strncmp(_: *char, _: *char, n: c_size) -> c_int;

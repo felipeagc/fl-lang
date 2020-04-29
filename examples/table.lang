@@ -2,7 +2,7 @@ import "core:c";
 
 const DEFAULT_TABLE_SIZE: u64 = 32;
 
-fn hash_str(str: [_]char) -> u64 {
+func hash_str(str: [_]char) -> u64 {
     var hash: u64 = 5381;
 
     for (var i: u64 = 0; i < str.len; i += 1) {
@@ -13,7 +13,7 @@ fn hash_str(str: [_]char) -> u64 {
 }
 
 #[inline]
-fn str_equal(a: [_]char, b: [_]char) -> bool {
+func str_equal(a: [_]char, b: [_]char) -> bool {
     if (a.len != b.len) return false;
     for (var i: uint = 0; i < a.len; i += 1) {
         if (a[i] != b[i]) return false;
@@ -28,7 +28,7 @@ pub typedef Table(V) struct {
     values: *V,
 };
 
-pub fn table_init(V)(table: *Table(V), size: u64) {
+pub func table_init(V)(table: *Table(V), size: u64) {
     table.size = size;
     if (table.size == 0) {
         table.size = DEFAULT_TABLE_SIZE;
@@ -50,13 +50,13 @@ pub fn table_init(V)(table: *Table(V), size: u64) {
     table.keys = calloc(table.size, @size_of(table.keys[0]));
 }
 
-pub fn table_deinit(V)(table: *Table(V)) {
+pub func table_deinit(V)(table: *Table(V)) {
     free(table.keys);
     free(table.hashes);
     free(table.values);
 }
 
-pub fn table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
+pub func table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -80,7 +80,7 @@ pub fn table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
     return value;
 }
 
-pub fn table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
+pub func table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -104,7 +104,7 @@ pub fn table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
     return false;
 }
 
-fn table_grow(V)(table: *Table(V)) {
+func table_grow(V)(table: *Table(V)) {
     var old_size = table.size;
     var old_keys = table.keys;
     var old_hashes = table.hashes;
@@ -126,7 +126,7 @@ fn table_grow(V)(table: *Table(V)) {
     free(old_values);
 }
 
-fn main() {
+func main() {
     {
         var table: Table(int);
         table_init(int)(&table, 5);

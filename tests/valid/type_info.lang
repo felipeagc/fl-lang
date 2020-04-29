@@ -1,7 +1,7 @@
 import runtime "core:runtime";
 import "core:c";
 
-fn main() {
+func main() {
     // Integer
     {
         var t: runtime.TypeInfo = @type_info_of(i32);
@@ -46,7 +46,7 @@ fn main() {
 
     // Function
     {
-        var t = @type_info_of(fn* (a: i32, b: [_]char) -> i32);
+        var t = @type_info_of(func* (a: i32, b: [_]char) -> i32);
         if (t.kind != runtime.TypeKind.Pointer) abort();
         if (t.pointer.sub.kind != runtime.TypeKind.Function) abort();
         if (t.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();

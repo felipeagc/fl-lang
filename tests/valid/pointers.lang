@@ -1,10 +1,10 @@
-extern fn printf(fmt: *char, ...);
+extern func printf(fmt: *char, ...);
 
-fn some_func(a: *void) {
+func some_func(a: *void) {
     printf(c"Ptr: %p\n", a);
 }
 
-fn main() {
+func main() {
     var my_int: i32 = 123;
     var ptr: *i32 = &my_int;
     var ptr2: *i64 = &123;

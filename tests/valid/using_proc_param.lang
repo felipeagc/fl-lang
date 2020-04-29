@@ -7,12 +7,12 @@ typedef Struct struct {
     }
 };
 
-fn my_func(using str: Struct) {
+func my_func(using str: Struct) {
     printf(c"%d\n", a);
     printf(c"%d\n", b.c);
 }
 
-fn main() {
+func main() {
     var str: Struct;
     str.a = 123;
     str.b.c = 321;

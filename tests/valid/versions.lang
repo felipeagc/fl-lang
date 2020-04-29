@@ -1,6 +1,6 @@
 import "core:c";
 
-fn main() {
+func main() {
     version (linux) {
         printf(c"I'm on linux\n");
     }

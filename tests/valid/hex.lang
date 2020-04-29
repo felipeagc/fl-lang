@@ -1,5 +1,5 @@
 import "core:c";
 
-fn main() {
+func main() {
     if (0xffffff != 16777215) abort();
 }

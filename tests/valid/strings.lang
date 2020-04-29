@@ -1,4 +1,4 @@
-fn main() {
+func main() {
     var str: [_]char = "Hello";
     var c_str: *char = c"Hello";
 }

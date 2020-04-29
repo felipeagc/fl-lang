@@ -8,6 +8,6 @@ pub typedef SomeType struct {
     field: i64,
 };
 
-pub fn say_hello() {
+pub func say_hello() {
     fmt.print("Hello!\n");
 }

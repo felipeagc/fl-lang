@@ -5,7 +5,7 @@ typedef MyUnion union {
     b: float,
 };
 
-fn main() {
+func main() {
     var u: MyUnion;
     u.b = 123133.1258;
 

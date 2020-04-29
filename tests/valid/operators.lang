@@ -4,7 +4,7 @@ const const1: float = -3 * 5.8 + 9.1;
 const const2: i32 = (123 + 321) * 2;
 const const3: bool = !(-(123 + 321) > 2.2);
 
-fn main() {
+func main() {
     printf(c"const1 = %f\n", const1);
     printf(c"const2 = %d\n", const2);
     printf(c"const3 = %hhu\n", const3);
@@ -22,7 +22,7 @@ fn main() {
     printf(c"sub2 = %u\n", sub2);
 
     printf(c"neg = %ld\n", -5);
-    printf(c"fneg = %f\n", -5.5 + 3);
+    printf(c"funceg = %f\n", -5.5 + 3);
 
     var cmp1: bool = 5 == 5;
     printf(c"cmp1 = %hhu\n", cmp1);

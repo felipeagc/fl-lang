@@ -1,5 +1,5 @@
 var hello: i32 = 32;
 
-fn main() {
+func main() {
     const a: i32 = hello;
 }

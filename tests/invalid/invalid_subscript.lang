@@ -1,4 +1,4 @@
-fn main() {
+func main() {
     var a: i32 = 123;
     var b: i32 = a[0];
 }

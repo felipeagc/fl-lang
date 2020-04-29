@@ -1,5 +1,5 @@
-fn main() {
-    puts_fn(c"Hello");
+func main() {
+    puts_func(c"Hello");
 
     printf(c"other_int: %d\n", other_int);
 
@@ -9,4 +9,4 @@ fn main() {
 import "core:c";
 
 const some_int: i32 = 123;
-const puts_fn = puts;
+const puts_func = puts;

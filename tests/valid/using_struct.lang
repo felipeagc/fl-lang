@@ -7,7 +7,7 @@ typedef Hello struct {
     },
 };
 
-fn main() {
+func main() {
     using c;
 
     var h: Hello;

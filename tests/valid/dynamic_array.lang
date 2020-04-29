@@ -1,7 +1,7 @@
 import "core:c";
 import "core:array";
 
-fn main() {
+func main() {
     var arr: [dyn]i32;
 
     array_push(i32)(&arr, 1);

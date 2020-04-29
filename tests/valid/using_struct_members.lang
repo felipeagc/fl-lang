@@ -15,7 +15,7 @@ typedef Struct struct {
     field: i32,
 };
 
-fn main() {
+func main() {
     var str: Struct;
     str.hello = 123;
     printf(c"str.hello = %d\n", str.hello);

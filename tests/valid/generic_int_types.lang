@@ -1,5 +1,5 @@
 import c "core:c";
 
-fn main() {
+func main() {
     if (@size_of(int) != @size_of(*void)) c.abort();
 }

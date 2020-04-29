@@ -1,12 +1,12 @@
 import fmt "core:fmt";
 
-typedef MyFunc fn* ();
+typedef MyFunc func* ();
 
-fn callback() {
+func callback() {
     fmt.print("Hey!\n");
 }
 
-fn main() {
+func main() {
     var my_func: MyFunc = callback;
     my_func();
 }

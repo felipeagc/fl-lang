@@ -4,7 +4,7 @@ pub typedef Test struct {
     test: *Test,
 };
 
-fn main() {
+func main() {
     var a: Test;
     a.test = malloc(@size_of(Test));
     free(a.test);

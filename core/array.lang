@@ -2,7 +2,7 @@ import "core:c";
 
 const DEFAULT_ARRAY_CAP: uint = 8;
 
-fn array_grow(V)(arr: *[dyn]V, cap: uint) {
+func array_grow(V)(arr: *[dyn]V, cap: uint) {
     if (arr.ptr == null) {
         arr.len = 0;
         arr.cap = cap;
@@ -20,12 +20,12 @@ fn array_grow(V)(arr: *[dyn]V, cap: uint) {
 }
 
 #[inline]
-pub fn array_reserve(V)(arr: *[dyn]V, cap: uint) {
+pub func array_reserve(V)(arr: *[dyn]V, cap: uint) {
     if (arr.cap < cap) array_grow(V)(arr, cap);
 }
 
 #[inline]
-pub fn array_push(V)(arr: *[dyn]V, val: V) -> *V {
+pub func array_push(V)(arr: *[dyn]V, val: V) -> *V {
     if (arr.len >= arr.cap) array_grow(V)(arr, 0);
     (*arr)[arr.len] = val;
     arr.len += 1;
@@ -33,14 +33,14 @@ pub fn array_push(V)(arr: *[dyn]V, val: V) -> *V {
 }
 
 #[inline]
-pub fn array_pop(V)(arr: *[dyn]V) -> *V {
+pub func array_pop(V)(arr: *[dyn]V) -> *V {
     if (arr.len == 0) return null;
     arr.len -= 1;
     return &((*arr)[arr.len]);
 }
 
 #[inline]
-pub fn array_free(V)(arr: *[dyn]V) {
+pub func array_free(V)(arr: *[dyn]V) {
     if (arr.ptr) free(arr.ptr);
 
     arr.ptr = null;

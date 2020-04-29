@@ -2,6 +2,6 @@ typedef MyEnum enum u32 {
     one = 1,
 };
 
-fn main() {
+func main() {
     var my_enum: MyEnum = 1;
 }

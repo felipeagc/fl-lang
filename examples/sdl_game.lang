@@ -2,7 +2,7 @@ import "sdl.lang";
 import c "core:c";
 import fmt "core:fmt";
 
-fn main() {
+func main() {
     SDL_Init(SDL_INIT_EVERYTHING);
     defer SDL_Quit();
 

@@ -4,6 +4,6 @@ typedef Struct struct {
 
 const const_struct = Struct {12};
 
-fn main() {
+func main() {
     const_struct.a = 123;
 }

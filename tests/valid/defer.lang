@@ -1,6 +1,6 @@
 import "core:fmt";
 
-fn main() {
+func main() {
     defer print("Yo\n");
 
     {

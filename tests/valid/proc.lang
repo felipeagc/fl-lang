@@ -13,14 +13,14 @@ typedef MyStruct struct {
     b: *u8,
 };
 
-extern fn puts(str: *char);
-extern fn printf(fmt: *char, ...);
+extern func puts(str: *char);
+extern func printf(fmt: *char, ...);
 
-fn add(a: i32, b: i32) -> i32 {
+func add(a: i32, b: i32) -> i32 {
     return 0;
 }
 
-fn main() {
+func main() {
     var hey: i32 = 2;
     var yo: *i32 = (&hey);
     var a_int: i32 = yo[0];

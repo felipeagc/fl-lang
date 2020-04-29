@@ -3,12 +3,12 @@ import "core:c";
 typedef Vec3 @vector_type(float, 3);
 
 #[inline]
-fn v3_dot(u: Vec3, v: Vec3) -> float {
+func v3_dot(u: Vec3, v: Vec3) -> float {
     return u.x * v.x + u.y * v.y + u.z * v.z;
 }
 
 #[inline]
-fn v3_cross(u: Vec3, v: Vec3) -> Vec3 {
+func v3_cross(u: Vec3, v: Vec3) -> Vec3 {
     return Vec3{
         u.y * v.z - u.z * v.y,
         u.z * v.x - u.x * v.z,
@@ -17,12 +17,12 @@ fn v3_cross(u: Vec3, v: Vec3) -> Vec3 {
 }
 
 #[inline]
-fn v3_length(u: Vec3) -> float {
+func v3_length(u: Vec3) -> float {
     return @sqrt(v3_dot(u, u));
 }
 
 #[inline]
-fn unit_v3(u: Vec3) -> Vec3 {
+func unit_v3(u: Vec3) -> Vec3 {
     return u / v3_length(u);
 }
 
@@ -37,11 +37,11 @@ typedef HitRecord struct {
 };
 
 #[inline]
-fn ray_at(ray: Ray, t: float) -> Vec3 {
+func ray_at(ray: Ray, t: float) -> Vec3 {
     return ray.origin + ray.dir * t;
 }
 
-fn hit_sphere(center: Vec3, radius: float, ray: Ray) -> float {
+func hit_sphere(center: Vec3, radius: float, ray: Ray) -> float {
     var oc = ray.origin - center;
     var a = v3_dot(ray.dir, ray.dir);
     var half_b = v3_dot(oc, ray.dir);
@@ -54,7 +54,7 @@ fn hit_sphere(center: Vec3, radius: float, ray: Ray) -> float {
     return (-half_b - @sqrt(discriminant)) / a;
 }
 
-fn ray_color(ray: Ray) -> Vec3 {
+func ray_color(ray: Ray) -> Vec3 {
     var t = hit_sphere(Vec3{0, 0, -1}, 0.5, ray);
     if (t > 0) {
         var n = unit_v3(ray_at(ray, t) - Vec3{0, 0, -1});
@@ -66,7 +66,7 @@ fn ray_color(ray: Ray) -> Vec3 {
     return (1.0-t) * Vec3{1.0} + t * Vec3{0.5, 0.7, 1.0};
 }
 
-fn main() {
+func main() {
     const width = 400;
     const height = 200;
 

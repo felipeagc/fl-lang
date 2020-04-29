@@ -4,15 +4,15 @@ typedef Hello(V) struct {
     v: V
 };
 
-fn add(V)(v: *Hello(V), b: V) -> V {
+func add(V)(v: *Hello(V), b: V) -> V {
     return v.v + cast(V)b;
 }
 
-fn other(V)(v: *Hello(V), b: V) -> V {
+func other(V)(v: *Hello(V), b: V) -> V {
     return v.v + add(V)(v, 2);
 }
 
-fn main() {
+func main() {
     var h = Hello(i32){321};
     var a = add(i32)(&h, 123);
     add(i32)(&h, 123);
