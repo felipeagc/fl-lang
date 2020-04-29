@@ -6,9 +6,9 @@ typedef struct Parser
     size_t pos;
 } Parser;
 
-static inline bool parser_is_at_end(Parser *p)
+static inline bool parser_is_at_end(Parser *p, size_t offset)
 {
-    return p->pos >= p->lexer->tokens.len;
+    return (p->pos + offset) >= p->lexer->tokens.len;
 }
 
 static inline Token *parser_peek(Parser *p, size_t offset)
@@ -22,13 +22,13 @@ static inline Token *parser_peek(Parser *p, size_t offset)
 
 static inline Token *parser_next(Parser *p, size_t count)
 {
-    if (!parser_is_at_end(p)) p->pos += count;
+    if (!parser_is_at_end(p, 0)) p->pos += count;
     return &p->lexer->tokens.ptr[p->pos - count];
 }
 
 static inline Token *parser_consume(Parser *p, TokenKind tok_type)
 {
-    if (parser_is_at_end(p))
+    if (parser_is_at_end(p, 0))
     {
         Token *tok = &p->lexer->tokens.ptr[p->lexer->tokens.len - 1];
         compile_error(
@@ -113,7 +113,7 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
+bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -121,35 +121,104 @@ bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    if (parser_peek(p, 0)->type == TOKEN_NOT)
+    while (parser_peek(p, 0)->type == TOKEN_LPAREN && !parser_is_at_end(p, 0))
     {
-        parser_next(p, 1);
+        Ast expr = *ast;
+        memset(&ast->proc_call, 0, sizeof(ast->proc_call));
 
-        Ast *sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        *sub = *ast;
+        if (expr.type == AST_PRIMARY &&
+            expr.primary.tok->type == TOKEN_INTRINSIC)
+        {
+            // Intrinsic call
 
-        ast->type = AST_TEMPLATE_INST;
-        ast->template_inst.sub = sub;
-        memset(
-            &ast->template_inst.params, 0, sizeof(ast->template_inst.params));
+            ast->type = AST_INTRINSIC_CALL;
+            if (string_equals(expr.primary.tok->str, STR("size_of")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_SIZE_OF;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("align_of")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("sqrt")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_SQRT;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("sin")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_SIN;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("cos")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_COS;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("vector_type")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("type_info_of")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
+            }
+            else
+            {
+                compile_error(
+                    p->compiler,
+                    expr.loc,
+                    "unknown intrinsic: '%.*s'",
+                    (int)expr.primary.tok->str.length,
+                    expr.primary.tok->str.buf);
+                res = false;
+            }
+
+            if (!parser_consume(p, TOKEN_LPAREN))
+            {
+                res = false;
+                break;
+            }
+
+            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                   !parser_is_at_end(p, 0))
+            {
+                Ast param = {0};
+                if (parse_expr(p, &param, parsing_type))
+                    array_push(&ast->intrinsic_call.params, param);
+                else
+                    res = false;
+
+                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
+            }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            break;
+        }
+
+        // Proc call
+
+        ast->type = AST_PROC_CALL;
+
+        ast->proc_call.expr =
+            bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
+        *ast->proc_call.expr = expr;
 
         if (!parser_consume(p, TOKEN_LPAREN))
         {
             res = false;
-            return res;
+            break;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+               !parser_is_at_end(p, 0))
         {
             Ast param = {0};
-            if (parse_expr(p, &param, true))
-            {
-                array_push(&ast->template_inst.params, param);
-            }
+            if (parse_expr(p, &param, parsing_type))
+                array_push(&ast->proc_call.params, param);
             else
-            {
                 res = false;
-            }
 
             if (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
@@ -224,127 +293,9 @@ bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
     default: {
-        if (!parse_template_instantiation(p, ast, parsing_type)) res = false;
+        if (!parse_proc_call(p, ast, parsing_type)) res = false;
         break;
     }
-    }
-
-    return res;
-}
-
-bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
-{
-    bool res = true;
-
-    if (!parse_array_type(p, ast, parsing_type)) res = false;
-    Location last_loc = parser_peek(p, -1)->loc;
-    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
-
-    while (parser_peek(p, 0)->type == TOKEN_LPAREN && !parser_is_at_end(p))
-    {
-        Ast expr = *ast;
-        memset(&ast->proc_call, 0, sizeof(ast->proc_call));
-
-        if (expr.type == AST_PRIMARY &&
-            expr.primary.tok->type == TOKEN_INTRINSIC)
-        {
-            // Intrinsic call
-
-            ast->type = AST_INTRINSIC_CALL;
-            if (string_equals(expr.primary.tok->str, STR("size_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SIZE_OF;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("align_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("sqrt")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SQRT;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("sin")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SIN;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("cos")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_COS;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("vector_type")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("type_info_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
-            }
-            else
-            {
-                compile_error(
-                    p->compiler,
-                    expr.loc,
-                    "unknown intrinsic: '%.*s'",
-                    (int)expr.primary.tok->str.length,
-                    expr.primary.tok->str.buf);
-                res = false;
-            }
-
-            if (!parser_consume(p, TOKEN_LPAREN))
-            {
-                res = false;
-                break;
-            }
-
-            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
-                   !parser_is_at_end(p))
-            {
-                Ast param = {0};
-                if (parse_expr(p, &param, parsing_type))
-                    array_push(&ast->intrinsic_call.params, param);
-                else
-                    res = false;
-
-                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
-                {
-                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
-                }
-            }
-
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-            break;
-        }
-
-        // Proc call
-
-        ast->type = AST_PROC_CALL;
-
-        ast->proc_call.expr =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
-        *ast->proc_call.expr = expr;
-
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
-        {
-            Ast param = {0};
-            if (parse_expr(p, &param, parsing_type))
-                array_push(&ast->proc_call.params, param);
-            else
-                res = false;
-
-            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
-            {
-                if (!parser_consume(p, TOKEN_COMMA)) res = false;
-            }
-        }
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
     }
 
     return res;
@@ -354,11 +305,11 @@ bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_proc_call(p, ast, parsing_type)) res = false;
+    if (!parse_array_type(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while (parser_peek(p, 0)->type == TOKEN_LBRACK && !parser_is_at_end(p))
+    while (parser_peek(p, 0)->type == TOKEN_LBRACK && !parser_is_at_end(p, 0))
     {
         Ast expr = *ast;
 
@@ -444,7 +395,7 @@ bool parse_access(Parser *p, Ast *ast, bool parsing_type)
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
-    while (parser_peek(p, 0)->type == TOKEN_DOT && !parser_is_at_end(p))
+    while (parser_peek(p, 0)->type == TOKEN_DOT && !parser_is_at_end(p, 0))
     {
         Ast expr = *ast;
         memset(&ast->access, 0, sizeof(ast->access));
@@ -494,7 +445,8 @@ bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
         memset(&ast->compound, 0, sizeof(ast->compound));
         ast->compound.type_expr = type_expr;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
 
             Ast value = {0};
@@ -567,7 +519,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         memset(&ast->structure.fields, 0, sizeof(ast->structure.fields));
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
@@ -634,7 +587,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         memset(&ast->enumeration.fields, 0, sizeof(ast->enumeration.fields));
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
             Ast field = {0};
             field.loc = parser_peek(p, 0)->loc;
@@ -748,7 +702,8 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             break;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+               !parser_is_at_end(p, 0))
         {
             if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
             {
@@ -842,7 +797,7 @@ bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
     while (((parser_peek(p, 0)->type == TOKEN_ASTERISK) ||
             (parser_peek(p, 0)->type == TOKEN_SLASH) ||
             (parser_peek(p, 0)->type == TOKEN_PERCENT)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -882,7 +837,7 @@ bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
 
     while (((parser_peek(p, 0)->type == TOKEN_PLUS) ||
             (parser_peek(p, 0)->type == TOKEN_MINUS)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -921,7 +876,7 @@ bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
 
     while (((parser_peek(p, 0)->type == TOKEN_RSHIFT) ||
             (parser_peek(p, 0)->type == TOKEN_LSHIFT)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -961,7 +916,7 @@ bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
     while (((parser_peek(p, 0)->type == TOKEN_PIPE) ||
             (parser_peek(p, 0)->type == TOKEN_AMPERSAND) ||
             (parser_peek(p, 0)->type == TOKEN_HAT)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1005,7 +960,7 @@ bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
             (parser_peek(p, 0)->type == TOKEN_LESSEQ) ||
             (parser_peek(p, 0)->type == TOKEN_GREATER) ||
             (parser_peek(p, 0)->type == TOKEN_GREATEREQ)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1048,7 +1003,7 @@ bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
 
     while (((parser_peek(p, 0)->type == TOKEN_AND) ||
             (parser_peek(p, 0)->type == TOKEN_OR)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1095,7 +1050,7 @@ bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
             (parser_peek(p, 0)->type == TOKEN_XOREQ) ||
             (parser_peek(p, 0)->type == TOKEN_LSHIFTEQ) ||
             (parser_peek(p, 0)->type == TOKEN_RSHIFTEQ)) &&
-           !parser_is_at_end(p))
+           !parser_is_at_end(p, 0))
     {
         Token *op_tok = parser_next(p, 1);
 
@@ -1135,7 +1090,7 @@ bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
 
 bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
 {
-    assert(!parser_is_at_end(p));
+    assert(!parser_is_at_end(p, 0));
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
     bool res = parse_op_assign(p, ast, parsing_type);
@@ -1159,7 +1114,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ArrayOfAstAttribute attributes = {0};
         if (!parser_consume(p, TOKEN_LBRACK)) res = false;
 
-        while (parser_peek(p, 0)->type != TOKEN_RBRACK && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RBRACK &&
+               !parser_is_at_end(p, 0))
         {
             Token *name_tok = parser_next(p, 1);
             if (name_tok->type == TOKEN_IDENT)
@@ -1256,7 +1212,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         ast->type = AST_BLOCK;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
@@ -1373,19 +1330,39 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         else
             ast->proc.name = proc_name_tok->str;
 
-        if (parser_peek(p, 0)->type == TOKEN_NOT)
+        if (!parser_consume(p, TOKEN_LPAREN))
         {
-            parser_next(p, 1);
+            res = false;
+            break;
+        }
+
+        bool is_template = false;
+
+        size_t lookahead = 0;
+        while (parser_peek(p, lookahead)->type != TOKEN_RPAREN &&
+               !parser_is_at_end(p, lookahead))
+        {
+            ++lookahead;
+        }
+
+        ++lookahead;
+
+        if (parser_is_at_end(p, lookahead))
+        {
+            break;
+        }
+
+        if (parser_peek(p, lookahead)->type == TOKEN_LPAREN)
+        {
+            is_template = true;
+        }
+
+        if (is_template)
+        {
             ast->flags |= AST_FLAG_IS_TEMPLATE;
 
-            if (!parser_consume(p, TOKEN_LPAREN))
-            {
-                res = false;
-                break;
-            }
-
             while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
-                   !parser_is_at_end(p))
+                   !parser_is_at_end(p, 0))
             {
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
@@ -1404,15 +1381,16 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             }
 
             if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            if (!parser_consume(p, TOKEN_LPAREN))
+            {
+                res = false;
+                break;
+            }
         }
 
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+               !parser_is_at_end(p, 0))
         {
             Ast param = {0};
             param.type = AST_PROC_PARAM;
@@ -1480,7 +1458,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             ast->proc.flags |= PROC_FLAG_HAS_BODY;
 
             while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-                   !parser_is_at_end(p))
+                   !parser_is_at_end(p, 0))
             {
                 Ast stmt = {0};
                 if (!parse_stmt(p, &stmt, true, true)) res = false;
@@ -1575,19 +1553,13 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         else
             ast->type_def.name = type_name_tok->str;
 
-        if (parser_peek(p, 0)->type == TOKEN_NOT)
+        if (parser_peek(p, 0)->type == TOKEN_LPAREN)
         {
             parser_next(p, 1);
             ast->flags |= AST_FLAG_IS_TEMPLATE;
 
-            if (!parser_consume(p, TOKEN_LPAREN))
-            {
-                res = false;
-                break;
-            }
-
             while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
-                   !parser_is_at_end(p))
+                   !parser_is_at_end(p, 0))
             {
                 Token *param_name = parser_consume(p, TOKEN_IDENT);
                 if (param_name)
@@ -1655,7 +1627,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             break;
         }
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
@@ -1728,7 +1701,8 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
         ast->switch_stmt.else_stmt = NULL;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY && !parser_is_at_end(p))
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
         {
             if (parser_peek(p, 0)->type == TOKEN_ELSE)
             {
@@ -1912,7 +1886,7 @@ void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     memset(p->ast, 0, sizeof(*p->ast));
     p->ast->type = AST_ROOT;
 
-    while (!parser_is_at_end(p))
+    while (!parser_is_at_end(p, 0))
     {
         Ast stmt = {0};
         if (parse_stmt(p, &stmt, false, true))

@@ -160,6 +160,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
+    case TYPE_TEMPLATE:
     case TYPE_NONE:
     case TYPE_UNINITIALIZED: assert(0); break;
     }
@@ -1039,6 +1040,14 @@ static void llvm_codegen_ast(
     }
 
     case AST_PROC_CALL: {
+        if (ast->proc_call.is_template_inst)
+        {
+            assert(ast->proc_call.resolves_to);
+            llvm_codegen_ast(
+                l, mod, ast->proc_call.resolves_to, is_const, out_value);
+            break;
+        }
+
         AstValue function_value = {0};
         llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);
         LLVMValueRef fun = load_val(mod, &function_value);
@@ -3577,13 +3586,6 @@ static void llvm_codegen_ast(
             array_last(&l->continue_block_stack);
         assert(continue_block);
         LLVMBuildBr(mod->builder, *continue_block);
-        break;
-    }
-
-    case AST_TEMPLATE_INST: {
-        assert(ast->template_inst.resolves_to);
-        llvm_codegen_ast(
-            l, mod, ast->template_inst.resolves_to, is_const, out_value);
         break;
     }
 

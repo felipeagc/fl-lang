@@ -15,6 +15,7 @@ typedef enum TypeKind {
     TYPE_BOOL = 13,
     TYPE_VOID = 14,
     TYPE_NAMESPACE = 15,
+    TYPE_TEMPLATE = 16,
 } TypeKind;
 
 typedef enum TypeFlags {
@@ -131,6 +132,8 @@ static TypeInfo BOOL_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
 
 static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
+
+static TypeInfo TEMPLATE_TYPE = {.kind = TYPE_TEMPLATE};
 
 static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
 
@@ -262,6 +265,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     case TYPE_BOOL:
     case TYPE_VOID:
     case TYPE_TYPE:
+    case TYPE_TEMPLATE:
     case TYPE_UNINITIALIZED:
     case TYPE_NONE: break;
     }
@@ -488,6 +492,7 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     switch (type->kind)
     {
     case TYPE_TYPE: sb_append(sb, STR("t")); break;
+    case TYPE_TEMPLATE: sb_append(sb, STR("m")); break;
 
     case TYPE_VOID: sb_append(sb, STR("v")); break;
 
@@ -646,6 +651,7 @@ static uint32_t align_of_type(TypeInfo *type)
     case TYPE_NONE:
     case TYPE_VOID:
     case TYPE_NAMESPACE:
+    case TYPE_TEMPLATE:
     case TYPE_TYPE: assert(0); break;
     }
 
@@ -718,6 +724,7 @@ static uint32_t size_of_type(TypeInfo *type)
     case TYPE_NONE:
     case TYPE_VOID:
     case TYPE_NAMESPACE:
+    case TYPE_TEMPLATE:
     case TYPE_TYPE: assert(0); break;
     }
 

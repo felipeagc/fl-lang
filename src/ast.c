@@ -81,7 +81,6 @@ typedef enum AstType {
     AST_COMPOUND_LIT,
     AST_DISTINCT_TYPE,
     AST_USING,
-    AST_TEMPLATE_INST,
     AST_DEFER,
 
     AST_BUILTIN_LEN,
@@ -214,6 +213,9 @@ struct Ast
         {
             struct Ast *expr;
             ArrayOfAst params;
+
+            struct Ast *resolves_to; // filled in semantic analysis
+            bool is_template_inst;
         } proc_call;
         struct
         {
@@ -315,12 +317,5 @@ struct Ast
         {
             size_t position;
         } vec_access;
-        struct
-        {
-            struct Ast *sub;
-            ArrayOfAst params;
-
-            struct Ast *resolves_to; // filled in semantic analysis
-        } template_inst;
     };
 };

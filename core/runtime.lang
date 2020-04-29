@@ -13,6 +13,7 @@ pub typedef TypeKind enum u32 {
     Bool = 13,
     Void = 14,
     Namespace = 15,
+    Template = 16,
 };
 
 pub typedef TypeFlags enum u32 {

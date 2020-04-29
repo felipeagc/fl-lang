@@ -312,12 +312,6 @@ static void instantiate_template(
         break;
     }
 
-    case AST_TEMPLATE_INST: {
-        INSTANTIATE_AST(template_inst.sub);
-        INSTANTIATE_ARRAY(template_inst.params);
-        break;
-    }
-
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
     case AST_BUILTIN_CAP:
@@ -778,26 +772,26 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
-    case AST_TEMPLATE_INST: {
-        if (ast->template_inst.sub->type != AST_PRIMARY ||
-            ast->template_inst.sub->primary.tok->type != TOKEN_IDENT)
+    case AST_PROC_CALL: {
+        if (ast->proc_call.expr->type != AST_PRIMARY ||
+            ast->proc_call.expr->primary.tok->type != TOKEN_IDENT)
             break;
 
-        String name = ast->template_inst.sub->primary.tok->str;
+        String name = ast->proc_call.expr->primary.tok->str;
         Ast *sym = get_symbol(scope, name, ast->loc.file);
 
         if (sym && sym->type == AST_TYPEDEF)
         {
             if ((sym->type_def.template_params.len) !=
-                (ast->template_inst.params.len))
+                (ast->proc_call.params.len))
                 break;
 
             assert(sym->type_def.template_cache);
 
             sb_reset(&a->compiler->sb);
-            for (size_t i = 0; i < ast->template_inst.params.len; ++i)
+            for (size_t i = 0; i < ast->proc_call.params.len; ++i)
             {
-                Ast *param = &ast->template_inst.params.ptr[i];
+                Ast *param = &ast->proc_call.params.ptr[i];
                 sb_append(&a->compiler->sb, STR("$"));
                 print_mangled_type(
                     &a->compiler->sb, ast_as_type(a, scope, param, false));
@@ -827,7 +821,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 cloned_ast,
                 sym->type_def.type_expr,
                 sym->type_def.template_params,
-                ast->template_inst.params);
+                ast->proc_call.params);
 
             create_scopes_ast(a, cloned_ast);
             register_symbol_asts(a, cloned_ast, 1);
@@ -835,7 +829,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
             ast->as_type = cloned_ast->as_type;
             ast->type_info = cloned_ast->type_info;
-            ast->template_inst.resolves_to = cloned_ast;
+            ast->proc_call.resolves_to = cloned_ast;
         }
 
         break;
@@ -1486,7 +1480,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_TEMPLATE_INST:
     case AST_STRUCT_FIELD_ALIAS:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
@@ -2541,6 +2534,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
+            if (sym->flags & AST_FLAG_IS_TEMPLATE)
+            {
+                ast->type_info = &TEMPLATE_TYPE;
+                break;
+            }
+
             switch (sym->type)
             {
             case AST_PROC_DECL:
@@ -2618,159 +2617,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         default: break;
         }
-        break;
-    }
-
-    case AST_TEMPLATE_INST: {
-        Scope *scope = *array_last(&a->scope_stack);
-
-        if (ast->template_inst.sub->type != AST_PRIMARY ||
-            ast->template_inst.sub->primary.tok->type != TOKEN_IDENT)
-        {
-            compile_error(
-                a->compiler,
-                ast->template_inst.sub->loc,
-                "template instantiation subexpression is not an "
-                "identifier");
-            break;
-        }
-
-        String name = ast->template_inst.sub->primary.tok->str;
-        Ast *sym = get_symbol(scope, name, ast->loc.file);
-
-        if (!sym)
-        {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "template instantiation subexpression does not refer to a "
-                "symbol");
-            break;
-        }
-
-        for (Ast *param = ast->template_inst.params.ptr;
-             param !=
-             ast->template_inst.params.ptr + ast->template_inst.params.len;
-             ++param)
-        {
-            analyze_ast(a, param, &TYPE_OF_TYPE);
-        }
-
-        switch (sym->type)
-        {
-        case AST_TYPEDEF: {
-            if (sym->type_def.template_params.len == 0)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "typedef is not a template");
-                break;
-            }
-
-            if ((sym->type_def.template_params.len) !=
-                (ast->template_inst.params.len))
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "wrong count of template parameters");
-                break;
-            }
-
-            if (!ast->as_type)
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "template instantiation did not resolve to a type");
-                break;
-            }
-
-            ast->type_info = &TYPE_OF_TYPE;
-            break;
-        }
-
-        case AST_PROC_DECL: {
-            if ((sym->flags & AST_FLAG_IS_TEMPLATE) != AST_FLAG_IS_TEMPLATE)
-            {
-                compile_error(
-                    a->compiler, sym->loc, "function is not a template");
-                break;
-            }
-
-            if ((sym->proc.template_params.len) !=
-                (ast->template_inst.params.len))
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "wrong count of template parameters");
-                break;
-            }
-
-            assert(sym->proc.template_cache);
-
-            sb_reset(&a->compiler->sb);
-            for (size_t i = 0; i < ast->template_inst.params.len; ++i)
-            {
-                Ast *param = &ast->template_inst.params.ptr[i];
-                sb_append(&a->compiler->sb, STR("$"));
-                print_mangled_type(
-                    &a->compiler->sb, ast_as_type(a, scope, param, false));
-            }
-            String mangled_type =
-                sb_build(&a->compiler->sb, &a->compiler->bump);
-
-            Ast *cached_ast = NULL;
-            if (hash_get(
-                    sym->proc.template_cache,
-                    mangled_type,
-                    (void **)&cached_ast))
-            {
-                assert(cached_ast);
-                ast->type_info = cached_ast->type_info;
-                ast->as_type = cached_ast->as_type;
-                ast->template_inst.resolves_to = cached_ast;
-
-                break;
-            }
-
-            Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
-            memset(cloned_ast, 0, sizeof(Ast));
-
-            hash_set(sym->proc.template_cache, mangled_type, cloned_ast);
-
-            instantiate_template(
-                a->compiler,
-                cloned_ast,
-                sym,
-                sym->proc.template_params,
-                ast->template_inst.params);
-
-            create_scopes_ast(a, cloned_ast);
-            register_symbol_asts(a, cloned_ast, 1);
-            analyze_asts(a, cloned_ast, 1);
-
-            ast->as_type = cloned_ast->as_type;
-            ast->type_info = cloned_ast->type_info;
-            ast->template_inst.resolves_to = cloned_ast;
-
-            break;
-        }
-
-        default: {
-            compile_error(
-                a->compiler, ast->loc, "tried to instantiate a non-template");
-            break;
-        }
-        }
-
-        if (!ast->type_info)
-        {
-            compile_error(
-                a->compiler, ast->loc, "failed to instantiate template");
-            break;
-        }
-
         break;
     }
 
@@ -2874,17 +2720,181 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
+        if (ast->proc_call.expr->type_info->kind == TYPE_TEMPLATE)
+        {
+            //
+            // Template instantiation
+            //
+
+            if (ast->proc_call.expr->type != AST_PRIMARY ||
+                ast->proc_call.expr->primary.tok->type != TOKEN_IDENT)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->proc_call.expr->loc,
+                    "template instantiation subexpression is not an "
+                    "identifier");
+                break;
+            }
+
+            Scope *scope = *array_last(&a->scope_stack);
+            String name = ast->proc_call.expr->primary.tok->str;
+            Ast *sym = get_symbol(scope, name, ast->loc.file);
+
+            if (!sym)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "template instantiation subexpression does not refer to a "
+                    "symbol");
+                break;
+            }
+
+            for (Ast *param = ast->proc_call.params.ptr;
+                 param != ast->proc_call.params.ptr + ast->proc_call.params.len;
+                 ++param)
+            {
+                analyze_ast(a, param, &TYPE_OF_TYPE);
+            }
+
+            switch (sym->type)
+            {
+            case AST_TYPEDEF: {
+                if (sym->type_def.template_params.len == 0)
+                {
+                    compile_error(
+                        a->compiler, ast->loc, "typedef is not a template");
+                    break;
+                }
+
+                if ((sym->type_def.template_params.len) !=
+                    (ast->proc_call.params.len))
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "wrong count of template parameters");
+                    break;
+                }
+
+                if (!ast->as_type)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "template instantiation did not resolve to a type");
+                    break;
+                }
+
+                ast->type_info = &TYPE_OF_TYPE;
+                break;
+            }
+
+            case AST_PROC_DECL: {
+                if ((sym->flags & AST_FLAG_IS_TEMPLATE) != AST_FLAG_IS_TEMPLATE)
+                {
+                    compile_error(
+                        a->compiler, sym->loc, "function is not a template");
+                    break;
+                }
+
+                if ((sym->proc.template_params.len) !=
+                    (ast->proc_call.params.len))
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "wrong count of template parameters");
+                    break;
+                }
+
+                assert(sym->proc.template_cache);
+
+                sb_reset(&a->compiler->sb);
+                for (size_t i = 0; i < ast->proc_call.params.len; ++i)
+                {
+                    Ast *param = &ast->proc_call.params.ptr[i];
+                    sb_append(&a->compiler->sb, STR("$"));
+                    print_mangled_type(
+                        &a->compiler->sb, ast_as_type(a, scope, param, false));
+                }
+                String mangled_type =
+                    sb_build(&a->compiler->sb, &a->compiler->bump);
+
+                Ast *cached_ast = NULL;
+                if (hash_get(
+                        sym->proc.template_cache,
+                        mangled_type,
+                        (void **)&cached_ast))
+                {
+                    assert(cached_ast);
+                    ast->type_info = cached_ast->type_info;
+                    ast->as_type = cached_ast->as_type;
+                    ast->proc_call.resolves_to = cached_ast;
+
+                    break;
+                }
+
+                Ast *cloned_ast = bump_alloc(&a->compiler->bump, sizeof(Ast));
+                memset(cloned_ast, 0, sizeof(Ast));
+
+                hash_set(sym->proc.template_cache, mangled_type, cloned_ast);
+
+                instantiate_template(
+                    a->compiler,
+                    cloned_ast,
+                    sym,
+                    sym->proc.template_params,
+                    ast->proc_call.params);
+
+                create_scopes_ast(a, cloned_ast);
+                register_symbol_asts(a, cloned_ast, 1);
+                analyze_asts(a, cloned_ast, 1);
+
+                ast->as_type = cloned_ast->as_type;
+                ast->type_info = cloned_ast->type_info;
+                ast->proc_call.resolves_to = cloned_ast;
+
+                break;
+            }
+
+            default: {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "tried to instantiate a non-template");
+                break;
+            }
+            }
+
+            if (!ast->type_info)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "failed to instantiate template");
+                break;
+            }
+
+            ast->proc_call.is_template_inst = true;
+
+            break;
+        }
+
+        //
+        // Analyze actual procedure call
+        //
 
         if (ast->proc_call.expr->type_info->kind != TYPE_POINTER ||
             ast->proc_call.expr->type_info->ptr.sub->kind != TYPE_PROC)
         {
             compile_error(
-                a->compiler, ast->loc, "tried to call a non procedure type");
+                a->compiler,
+                ast->proc_call.expr->loc,
+                "tried to call a non procedure type");
             break;
         }
 
-        TypeInfo *proc_ty = proc_ptr_ty->ptr.sub;
+        TypeInfo *proc_ty = ast->proc_call.expr->type_info->ptr.sub;
 
         assert(proc_ty);
         ast->type_info = proc_ty->proc.return_type;

@@ -21,14 +21,14 @@ fn str_equal(a: [_]char, b: [_]char) -> bool {
     return true;
 }
 
-pub typedef Table!(V) struct {
+pub typedef Table(V) struct {
     size: u64,
     keys: *[_]char,
     hashes: *u64,
     values: *V,
 };
 
-pub fn table_init!(V)(table: *Table!(V), size: u64) {
+pub fn table_init(V)(table: *Table(V), size: u64) {
     table.size = size;
     if (table.size == 0) {
         table.size = DEFAULT_TABLE_SIZE;
@@ -50,13 +50,13 @@ pub fn table_init!(V)(table: *Table!(V), size: u64) {
     table.keys = calloc(table.size, @size_of(table.keys[0]));
 }
 
-pub fn table_deinit!(V)(table: *Table!(V)) {
+pub fn table_deinit(V)(table: *Table(V)) {
     free(table.keys);
     free(table.hashes);
     free(table.values);
 }
 
-pub fn table_set!(V)(table: *Table!(V), key: [_]char, value: V) -> V {
+pub fn table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -69,8 +69,8 @@ pub fn table_set!(V)(table: *Table!(V), key: [_]char, value: V) -> V {
     }
 
     if (iters >= table.size) {
-        table_grow!(V)(table);
-        return table_set!(V)(table, key, value);
+        table_grow(V)(table);
+        return table_set(V)(table, key, value);
     }
 
     table.keys[i] = key;
@@ -80,7 +80,7 @@ pub fn table_set!(V)(table: *Table!(V), key: [_]char, value: V) -> V {
     return value;
 }
 
-pub fn table_get!(V)(table: *Table!(V), key: [_]char, result: *V) -> bool {
+pub fn table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -104,7 +104,7 @@ pub fn table_get!(V)(table: *Table!(V), key: [_]char, result: *V) -> bool {
     return false;
 }
 
-fn table_grow!(V)(table: *Table!(V)) {
+fn table_grow(V)(table: *Table(V)) {
     var old_size = table.size;
     var old_keys = table.keys;
     var old_hashes = table.hashes;
@@ -117,7 +117,7 @@ fn table_grow!(V)(table: *Table!(V)) {
 
     for (var i: u64 = 0; i < old_size; i += 1) {
         if (old_hashes[i] != 0) {
-            table_set!(V)(table, old_keys[i], old_values[i]);
+            table_set(V)(table, old_keys[i], old_values[i]);
         }
     }
 
@@ -128,30 +128,30 @@ fn table_grow!(V)(table: *Table!(V)) {
 
 fn main() {
     {
-        var table: Table!(int);
-        table_init!(int)(&table, 5);
-        defer table_deinit!(int)(&table);
+        var table: Table(int);
+        table_init(int)(&table, 5);
+        defer table_deinit(int)(&table);
 
-        table_set!(int)(&table, "hello", 5);
+        table_set(int)(&table, "hello", 5);
 
         {
             var result: int;
-            if (!table_get!(int)(&table, "hello", &result)) abort();
+            if (!table_get(int)(&table, "hello", &result)) abort();
             if (result != 5) abort();
             printf(c"table[\"hello\"] = %ld\n", result);
         }
     }
 
     {
-        var table: Table!(u16);
-        table_init!(u16)(&table, 5);
-        defer table_deinit!(u16)(&table);
+        var table: Table(u16);
+        table_init(u16)(&table, 5);
+        defer table_deinit(u16)(&table);
 
-        table_set!(u16)(&table, "hello", 5);
+        table_set(u16)(&table, "hello", 5);
 
         {
             var result: u16;
-            if (!table_get!(u16)(&table, "hello", &result)) abort();
+            if (!table_get(u16)(&table, "hello", &result)) abort();
             if (result != 5) abort();
             printf(c"table[\"hello\"] = %hu\n", result);
         }
