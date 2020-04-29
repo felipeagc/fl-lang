@@ -53,5 +53,3 @@ Bugs:
 - Circular imports
 - Circular structs
 - Circular typedefs
-- Assigning to struct type field
-	Repro: MyStructType.field = 123;

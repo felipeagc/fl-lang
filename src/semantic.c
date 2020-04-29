@@ -1162,7 +1162,16 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
         switch (ast->type_info->kind)
         {
         case TYPE_TYPE:
-            if (ast->as_type) accessed_scope = ast->as_type->scope;
+            if (ast->as_type)
+            {
+                if (ast->as_type->scope &&
+                    ast->as_type->scope->type != SCOPE_INSTANCED)
+                {
+                    // You can only access instanced scopes on instances, not on
+                    // the types themselves
+                    accessed_scope = ast->as_type->scope;
+                }
+            }
             break;
 
         case TYPE_DYNAMIC_ARRAY:
