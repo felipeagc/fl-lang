@@ -24,7 +24,7 @@ func main() {
     var hey: i32 = 2;
     var yo: *i32 = (&hey);
     var a_int: i32 = yo[0];
-    *yo = (123);
+    yo.* = (123);
 
     global = 321;
 

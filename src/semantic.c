@@ -205,6 +205,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_POINTER_TYPE:
     case AST_USING:
     case AST_EXPR_STMT:
     case AST_RETURN: {
@@ -840,21 +841,14 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
-    case AST_UNARY_EXPR: {
-        switch (ast->unop.type)
+    case AST_POINTER_TYPE: {
+        if (ast_as_type(a, scope, ast->expr, false))
         {
-        case UNOP_DEREFERENCE: {
-            if (ast_as_type(a, scope, ast->unop.sub, false))
-            {
-                TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-                memset(ty, 0, sizeof(*ty));
-                ty->kind = TYPE_POINTER;
-                ty->ptr.sub = ast->unop.sub->as_type;
-                ast->as_type = ty;
-            }
-            break;
-        }
-        default: break;
+            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
+            memset(ty, 0, sizeof(*ty));
+            ty->kind = TYPE_POINTER;
+            ty->ptr.sub = ast->expr->as_type;
+            ast->as_type = ty;
         }
         break;
     }
@@ -1240,6 +1234,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_POINTER_TYPE:
     case AST_USING: {
         create_scopes_ast(a, ast->expr);
         break;
@@ -3192,6 +3187,23 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_POINTER_TYPE: {
+        analyze_ast(a, ast->expr, &TYPE_OF_TYPE);
+
+        if (!ast->expr->type_info)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
+        memset(ty, 0, sizeof(*ty));
+        ty->kind = TYPE_TYPE;
+        ast->type_info = ty;
+
+        break;
+    }
+
     case AST_UNARY_EXPR: {
         TypeInfo *sub_expected_type = NULL;
 
@@ -3220,15 +3232,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (ast->unop.type)
         {
         case UNOP_DEREFERENCE: {
-            if (ast->unop.sub->type_info->kind == TYPE_TYPE)
-            {
-                TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-                memset(ty, 0, sizeof(*ty));
-                ty->kind = TYPE_TYPE;
-                ast->type_info = ty;
-                break;
-            }
-
             if (ast->unop.sub->type_info->kind != TYPE_POINTER)
             {
                 compile_error(

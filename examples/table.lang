@@ -97,7 +97,7 @@ pub func table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
     }
 
     if (table.hashes[i] != 0) {
-        if (result) *result = table.values[i];
+        if (result) result.* = table.values[i];
         return true;
     }
 

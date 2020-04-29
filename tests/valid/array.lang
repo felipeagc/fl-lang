@@ -23,7 +23,7 @@ func main() {
     printf(c"global_array4[0][1] = %d\n", global_array4[0][1]);
 
     var ptr_to_array: *[3]i32 = &global_array4[0];
-    (*ptr_to_array)[1] = 321;
+    ptr_to_array.*[1] = 321;
 
     var local_array1: [3]i32 = global_array4[0];
     printf(c"local_array1[1] = %d\n", local_array1[1]);

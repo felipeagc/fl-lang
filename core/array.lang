@@ -27,16 +27,16 @@ pub func array_reserve(V)(arr: *[dyn]V, cap: uint) {
 #[inline]
 pub func array_push(V)(arr: *[dyn]V, val: V) -> *V {
     if (arr.len >= arr.cap) array_grow(V)(arr, 0);
-    (*arr)[arr.len] = val;
+    arr.*[arr.len] = val;
     arr.len += 1;
-    return &((*arr)[arr.len - 1]);
+    return &arr.*[arr.len - 1];
 }
 
 #[inline]
 pub func array_pop(V)(arr: *[dyn]V) -> *V {
     if (arr.len == 0) return null;
     arr.len -= 1;
-    return &((*arr)[arr.len]);
+    return &arr.*[arr.len];
 }
 
 #[inline]

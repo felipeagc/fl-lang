@@ -301,11 +301,37 @@ bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
+bool parse_dereference(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
     if (!parse_array_type(p, ast, parsing_type)) res = false;
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    while (parser_peek(p, 0)->type == TOKEN_DOT &&
+           parser_peek(p, 1)->type == TOKEN_ASTERISK && !parser_is_at_end(p, 1))
+    {
+        parser_next(p, 2);
+
+        Ast expr = *ast;
+        memset(&ast->unop, 0, sizeof(ast->unop));
+
+        ast->type = AST_UNARY_EXPR;
+        ast->unop.type = UNOP_DEREFERENCE;
+
+        ast->unop.sub = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        *ast->unop.sub = expr;
+    }
+
+    return res;
+}
+
+bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
+{
+    bool res = true;
+
+    if (!parse_dereference(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 
@@ -401,9 +427,9 @@ bool parse_access(Parser *p, Ast *ast, bool parsing_type)
         memset(&ast->access, 0, sizeof(ast->access));
 
         parser_next(p, 1);
+
         ast->type = AST_ACCESS;
-        ast->access.left =
-            bump_alloc(&p->compiler->bump, sizeof(*ast->access.left));
+        ast->access.left = bump_alloc(&p->compiler->bump, sizeof(Ast));
         *ast->access.left = expr;
 
         Ast right = {0};
@@ -484,10 +510,15 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         parser_next(p, 1);
 
         ast->type = AST_UNARY_EXPR;
-        if (tok->type == TOKEN_ASTERISK) ast->unop.type = UNOP_DEREFERENCE;
-        if (tok->type == TOKEN_AMPERSAND) ast->unop.type = UNOP_ADDRESS;
-        if (tok->type == TOKEN_MINUS) ast->unop.type = UNOP_NEG;
-        if (tok->type == TOKEN_NOT) ast->unop.type = UNOP_NOT;
+        switch (tok->type)
+        {
+        case TOKEN_ASTERISK: ast->type = AST_POINTER_TYPE; break;
+        case TOKEN_AMPERSAND: ast->unop.type = UNOP_ADDRESS; break;
+        case TOKEN_MINUS: ast->unop.type = UNOP_NEG; break;
+        case TOKEN_NOT: ast->unop.type = UNOP_NOT; break;
+
+        default: assert(0); break;
+        }
 
         Ast *right = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(right, 0, sizeof(Ast));
@@ -496,7 +527,22 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         Location last_loc = parser_peek(p, -1)->loc;
         right->loc.length = last_loc.buf + last_loc.length - right->loc.buf;
 
-        ast->unop.sub = right;
+        switch (tok->type)
+        {
+        case TOKEN_ASTERISK: {
+            ast->expr = right;
+            break;
+        }
+
+        case TOKEN_AMPERSAND:
+        case TOKEN_MINUS:
+        case TOKEN_NOT: {
+            ast->unop.sub = right;
+            break;
+        }
+
+        default: assert(0); break;
+        }
 
         break;
     }
