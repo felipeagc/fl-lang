@@ -133,7 +133,11 @@ bool parse_template_instantiation(Parser *p, Ast *ast, bool parsing_type)
         memset(
             &ast->template_inst.params, 0, sizeof(ast->template_inst.params));
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            return res;
+        }
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
         {
@@ -286,7 +290,11 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
                 res = false;
             }
 
-            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+            if (!parser_consume(p, TOKEN_LPAREN))
+            {
+                res = false;
+                break;
+            }
 
             while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
                    !parser_is_at_end(p))
@@ -316,7 +324,11 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
         *ast->proc_call.expr = expr;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN && !parser_is_at_end(p))
         {
@@ -662,7 +674,11 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_CAST;
         parser_next(p, 1);
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         Ast type = {0};
         if (parse_expr(p, &type, parsing_type))
@@ -718,7 +734,11 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_ASTERISK)) res = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
         {
@@ -1343,7 +1363,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             parser_next(p, 1);
             ast->flags |= AST_FLAG_IS_TEMPLATE;
 
-            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+            if (!parser_consume(p, TOKEN_LPAREN))
+            {
+                res = false;
+                break;
+            }
 
             while (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
@@ -1539,7 +1563,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             parser_next(p, 1);
             ast->flags |= AST_FLAG_IS_TEMPLATE;
 
-            if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+            if (!parser_consume(p, TOKEN_LPAREN))
+            {
+                res = false;
+                break;
+            }
 
             while (parser_peek(p, 0)->type != TOKEN_RPAREN)
             {
@@ -1589,7 +1617,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ast->type = AST_VERSION_BLOCK;
         need_semi = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         Token *version_ident = parser_consume(p, TOKEN_IDENT);
         if (version_ident)
@@ -1619,7 +1651,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ast->type = AST_IF;
         need_semi = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         ast->if_stmt.cond_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->if_stmt.cond_expr, false)) res = false;
@@ -1649,7 +1685,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 
         ast->type = AST_SWITCH;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         ast->switch_stmt.expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->switch_stmt.expr, false)) res = false;
@@ -1708,7 +1748,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ast->type = AST_WHILE;
         need_semi = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         ast->while_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->while_stmt.cond, false)) res = false;
@@ -1727,7 +1771,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ast->type = AST_FOR;
         need_semi = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
         {
