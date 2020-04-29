@@ -91,6 +91,8 @@ typedef enum AstType {
     AST_BUILTIN_MIN,
 
     AST_BUILTIN_VEC_ACCESS,
+
+    AST_TYPE,
 } AstType;
 
 typedef struct AstValue

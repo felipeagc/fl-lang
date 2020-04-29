@@ -313,6 +313,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_TYPE:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
     case AST_BUILTIN_CAP:
@@ -1477,6 +1478,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TYPE:
     case AST_STRUCT_FIELD_ALIAS:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
@@ -1963,11 +1965,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.value_expr->type_info)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "could not resolve type for variable declaration "
-                    "initializer");
+                assert(a->compiler->errors.len > 0);
+                /* compile_error( */
+                /*     a->compiler, */
+                /*     ast->loc, */
+                /*     "could not resolve type for variable declaration " */
+                /*     "initializer"); */
                 break;
             }
 
@@ -2118,10 +2121,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->assign.assigned_expr, NULL);
         if (!ast->assign.assigned_expr->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->assign.assigned_expr->loc,
-                "could not resolve type for assign destination expression");
+            assert(a->compiler->errors.len > 0);
+            /* compile_error( */
+            /*     a->compiler, */
+            /*     ast->assign.assigned_expr->loc, */
+            /*     "could not resolve type for assign destination expression");
+             */
             break;
         }
 
@@ -2130,10 +2135,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->assign.value_expr->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->assign.value_expr->loc,
-                "could not resolve type for assigned expression");
+            assert(a->compiler->errors.len > 0);
+            /* compile_error( */
+            /*     a->compiler, */
+            /*     ast->assign.value_expr->loc, */
+            /*     "could not resolve type for assigned expression"); */
             break;
         }
 
@@ -2266,10 +2272,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!val_type)
         {
-            compile_error(
-                a->compiler,
-                ast->switch_stmt.expr->loc,
-                "could not resolve type for switch statement value");
+            assert(a->compiler->errors.len > 0);
+            /* compile_error( */
+            /*     a->compiler, */
+            /*     ast->switch_stmt.expr->loc, */
+            /*     "could not resolve type for switch statement value"); */
             break;
         }
 
@@ -2749,11 +2756,31 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
+            bool found_error = false;
+            assert(a->operand_scope_stack.len > 0);
+            array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
             for (Ast *param = ast->proc_call.params.ptr;
                  param != ast->proc_call.params.ptr + ast->proc_call.params.len;
                  ++param)
             {
                 analyze_ast(a, param, &TYPE_OF_TYPE);
+                if (!param->type_info)
+                {
+                    found_error = true;
+                }
+                else
+                {
+                    param->type = AST_TYPE;
+                    assert(param->as_type);
+                    assert(param->type_info);
+                }
+            }
+            array_pop(&a->scope_stack);
+
+            if (found_error)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
             }
 
             switch (sym->type)
@@ -3851,11 +3878,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->access.left->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->loc,
-                "invalid access: could not resolve type of left "
-                "expression");
+            assert(a->compiler->errors.len > 0);
+            // compile_error(
+            //     a->compiler,
+            //     ast->loc,
+            //     "invalid access: could not resolve type of left "
+            //     "expression");
             break;
         }
 
@@ -3893,11 +3921,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->access.right->type_info)
         {
-            compile_error(
-                a->compiler,
-                ast->access.right->loc,
-                "invalid access: could not resolve type of right "
-                "expression");
+            assert(a->compiler->errors.len > 0);
+            /* compile_error( */
+            /*     a->compiler, */
+            /*     ast->access.right->loc, */
+            /*     "invalid access: could not resolve type of right " */
+            /*     "expression"); */
             break;
         }
 
