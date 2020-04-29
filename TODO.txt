@@ -49,7 +49,6 @@ Safety:
 Bugs:
 - I think struct fields don't have location information
 - Duplicate extern declarations
-- Segfault when import path is not found
 - Circular imports
 - Circular structs
 - Circular typedefs

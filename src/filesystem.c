@@ -1,5 +1,6 @@
 #if defined(_WIN32)
-static void replace_slashes(char* path) {
+static void replace_slashes(char *path)
+{
     for (int i = 0; i < strlen(path); ++i)
     {
         if (path[i] == '\\') path[i] = '/';
@@ -13,10 +14,21 @@ static char *get_absolute_path(const char *relative_path)
     return realpath(relative_path, NULL);
 #elif defined(_WIN32)
     DWORD length = GetFullPathNameA(relative_path, 0, NULL, NULL);
-    char* buf = malloc(length);
+    char *buf = malloc(length);
     GetFullPathNameA(relative_path, length, buf, NULL);
     replace_slashes(buf);
     return buf;
+#else
+#error OS not supported
+#endif
+}
+
+static bool file_exists(const char *path)
+{
+#if defined(__unix__) || defined(__APPLE__)
+    return (access(path, F_OK) != -1);
+#elif defined(_WIN32)
+    return (bool)PathFileExistsA(path);
 #else
 #error OS not supported
 #endif
@@ -52,8 +64,9 @@ static char *get_exe_path(void)
 #elif defined(__APPLE__)
     uint32_t pathlen = 0;
     _NSGetExecutablePath(NULL, &pathlen);
-    char* exe_path = malloc(pathlen);
-    if (_NSGetExecutablePath(exe_path, &pathlen)) {
+    char *exe_path = malloc(pathlen);
+    if (_NSGetExecutablePath(exe_path, &pathlen))
+    {
         fprintf(stderr, "unable to get launcher executable path\n");
         abort();
     }
@@ -63,7 +76,7 @@ static char *get_exe_path(void)
     char tmp_buf[MAX_PATH];
     memset(tmp_buf, 0, sizeof(tmp_buf));
     DWORD length = GetModuleFileNameA(NULL, tmp_buf, sizeof(tmp_buf)) + 1;
-    char* buf = malloc(length);
+    char *buf = malloc(length);
     memcpy(buf, tmp_buf, length);
     replace_slashes(buf);
     return buf;

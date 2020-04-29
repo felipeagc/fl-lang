@@ -310,9 +310,10 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
     switch (ast->type)
     {
     case AST_IMPORT: {
+        bool import_exists = true;
+
         char *c_imported = bump_c_str(&compiler->bump, ast->import.path);
         static char *core_prefix = "core:";
-        String abs_path = {0};
 
         if (strncmp(c_imported, core_prefix, strlen(core_prefix)) == 0)
         {
@@ -326,8 +327,15 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
                 CSTR(file_name_without_extension),
                 CSTR(LANG_FILE_EXTENSION));
 
-            abs_path = bump_str_join(
+            ast->import.abs_path = bump_str_join(
                 &compiler->bump, compiler->corelib_dir, import_file_name);
+
+            char *abs_path_c =
+                bump_c_str(&compiler->bump, ast->import.abs_path);
+            if (!file_exists(abs_path_c))
+            {
+                import_exists = false;
+            }
         }
         else
         {
@@ -339,12 +347,29 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
             snprintf(c_new_path, new_path_size, "%s/%s", c_dir, c_imported);
 
             // Normalize the path
-            char *c_abs_path = get_absolute_path(c_new_path);
-            abs_path = CSTR(c_abs_path);
+            char *abs_path_c = get_absolute_path(c_new_path);
+            if (abs_path_c)
+            {
+                ast->import.abs_path = CSTR(abs_path_c);
+            }
+            else
+            {
+                import_exists = false;
+            }
         }
 
-        ast->import.abs_path = abs_path;
-        SourceFile *imported_file = process_file(compiler, abs_path);
+        if (!import_exists)
+        {
+            compile_error(
+                compiler,
+                ast->loc,
+                "imported file does not exist: '%.*s'",
+                PRINT_STR(ast->import.path));
+            break;
+        }
+
+        SourceFile *imported_file =
+            process_file(compiler, ast->import.abs_path);
 
         if (ast->import.name.buf == NULL)
         {
