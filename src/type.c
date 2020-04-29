@@ -662,7 +662,7 @@ static uint32_t align_of_type(TypeInfo *type)
     return type->align;
 }
 
-static uint32_t size_of_type(TypeInfo *type)
+static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
 {
     if (type->size > 0) return type->size;
 
@@ -674,7 +674,7 @@ static uint32_t size_of_type(TypeInfo *type)
     case TYPE_FLOAT: size = type->floating.num_bits / 8; break;
     case TYPE_BOOL: size = BOOL_INT_TYPE.integer.num_bits / 8; break;
     case TYPE_ENUM:
-        size = size_of_type(type->enumeration.underlying_type);
+        size = size_of_type(compiler, type->enumeration.underlying_type);
         break;
 
     case TYPE_POINTER: size = PTR_SIZE; break;
@@ -682,15 +682,18 @@ static uint32_t size_of_type(TypeInfo *type)
     case TYPE_DYNAMIC_ARRAY: size = PTR_SIZE * 3; break;
 
     case TYPE_VECTOR:
-        size = size_of_type(type->array.sub) * type->array.size;
+        size = size_of_type(compiler, type->array.sub) * type->array.size;
         break;
     case TYPE_ARRAY:
-        size = size_of_type(type->array.sub) * type->array.size;
+        size = size_of_type(compiler, type->array.sub) * type->array.size;
         break;
 
     case TYPE_STRUCT: {
         if (!type->structure.is_union)
         {
+            uint32_t *actual_alignments = bump_alloc(
+                &compiler->bump, sizeof(uint32_t) * type->structure.fields.len);
+
             for (size_t i = 0; i < type->structure.fields.len; ++i)
             {
                 TypeInfo *field = type->structure.fields.ptr[i];
@@ -700,10 +703,25 @@ static uint32_t size_of_type(TypeInfo *type)
                     next_field = type->structure.fields.ptr[0];
                 }
 
-                uint32_t field_size = size_of_type(field);
+                actual_alignments[i] = align_of_type(field);
+                uint32_t next_alignment = align_of_type(next_field);
+                actual_alignments[i] =
+                    pad_to_alignment(actual_alignments[i], next_alignment);
+            }
+
+            for (size_t i = 0; i < type->structure.fields.len; ++i)
+            {
+                TypeInfo *field = type->structure.fields.ptr[i];
+                uint32_t next_index = i + 1;
+                if (i == (type->structure.fields.len - 1))
+                {
+                    next_index = 0;
+                }
+
+                uint32_t field_size = size_of_type(compiler, field);
 
                 // Add padding
-                uint32_t next_alignment = align_of_type(next_field);
+                uint32_t next_alignment = actual_alignments[next_index];
                 size += field_size;
                 size = pad_to_alignment(size, next_alignment);
             }
@@ -713,7 +731,7 @@ static uint32_t size_of_type(TypeInfo *type)
             for (size_t i = 0; i < type->structure.fields.len; ++i)
             {
                 TypeInfo *field = type->structure.fields.ptr[i];
-                uint32_t field_size = size_of_type(field);
+                uint32_t field_size = size_of_type(compiler, field);
                 if (field_size > size) size = field_size;
             }
         }

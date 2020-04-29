@@ -198,9 +198,11 @@ static void compiler_init(Compiler *compiler)
 
 #if defined(__linux__)
     hash_set(&compiler->versions, STR("linux"), NULL);
+    hash_set(&compiler->versions, STR("glibc"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
 #elif defined(__APPLE__)
     hash_set(&compiler->versions, STR("apple"), NULL);
+    hash_set(&compiler->versions, STR("darwin"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
 #elif defined(_WIN32)
     hash_set(&compiler->versions, STR("windows"), NULL);
@@ -208,7 +210,9 @@ static void compiler_init(Compiler *compiler)
 #error OS not supported
 #endif
 
+    hash_set(&compiler->versions, STR("x86"), NULL);
     hash_set(&compiler->versions, STR("x86_64"), NULL);
+    hash_set(&compiler->versions, STR("x86_any"), NULL);
     hash_set(&compiler->versions, STR("debug"), NULL);
 
     // Initialize runtime module

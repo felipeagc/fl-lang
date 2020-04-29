@@ -667,7 +667,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
             if (type)
             {
                 res = true;
-                *i64 = (int64_t)size_of_type(type);
+                *i64 = (int64_t)size_of_type(a->compiler, type);
             }
 
             break;

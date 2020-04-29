@@ -1,0 +1,11 @@
+import "core:c";
+
+typedef MyStruct struct {
+    a: i32,
+    path: string,
+    d: i32,
+};
+
+func main() {
+    if (@size_of(MyStruct) != 32) abort();
+}

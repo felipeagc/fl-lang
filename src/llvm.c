@@ -148,7 +148,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         }
         else
         {
-            type->ref = LLVMArrayType(LLVMInt8Type(), size_of_type(type));
+            type->ref =
+                LLVMArrayType(LLVMInt8Type(), size_of_type(l->compiler, type));
         }
         break;
     }
@@ -1135,7 +1136,7 @@ static void llvm_codegen_ast(
             AstValue size_val = {0};
             size_val.value = LLVMConstInt(
                 llvm_type(l, ast->type_info),
-                (unsigned long long)size_of_type(type),
+                (unsigned long long)size_of_type(l->compiler, type),
                 false);
             if (out_value) *out_value = size_val;
 
