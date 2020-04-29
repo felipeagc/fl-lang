@@ -131,6 +131,8 @@ static TypeInfo VOID_PTR_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &VOID_TYPE};
 static TypeInfo BOOL_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
 
+static TypeInfo *STRING_TYPE = NULL;
+
 static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
 
 static TypeInfo TEMPLATE_TYPE = {.kind = TYPE_TEMPLATE};

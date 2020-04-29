@@ -57,9 +57,9 @@ static inline Token *parser_consume(Parser *p, TokenKind tok_type)
     return parser_next(p, 1);
 }
 
-bool parse_expr(Parser *p, Ast *ast, bool parsing_type);
+static bool parse_expr(Parser *p, Ast *ast, bool parsing_type);
 
-bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
     Token *tok = parser_peek(p, 0);
@@ -75,6 +75,7 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     case TOKEN_STRING_LIT:
     case TOKEN_CSTRING_LIT:
     case TOKEN_CHAR_LIT:
+    case TOKEN_STRING:
     case TOKEN_U8:
     case TOKEN_U16:
     case TOKEN_U32:
@@ -95,6 +96,7 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
         ast->primary.tok = tok;
         break;
     }
+
     case TOKEN_LPAREN: {
         parser_next(p, 1);
 
@@ -104,16 +106,18 @@ bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         break;
     }
+
     default: {
         parser_next(p, 1);
         res = false;
         break;
     }
     }
+
     return res;
 }
 
-bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -232,7 +236,7 @@ bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -301,7 +305,7 @@ bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_dereference(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_dereference(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -327,7 +331,7 @@ bool parse_dereference(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -413,7 +417,7 @@ bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_access(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_access(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -452,7 +456,7 @@ bool parse_access(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -496,7 +500,7 @@ bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
     Token *tok = parser_peek(p, 0);
@@ -832,7 +836,7 @@ bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -873,7 +877,7 @@ bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -912,7 +916,7 @@ bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -951,7 +955,7 @@ bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -992,7 +996,7 @@ bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -1039,7 +1043,7 @@ bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -1078,7 +1082,7 @@ bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
@@ -1134,7 +1138,7 @@ bool parse_op_assign(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
+static bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
 {
     assert(!parser_is_at_end(p, 0));
     memset(ast, 0, sizeof(*ast));
@@ -1145,7 +1149,7 @@ bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
+static bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
 {
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
@@ -1922,7 +1926,7 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
     return res;
 }
 
-void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
+static void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
 {
     memset(p, 0, sizeof(*p));
     p->compiler = compiler;

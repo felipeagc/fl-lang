@@ -751,6 +751,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         case TOKEN_VOID: ast->as_type = &VOID_TYPE; break;
 
+        case TOKEN_STRING: ast->as_type = STRING_TYPE; break;
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
@@ -2423,6 +2425,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TOKEN_INT:
         case TOKEN_UINT:
         case TOKEN_CHAR:
+        case TOKEN_STRING:
         case TOKEN_FLOAT:
         case TOKEN_DOUBLE:
         case TOKEN_BOOL:

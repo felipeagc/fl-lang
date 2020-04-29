@@ -88,6 +88,7 @@ typedef enum TokenKind {
     TOKEN_PUB,
     TOKEN_USING,
     TOKEN_DEFER,
+    TOKEN_STRING,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -208,6 +209,7 @@ static const char *token_strings[] = {
     [TOKEN_PUB] = "pub",
     [TOKEN_USING] = "using",
     [TOKEN_DEFER] = "defer",
+    [TOKEN_STRING] = "string",
 
     [TOKEN_INT_LIT] = "integer literal",
     [TOKEN_FLOAT_LIT] = "float literal",

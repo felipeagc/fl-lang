@@ -555,6 +555,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("for", TOKEN_FOR);
             LEX_MATCH_STR("using", TOKEN_USING);
             LEX_MATCH_STR("defer", TOKEN_DEFER);
+            LEX_MATCH_STR("string", TOKEN_STRING);
             LEX_MATCH_STR("return", TOKEN_RETURN);
             LEX_MATCH_STR("extern", TOKEN_EXTERN);
             LEX_MATCH_STR("distinct", TOKEN_DISTINCT);
