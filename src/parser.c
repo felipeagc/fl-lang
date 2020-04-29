@@ -1366,7 +1366,11 @@ bool parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             if (!parser_consume(p, TOKEN_RPAREN)) res = false;
         }
 
-        if (!parser_consume(p, TOKEN_LPAREN)) res = false;
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
 
         while (parser_peek(p, 0)->type != TOKEN_RPAREN)
         {
