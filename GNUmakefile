@@ -23,7 +23,7 @@ clean:
 	rm examples/table
 
 test: compiler
-	@bash ./tests/run_tests.sh
+	./compiler -r ./tests/run_tests.lang
 
 examples/ray: compiler bindgen examples/ray.lang $(CORE_FILES)
 	./compiler -o=$@ examples/ray.lang

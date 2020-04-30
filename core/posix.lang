@@ -484,7 +484,6 @@ pub extern func fchownat(__fd: i32, __file: *i8, __owner: __uid_t, __group: __gi
 pub extern func chdir(__path: *i8) -> i32;
 pub extern func fchdir(__fd: i32) -> i32;
 pub extern func getcwd(__buf: *i8, __size: uint) -> *i8;
-pub extern func get_current_dir_name() -> *i8;
 pub extern func getwd(__buf: *i8) -> *i8;
 pub extern func dup(__fd: i32) -> i32;
 pub extern func dup2(__fd: i32, __fd2: i32) -> i32;
@@ -591,6 +590,58 @@ pub extern func gettid() -> __pid_t;
 // sys/wait.h
 //
 
+version (glibc) {
+    pub func __WTERMSIG(status: i32) -> i32 {
+        return status & 0x7f;
+    }
+
+    pub func WIFEXITED(status: i32) -> bool {
+        return __WTERMSIG(status) == 0;
+    }
+
+    pub func WIFSIGNALED(status: i32) -> bool {
+        return (cast(byte)((status & 0x7f) + 1) >> 1) > 0;
+    }
+
+    pub func WEXITSTATUS(status: i32) -> i32 {
+        return (status & 0xff00) >> 8;
+    }
+
+    pub func WSTOPSIG(status: i32) -> i32 {
+        return WEXITSTATUS(status);
+    }
+
+    pub func WTERMSIG(status: i32) -> i32 {
+        return status & 0x7f;
+    }
+}
+
+version (darwin) {
+    pub func _WSTATUS(status: i32) -> i32 {
+        return status & 0x7f;
+    }
+
+    pub func WIFEXITED(status: i32) -> bool {
+        return _WSTATUS(status) == 0;
+    }
+
+    pub func WIFSIGNALED(status: i32) -> bool {
+        return _WSTATUS(status) != 0x7f && _WSTATUS(status) != 0;
+    }
+
+    pub func WEXITSTATUS(status: i32) -> i32 {
+        return status >> 8;
+    }
+
+    pub func WSTOPSIG(status: i32) -> i32 {
+        return status >> 8;
+    }
+
+    pub func WTERMSIG(status: i32) -> i32 {
+        return _WSTATUS(status);
+    }
+}
+
 pub typedef siginfo_t struct {};
 pub extern func wait(__stat_loc: *i32) -> __pid_t;
 pub extern func waitpid(__pid: __pid_t, __stat_loc: *i32, __options: i32) -> __pid_t;
@@ -598,3 +649,128 @@ pub extern func waitid(__idtype: idtype_t, __id: __id_t, __infop: *siginfo_t, __
 pub typedef rusage struct {};
 pub extern func wait3(__stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;
 pub extern func wait4(__pid: __pid_t, __stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;
+
+//
+// dirent.h
+//
+
+pub typedef dirent struct {
+    d_ino: __ino_t,
+    d_off: __off_t,
+    d_reclen: u16,
+    d_type: u8,
+    d_name: [256]i8,
+};
+pub typedef dirent64 struct {
+    d_ino: __ino64_t,
+    d_off: __off64_t,
+    d_reclen: u16,
+    d_type: u8,
+    d_name: [256]i8,
+};
+pub const DT_UNKNOWN: u32 = 0;
+pub const DT_FIFO: u32 = 1;
+pub const DT_CHR: u32 = 2;
+pub const DT_DIR: u32 = 4;
+pub const DT_BLK: u32 = 6;
+pub const DT_REG: u32 = 8;
+pub const DT_LNK: u32 = 10;
+pub const DT_SOCK: u32 = 12;
+pub const DT_WHT: u32 = 14;
+pub typedef __dirstream struct {
+};
+pub typedef DIR __dirstream;
+pub extern func opendir(__name: *i8) -> *DIR;
+pub extern func fdopendir(__fd: i32) -> *DIR;
+pub extern func closedir(__dirp: *DIR) -> i32;
+pub extern func readdir(__dirp: *DIR) -> *dirent;
+pub extern func readdir64(__dirp: *DIR) -> *dirent64;
+pub extern func readdir_r(__dirp: *DIR, __entry: *dirent, __result: **dirent) -> i32;
+pub extern func readdir64_r(__dirp: *DIR, __entry: *dirent64, __result: **dirent64) -> i32;
+pub extern func rewinddir(__dirp: *DIR);
+pub extern func seekdir(__dirp: *DIR, __pos: i64);
+pub extern func telldir(__dirp: *DIR) -> i64;
+pub extern func dirfd(__dirp: *DIR) -> i32;
+pub extern func scandir(__dir: *i8, __namelist: ***dirent, __selector: func* (_: *dirent) -> i32, __cmp: func* (_: **dirent, _: **dirent) -> i32) -> i32;
+pub extern func scandir64(__dir: *i8, __namelist: ***dirent64, __selector: func* (_: *dirent64) -> i32, __cmp: func* (_: **dirent64, _: **dirent64) -> i32) -> i32;
+pub extern func scandirat(__dfd: i32, __dir: *i8, __namelist: ***dirent, __selector: func* (_: *dirent) -> i32, __cmp: func* (_: **dirent, _: **dirent) -> i32) -> i32;
+pub extern func scandirat64(__dfd: i32, __dir: *i8, __namelist: ***dirent64, __selector: func* (_: *dirent64) -> i32, __cmp: func* (_: **dirent64, _: **dirent64) -> i32) -> i32;
+pub extern func alphasort(__e1: **dirent, __e2: **dirent) -> i32;
+pub extern func alphasort64(__e1: **dirent64, __e2: **dirent64) -> i32;
+pub extern func getdirentries(__fd: i32, __buf: *i8, __nbytes: uint, __basep: *__off_t) -> __ssize_t;
+pub extern func getdirentries64(__fd: i32, __buf: *i8, __nbytes: uint, __basep: *__off64_t) -> __ssize_t;
+pub extern func versionsort(__e1: **dirent, __e2: **dirent) -> i32;
+pub extern func versionsort64(__e1: **dirent64, __e2: **dirent64) -> i32;
+pub extern func getdents64(__fd: i32, __buffer: *void, __length: uint) -> __ssize_t;
+
+//
+// fcntl.h
+//
+
+version (glibc) {
+    pub const F_DUPFD: i32 = 0;
+    pub const F_GETFD: i32 = 1;
+    pub const F_SETFD: i32 = 2;
+    pub const F_GETFL: i32 = 3;
+    pub const F_SETFL: i32 = 4;
+    pub const F_GETOWN: i32 = 9;
+    pub const F_SETOWN: i32 = 8;
+    pub const F_GETLK: i32 = 5;
+    pub const F_SETLK: i32 = 6;
+    pub const F_SETLKW: i32 = 7;
+
+    pub const FD_CLOEXEC: i32 = 1;
+
+    pub const F_RDLCK: i32 = 0;
+    pub const F_UNLCK: i32 = 2;
+    pub const F_WRLCK: i32 = 1;
+
+    version (x86_any) {
+        pub const O_CREAT: i32 = 0x40;
+        pub const O_EXCL: i32 = 0x80;
+        pub const O_NOCTTY: i32 = 0x100;
+        pub const O_TRUNC: i32 = 0x200;
+
+        pub const O_NONBLOCK: i32 = 0x800;
+        pub const O_APPEND: i32 = 0x400;
+        pub const O_SYNC: i32 = 0x101000;
+    }
+
+    pub const O_RDONLY: i32 = 0x0;
+    pub const O_WRONLY: i32 = 0x1;
+    pub const O_RDWR: i32 = 0x2;
+    pub const O_ACCMODE: i32 = 0x3;
+}
+
+version (darwin) {
+    pub const F_DUPFD: i32 = 0;
+    pub const F_GETFD: i32 = 1;
+    pub const F_SETFD: i32 = 2;
+    pub const F_GETFL: i32 = 3;
+    pub const F_SETFL: i32 = 4;
+    pub const F_GETOWN: i32 = 5;
+    pub const F_SETOWN: i32 = 6;
+    pub const F_GETLK: i32 = 7;
+    pub const F_SETLK: i32 = 8;
+    pub const F_SETLKW: i32 = 9;
+
+    pub const FD_CLOEXEC: i32 = 1;
+
+    pub const F_RDLCK: i32 = 1;
+    pub const F_UNLCK: i32 = 2;
+    pub const F_WRLCK: i32 = 3;
+
+    pub const O_CREAT: i32 = 0x0200;
+    pub const O_EXCL: i32 = 0x0800;
+    pub const O_NOCTTY: i32 = 0;
+    pub const O_TRUNC: i32 = 0x0400;
+
+    pub const O_RDONLY: i32 = 0x0000;
+    pub const O_WRONLY: i32 = 0x0001;
+    pub const O_RDWR: i32 = 0x0002;
+    pub const O_ACCMODE: i32 = 0x0003;
+
+    pub const O_NONBLOCK: i32 = 0x0004;
+    pub const O_APPEND: i32 = 0x0008;
+    pub const O_SYNC: i32 = 0x0080;
+}

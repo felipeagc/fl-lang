@@ -1,0 +1,47 @@
+version (posix) {
+    import posix "core:posix";
+    import c "core:c";
+    import strings "core:strings";
+    import arrays "core:arrays";
+
+    pub func get_cwd_alloc() -> string {
+        var buf = posix.getcwd(null, 0);
+        return buf[0..c.strlen(buf)];
+    }
+
+    pub func chdir(path: string) -> bool {
+        var c_path = strings.to_c_str_alloc(path);
+        defer c.free(c_path);
+        return posix.chdir(c_path) == 0;
+    }
+
+    pub func dir_entries_alloc(path: string) -> [_]string {
+        var c_path = strings.to_c_str_alloc(path);
+        defer c.free(c_path);
+
+        var entries: [dyn]string;
+
+        var ep: *posix.dirent;
+        var dp: *posix.DIR = posix.opendir(c_path);
+
+        if (dp != null) {
+            ep = posix.readdir(dp);
+            while (ep) {
+                var c_entry = c.strdup(ep.d_name.ptr);
+                arrays.push(string)(&entries, c_entry[0..c.strlen(c_entry)]);
+                ep = posix.readdir(dp);
+            }
+
+            posix.closedir(dp);
+        }
+
+        return entries[..];
+    }
+
+    pub func dir_entries_free(entries: [_]string) {
+        for (var i: uint = 0; i < entries.len; i += 1) {
+            c.free(entries[i].ptr);
+        }
+        c.free(entries.ptr);
+    }
+}

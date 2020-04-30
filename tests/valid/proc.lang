@@ -32,7 +32,7 @@ func main() {
     var my_u8: u8 = 255;
     var my_float: float = 321.123;
 
-    var string: *i8 = c"cool";
+    var str: *i8 = c"cool";
 
     var derp: i32 = add(1, 2);
     add(1, 2);

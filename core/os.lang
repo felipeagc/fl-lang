@@ -1,9 +1,11 @@
 version(posix) {
-    import posix "posix.lang";
+    import posix "core:posix";
+    import strings "core:strings";
+    import c "core:c";
 
     extern var environ: **char;
 
-    pub typedef Handle distinct i32;
+    pub typedef Handle i32;
     pub const NULL_HANDLE: Handle = 0;
 
     #[inline] pub func get_stdin() -> Handle { return 0; }
@@ -14,18 +16,71 @@ version(posix) {
         return cast(int)posix.write(stream, buf.ptr, buf.len);
     }
 
-    pub func run_process(file: *char, args: **char) -> Handle {
-        var pid: Handle;
-        if (posix.posix_spawnp(&pid, file, null, null, args, environ) != 0) {
+    pub func spawn_process(args: [_]string, stdout: Handle, stderr: Handle) -> Handle {
+        if (args.len < 1) {
             return NULL_HANDLE;
         }
+
+        var actual_args: **char = c.malloc(@size_of(*char) * (args.len + 1));
+        defer c.free(actual_args);
+
+        for (var i: uint = 0; i < args.len; i += 1) {
+            actual_args[i] = strings.to_c_str_alloc(args[i]);
+        }
+        defer for (var i: uint = 0; i < args.len; i += 1) {
+            c.free(actual_args[i]);
+        };
+
+        actual_args[args.len] = null; // null terminate the list
+
+        var spawn_actions: posix.posix_spawn_file_actions_t;
+        posix.posix_spawn_file_actions_init(&spawn_actions);
+        defer posix.posix_spawn_file_actions_destroy(&spawn_actions);
+
+        if (stdout != NULL_HANDLE) {
+            posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+        } else {
+            posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stdout(),
+                c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
+        }
+
+        if (stderr != NULL_HANDLE) {
+            posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+        } else {
+            posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stderr(),
+                c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
+        }
+
+        var pid: Handle;
+        var result = posix.posix_spawnp(
+            &pid,
+            actual_args[0],
+            &spawn_actions,
+            null,
+            actual_args,
+            environ);
+
+        if (result != 0) {
+            return NULL_HANDLE;
+        }
+
         return pid;
     }
 
     pub func wait_process(process: Handle, status: *i32) -> bool {
-        if (posix.waitpid(process, status, 0) == -1) {
-            return false;
+        var tmp_status: i32;
+        var success = posix.waitpid(process, &tmp_status, 0) != -1;
+
+        if (success) {
+            if (posix.WIFEXITED(tmp_status)) {
+                status.* = posix.WEXITSTATUS(tmp_status);
+            } else if (posix.WIFSIGNALED(tmp_status)) {
+                status.* = -posix.WTERMSIG(tmp_status);
+            } else {
+                return false;
+            }
         }
-        return true;
+
+        return success;
     }
 }

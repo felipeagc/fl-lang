@@ -1,13 +1,13 @@
 import "core:c";
-import "core:array";
+import arrays "core:arrays";
 
 func main() {
     var arr: [dyn]i32;
 
-    array_push(i32)(&arr, 1);
-    array_push(i32)(&arr, 2);
+    arrays.push(i32)(&arr, 1);
+    arrays.push(i32)(&arr, 2);
 
     if (arr.len != 2) abort();
 
-    array_free(i32)(&arr);
+    arrays.free(i32)(&arr);
 }

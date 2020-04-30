@@ -1,4 +1,4 @@
 func main() {
-    var str: [_]char = "Hello";
+    var str: string = "Hello";
     var c_str: *char = c"Hello";
 }

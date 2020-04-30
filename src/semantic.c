@@ -3973,6 +3973,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {
+            // Type mismatch
             sb_reset(&a->compiler->sb);
             sb_append(&a->compiler->sb, STR("wrong type, expected "));
             print_mangled_type(&a->compiler->sb, expected_type);
@@ -3980,6 +3981,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             print_mangled_type(&a->compiler->sb, ast->type_info);
             String error = sb_build(&a->compiler->sb, &a->compiler->bump);
             compile_error(a->compiler, ast->loc, "%.*s", PRINT_STR(error));
+
+            ast->type_info = NULL; // We set this to null to mark it as invalid
         }
     }
 }

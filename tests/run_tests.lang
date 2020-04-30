@@ -1,0 +1,83 @@
+import c "core:c";
+import os "core:os";
+import fmt "core:fmt";
+import files "core:files";
+import strings "core:strings";
+import arrays "core:arrays";
+
+typedef TestRun struct {
+    pid: os.Handle,
+    path: string,
+    status: i32,
+};
+
+var failures: uint = 0;
+
+func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
+    var entries = files.dir_entries_alloc(tests_path);
+    defer files.dir_entries_free(entries);
+
+    var runs: [dyn]TestRun;
+    defer arrays.free(TestRun)(&runs);
+
+    for (var i: uint = 0; i < entries.len; i += 1) {
+        if (strings.ends_with(entries[i], ".lang")) {
+            var path = strings.concat_alloc(tests_path, entries[i]);
+
+            var pid = os.spawn_process(
+                []string{"./compiler", "-r", path},
+                os.NULL_HANDLE,
+                os.NULL_HANDLE);
+
+            if (!pid) {
+                fmt.eprint("Failed to spawn compiler process\n");
+                c.exit(1);
+            } else {
+                var run: TestRun;
+                run.pid = pid;
+                run.path = path;
+                arrays.push(TestRun)(&runs, run);
+                c.printf(c"Testing '%.*s'\n", cast(c.Int)path.len, path.ptr);
+            }
+        }
+    }
+
+    defer for (var i: uint = 0; i < runs.len; i += 1) {
+        strings.free(runs[i].path);
+    };
+
+    for (var i: uint = 0; i < runs.len; i += 1) {
+        if (!os.wait_process(runs[i].pid, &runs[i].status)) {
+            fmt.eprint("Failed to wait for process\n");
+            c.exit(1);
+        }
+    }
+
+    var local_failures: uint = 0;
+    for (var i: uint = 0; i < runs.len; i += 1) {
+        if (runs[i].status != expected_status) {
+            c.printf(c"Failed '%.*s' with code %d\n", 
+                        cast(c.Int) runs[i].path.len,
+                        runs[i].path.ptr,
+                        runs[i].status);
+            local_failures += 1;
+        }
+    }
+
+    failures += local_failures;
+}
+
+func main() {
+    run_tests("Valid tests", "tests/valid/", 0);
+    run_tests("Invalid tests", "tests/invalid/", 1);
+
+    fmt.eprint("=========================================\n");
+    fmt.eprint("                Results                  \n");
+    fmt.eprint("=========================================\n");
+
+    if (failures == 0) {
+        fmt.eprint("Success!\n");
+    } else {
+        fmt.eprint("Some tests failed!\n");
+    }
+}

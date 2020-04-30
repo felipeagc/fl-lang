@@ -2,7 +2,7 @@ import "core:c";
 
 const DEFAULT_TABLE_SIZE: u64 = 32;
 
-func hash_str(str: [_]char) -> u64 {
+func hash_str(str: string) -> u64 {
     var hash: u64 = 5381;
 
     for (var i: u64 = 0; i < str.len; i += 1) {
@@ -13,7 +13,7 @@ func hash_str(str: [_]char) -> u64 {
 }
 
 #[inline]
-func str_equal(a: [_]char, b: [_]char) -> bool {
+func str_equal(a: string, b: string) -> bool {
     if (a.len != b.len) return false;
     for (var i: uint = 0; i < a.len; i += 1) {
         if (a[i] != b[i]) return false;
@@ -23,7 +23,7 @@ func str_equal(a: [_]char, b: [_]char) -> bool {
 
 pub typedef Table(V) struct {
     size: u64,
-    keys: *[_]char,
+    keys: *string,
     hashes: *u64,
     values: *V,
 };
@@ -56,7 +56,7 @@ pub func table_deinit(V)(table: *Table(V)) {
     free(table.values);
 }
 
-pub func table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
+pub func table_set(V)(table: *Table(V), key: string, value: V) -> V {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
@@ -80,7 +80,7 @@ pub func table_set(V)(table: *Table(V), key: [_]char, value: V) -> V {
     return value;
 }
 
-pub func table_get(V)(table: *Table(V), key: [_]char, result: *V) -> bool {
+pub func table_get(V)(table: *Table(V), key: string, result: *V) -> bool {
     var hash: u64 = hash_str(key);
     var i: u64 = hash & (table.size - 1);
     var iters: u64 = 0;
