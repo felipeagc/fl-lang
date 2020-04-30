@@ -280,6 +280,11 @@ static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast)
 
     analyze_asts(analyzer, ast, 1);
     print_errors(compiler);
+
+    if (file->main_function_ast)
+    {
+        check_used_asts(analyzer, file->main_function_ast);
+    }
 }
 
 static SourceFile *process_file(Compiler *compiler, String absolute_path)

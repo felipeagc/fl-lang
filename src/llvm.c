@@ -990,6 +990,8 @@ static void llvm_codegen_ast(
             switch (sym->type)
             {
             case AST_PROC_DECL: {
+                // TODO: shouldn't this be sym->flags? Is this bit even useful
+                // past semantic analysis?
                 if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
                 {
                     break;

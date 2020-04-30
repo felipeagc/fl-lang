@@ -3,6 +3,7 @@ typedef struct SourceFile
     String path;
     String content;
     struct Ast *root;
+    struct Ast* main_function_ast;
     bool did_codegen;
 } SourceFile;
 

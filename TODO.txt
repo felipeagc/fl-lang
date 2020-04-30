@@ -16,11 +16,9 @@ Key/val struct literal
 Proper module/package system
 
 TODO:
-- attributes with values
 - #[link_name="blabla"]
 - compiler API
 - build scripts
-- replace test script with an actual program
 - windows support in core library
 
 - any type

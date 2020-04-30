@@ -34,7 +34,7 @@ pub func table_init(V)(table: *Table(V), size: u64) {
         table.size = DEFAULT_TABLE_SIZE;
     }
 
-    // Round up to nearnest power of two
+    // Round up to nearest power of two
     table.size -= 1;
     table.size |= table.size >> 1;
     table.size |= table.size >> 2;

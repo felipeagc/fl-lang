@@ -2214,12 +2214,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_PROC_DECL: {
         if (string_equals(ast->proc.name, STR("main")))
         {
-            ast->flags |= AST_FLAG_WAS_USED;
-        }
-
-        if (ast->flags & AST_FLAG_TEMPLATE_INSTANTIATION)
-        {
-            ast->flags |= AST_FLAG_WAS_USED;
+            ast->loc.file->main_function_ast = ast;
         }
 
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
@@ -2660,12 +2655,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             switch (sym->type)
             {
-            case AST_PROC_DECL: {
-                sym->flags |= AST_FLAG_WAS_USED;
-                ast->type_info = sym->type_info;
-                break;
-            }
-
+            case AST_PROC_DECL:
             case AST_ENUM_FIELD:
             case AST_STRUCT_FIELD:
             case AST_PROC_PARAM:
@@ -4239,5 +4229,364 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
 
         default: break;
         }
+    }
+}
+
+#define CHECK_USED_AST(ELEM)                                                   \
+    do                                                                         \
+    {                                                                          \
+        clone_into->ELEM = bump_alloc(&compiler->bump, sizeof(Ast));           \
+        instantiate_template(                                                  \
+            compiler,                                                          \
+            clone_into->ELEM,                                                  \
+            ast->ELEM,                                                         \
+            names_to_replace,                                                  \
+            replacements);                                                     \
+    } while (0)
+
+#define CHECK_USED_AST_ARRAY(ARRAY)                                            \
+    do                                                                         \
+    {                                                                          \
+        memset(&clone_into->ARRAY, 0, sizeof(clone_into->ARRAY));              \
+        array_add(&clone_into->ARRAY, ast->ARRAY.len);                         \
+        for (size_t i = 0; i < ast->ARRAY.len; ++i)                            \
+        {                                                                      \
+            instantiate_template(                                              \
+                compiler,                                                      \
+                &clone_into->ARRAY.ptr[i],                                     \
+                &ast->ARRAY.ptr[i],                                            \
+                names_to_replace,                                              \
+                replacements);                                                 \
+        }                                                                      \
+    } while (0)
+
+static void check_used_asts(Analyzer *a, Ast *ast)
+{
+    if (ast->flags & AST_FLAG_WAS_USED) return;
+
+    ast->flags |= AST_FLAG_WAS_USED;
+
+    switch (ast->type)
+    {
+    case AST_PRIMARY: {
+        switch (ast->primary.tok->type)
+        {
+        case TOKEN_IDENT: {
+            Ast *sym = get_symbol(
+                *array_last(&a->scope_stack),
+                ast->primary.tok->str,
+                ast->loc.file);
+            assert(sym);
+
+            array_push(&a->scope_stack, sym->sym_scope);
+            array_push(&a->operand_scope_stack, sym->sym_scope);
+            check_used_asts(a, sym);
+            array_pop(&a->operand_scope_stack);
+            array_pop(&a->scope_stack);
+            break;
+        }
+
+        default: break;
+        }
+
+        break;
+    }
+
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
+        {
+            for (Ast *stmt = ast->version_block.stmts.ptr;
+                 stmt !=
+                 ast->version_block.stmts.ptr + ast->version_block.stmts.len;
+                 ++stmt)
+            {
+                check_used_asts(a, stmt);
+            }
+        }
+
+        break;
+    }
+
+    case AST_ENUM: {
+        break;
+    }
+
+    case AST_PROC_TYPE: {
+        break;
+    }
+
+    case AST_PROC_DECL: {
+        if (ast->flags & AST_FLAG_IS_TEMPLATE)
+        {
+            for (Ast **instantiation =
+                     (Ast **)ast->proc.template_cache->values.ptr;
+                 instantiation != (Ast **)ast->proc.template_cache->values.ptr +
+                                      ast->proc.template_cache->values.len;
+                 ++instantiation)
+            {
+                assert((*instantiation)->type == AST_PROC_DECL);
+                check_used_asts(a, *instantiation);
+            }
+        }
+        else
+        {
+            array_push(&a->scope_stack, ast->scope);
+            array_push(&a->operand_scope_stack, ast->scope);
+            for (Ast *stmt = ast->proc.stmts.ptr;
+                 stmt != ast->proc.stmts.ptr + ast->proc.stmts.len;
+                 ++stmt)
+            {
+                check_used_asts(a, stmt);
+            }
+            array_pop(&a->operand_scope_stack);
+            array_pop(&a->scope_stack);
+        }
+        break;
+    }
+
+    case AST_PROC_PARAM: {
+        break;
+    }
+
+    case AST_BLOCK: {
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        for (Ast *stmt = ast->block.stmts.ptr;
+             stmt != ast->block.stmts.ptr + ast->block.stmts.len;
+             ++stmt)
+        {
+            check_used_asts(a, stmt);
+        }
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_INTRINSIC_CALL: {
+        for (Ast *param = ast->intrinsic_call.params.ptr;
+             param !=
+             ast->intrinsic_call.params.ptr + ast->intrinsic_call.params.len;
+             ++param)
+        {
+            check_used_asts(a, param);
+        }
+        break;
+    }
+
+    case AST_PROC_CALL: {
+        check_used_asts(a, ast->proc_call.expr);
+
+        assert(a->operand_scope_stack.len > 0);
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
+        for (Ast *param = ast->proc_call.params.ptr;
+             param != ast->proc_call.params.ptr + ast->proc_call.params.len;
+             ++param)
+        {
+            check_used_asts(a, param);
+        }
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_TYPEDEF: {
+        break;
+    }
+
+    case AST_CAST: {
+        check_used_asts(a, ast->cast.type_expr);
+        check_used_asts(a, ast->cast.value_expr);
+        break;
+    }
+
+    case AST_CONST_DECL:
+    case AST_VAR_DECL: {
+        if (ast->decl.type_expr) check_used_asts(a, ast->decl.type_expr);
+        if (ast->decl.value_expr) check_used_asts(a, ast->decl.value_expr);
+        break;
+    }
+
+    case AST_VAR_ASSIGN: {
+        check_used_asts(a, ast->assign.assigned_expr);
+        check_used_asts(a, ast->assign.value_expr);
+        break;
+    }
+
+    case AST_POINTER_TYPE:
+    case AST_USING:
+    case AST_EXPR_STMT:
+    case AST_RETURN: {
+        if (ast->expr) check_used_asts(a, ast->expr);
+        break;
+    }
+
+    case AST_DEFER: {
+        if (ast->stmt) check_used_asts(a, ast->stmt);
+        break;
+    }
+
+    case AST_DISTINCT_TYPE: {
+        break;
+    }
+
+    case AST_SUBSCRIPT: {
+        check_used_asts(a, ast->subscript.left);
+
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
+        check_used_asts(a, ast->subscript.right);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_SUBSCRIPT_SLICE: {
+        check_used_asts(a, ast->subscript_slice.left);
+
+        array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
+        if (ast->subscript_slice.lower)
+            check_used_asts(a, ast->subscript_slice.lower);
+        if (ast->subscript_slice.upper)
+            check_used_asts(a, ast->subscript_slice.upper);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_DYNAMIC_ARRAY_TYPE:
+    case AST_SLICE_TYPE:
+    case AST_ARRAY_TYPE: {
+        if (ast->array_type.size) check_used_asts(a, ast->array_type.size);
+        check_used_asts(a, ast->array_type.sub);
+        break;
+    }
+
+    case AST_ACCESS: {
+        check_used_asts(a, ast->access.left);
+
+        Scope *accessed_scope = get_expr_scope(
+            a->compiler, *array_last(&a->scope_stack), ast->access.left);
+        assert(accessed_scope);
+
+        array_push(&a->scope_stack, accessed_scope);
+        check_used_asts(a, ast->access.right);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_UNARY_EXPR: {
+        check_used_asts(a, ast->unop.sub);
+        break;
+    }
+
+    case AST_BINARY_EXPR: {
+        check_used_asts(a, ast->binop.left);
+        check_used_asts(a, ast->binop.right);
+        break;
+    }
+
+    case AST_ENUM_FIELD: {
+        check_used_asts(a, ast->enum_field.value_expr);
+        break;
+    }
+
+    case AST_STRUCT_FIELD: {
+        if (ast->struct_field.value_expr)
+        {
+            check_used_asts(a, ast->struct_field.value_expr);
+        }
+        break;
+    }
+
+    case AST_STRUCT: {
+        break;
+    }
+
+    case AST_IF: {
+        check_used_asts(a, ast->if_stmt.cond_expr);
+        check_used_asts(a, ast->if_stmt.cond_stmt);
+        if (ast->if_stmt.else_stmt) check_used_asts(a, ast->if_stmt.else_stmt);
+        break;
+    }
+
+    case AST_SWITCH: {
+        check_used_asts(a, ast->switch_stmt.expr);
+
+        for (Ast *val = ast->switch_stmt.vals.ptr;
+             val != ast->switch_stmt.vals.ptr + ast->switch_stmt.vals.len;
+             ++val)
+        {
+            check_used_asts(a, val);
+        }
+
+        for (Ast *stmt = ast->switch_stmt.stmts.ptr;
+             stmt != ast->switch_stmt.stmts.ptr + ast->switch_stmt.stmts.len;
+             ++stmt)
+        {
+            check_used_asts(a, stmt);
+        }
+
+        if (ast->switch_stmt.else_stmt)
+        {
+            check_used_asts(a, ast->switch_stmt.else_stmt);
+        }
+
+        break;
+    }
+
+    case AST_WHILE: {
+        check_used_asts(a, ast->while_stmt.cond);
+        check_used_asts(a, ast->while_stmt.stmt);
+        break;
+    }
+
+    case AST_FOR: {
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        if (ast->for_stmt.init) check_used_asts(a, ast->for_stmt.init);
+        if (ast->for_stmt.cond) check_used_asts(a, ast->for_stmt.cond);
+        if (ast->for_stmt.inc) check_used_asts(a, ast->for_stmt.inc);
+        check_used_asts(a, ast->for_stmt.stmt);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_FOREACH: {
+        check_used_asts(a, ast->foreach_stmt.iterator);
+
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        check_used_asts(a, ast->foreach_stmt.stmt);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_COMPOUND_LIT: {
+        check_used_asts(a, ast->compound.type_expr);
+
+        for (Ast *value = ast->compound.values.ptr;
+             value != ast->compound.values.ptr + ast->compound.values.len;
+             ++value)
+        {
+            check_used_asts(a, value);
+        }
+        break;
+    }
+
+    case AST_TYPE:
+    case AST_BUILTIN_LEN:
+    case AST_BUILTIN_PTR:
+    case AST_BUILTIN_CAP:
+    case AST_BUILTIN_MAX:
+    case AST_BUILTIN_MIN:
+    case AST_BUILTIN_VEC_ACCESS:
+    case AST_CONTINUE:
+    case AST_BREAK:
+    case AST_STRUCT_FIELD_ALIAS:
+    case AST_IMPORT: break;
+
+    case AST_ROOT:
+    case AST_UNINITIALIZED: {
+        assert(0);
+        break;
+    }
     }
 }
