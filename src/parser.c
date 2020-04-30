@@ -758,7 +758,7 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
             {
                 parser_next(p, 1);
-                ast->proc.flags |= PROC_FLAG_IS_C_VARARGS;
+                ast->flags |= AST_FLAG_FUNCTION_IS_C_VARARGS;
                 break;
             }
 
@@ -1469,7 +1469,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
             if (parser_peek(p, 0)->type == TOKEN_ELLIPSIS)
             {
                 parser_next(p, 1);
-                ast->proc.flags |= PROC_FLAG_IS_C_VARARGS;
+                ast->flags |= AST_FLAG_FUNCTION_IS_C_VARARGS;
                 break;
             }
             else if (parser_peek(p, 0)->type == TOKEN_USING)
@@ -1526,7 +1526,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
             parser_next(p, 1);
-            ast->proc.flags |= PROC_FLAG_HAS_BODY;
+            ast->flags |= AST_FLAG_FUNCTION_HAS_BODY;
 
             while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
                    !parser_is_at_end(p, 0))
@@ -1540,7 +1540,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         }
         else
         {
-            ast->proc.flags = ast->proc.flags & ~PROC_FLAG_HAS_BODY;
+            ast->flags = ast->flags & ~AST_FLAG_FUNCTION_HAS_BODY;
             need_semi = true;
         }
 

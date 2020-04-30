@@ -102,11 +102,6 @@ typedef struct AstValue
     bool is_lvalue;
 } AstValue;
 
-enum {
-    PROC_FLAG_HAS_BODY = 1 << 0,
-    PROC_FLAG_IS_C_VARARGS = 1 << 1,
-};
-
 typedef enum AstFlags {
     AST_FLAG_EXTERN = 1 << 0,
     AST_FLAG_STATIC = 1 << 1,
@@ -114,6 +109,11 @@ typedef enum AstFlags {
     AST_FLAG_USING = 1 << 3,
     AST_FLAG_IS_TEMPLATE = 1 << 4,
     AST_FLAG_FOREACH_PTR = 1 << 5,
+    AST_FLAG_FUNCTION_RETURNED = 1 << 6,
+    AST_FLAG_FUNCTION_HAS_BODY = 1 << 7,
+    AST_FLAG_FUNCTION_IS_C_VARARGS = 1 << 8,
+    AST_FLAG_WAS_USED = 1 << 9,
+    AST_FLAG_TEMPLATE_INSTANTIATION = 1 << 10,
 } AstFlags;
 
 typedef struct AstAttribute
@@ -161,14 +161,12 @@ struct Ast
         struct
         {
             String name;
-            uint32_t flags;
             struct Ast *return_type;
             ArrayOfAst params;
             ArrayOfAst stmts;
 
             ArrayOfString template_params;
             HashMap *template_cache;
-            bool returned; // helper
 
             AstValue value;
         } proc;

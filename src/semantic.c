@@ -833,6 +833,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 sym->type_def.template_params,
                 ast->proc_call.params);
 
+            cloned_ast->flags |= AST_FLAG_TEMPLATE_INSTANTIATION;
+
             create_scopes_ast(a, cloned_ast);
             register_symbol_asts(a, cloned_ast, 1);
             analyze_asts(a, cloned_ast, 1);
@@ -965,7 +967,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
-        if (ast->proc.flags & PROC_FLAG_IS_C_VARARGS)
+        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
         {
             ty->flags |= TYPE_FLAG_C_VARARGS;
         }
@@ -1831,7 +1833,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (scope->ast && scope->ast->type == AST_PROC_DECL)
         {
-            scope->ast->proc.returned = true;
+            scope->ast->flags |= AST_FLAG_FUNCTION_RETURNED;
         }
 
         TypeInfo *return_type = NULL;
@@ -2210,6 +2212,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_PROC_DECL: {
+        if (string_equals(ast->proc.name, STR("main")))
+        {
+            ast->flags |= AST_FLAG_WAS_USED;
+        }
+
+        if (ast->flags & AST_FLAG_TEMPLATE_INSTANTIATION)
+        {
+            ast->flags |= AST_FLAG_WAS_USED;
+        }
+
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
         {
             break;
@@ -2219,7 +2231,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
-        if (ast->proc.flags & PROC_FLAG_IS_C_VARARGS)
+        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
         {
             ty->flags |= TYPE_FLAG_C_VARARGS;
         }
@@ -2648,7 +2660,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             switch (sym->type)
             {
-            case AST_PROC_DECL:
+            case AST_PROC_DECL: {
+                sym->flags |= AST_FLAG_WAS_USED;
+                ast->type_info = sym->type_info;
+                break;
+            }
+
             case AST_ENUM_FIELD:
             case AST_STRUCT_FIELD:
             case AST_PROC_PARAM:
@@ -2974,6 +2991,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     sym,
                     sym->proc.template_params,
                     ast->proc_call.params);
+
+                cloned_ast->flags |= AST_FLAG_TEMPLATE_INSTANTIATION;
 
                 create_scopes_ast(a, cloned_ast);
                 register_symbol_asts(a, cloned_ast, 1);
@@ -4204,9 +4223,10 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
             {
                 assert(proc_type->kind == TYPE_POINTER);
                 if (proc_type->ptr.sub->proc.return_type->kind != TYPE_VOID &&
-                    (ast->proc.flags & PROC_FLAG_HAS_BODY))
+                    (ast->flags & AST_FLAG_FUNCTION_HAS_BODY))
                 {
-                    if (!ast->proc.returned)
+                    if ((ast->flags & AST_FLAG_FUNCTION_RETURNED) !=
+                        AST_FLAG_FUNCTION_RETURNED)
                     {
                         compile_error(
                             a->compiler, ast->loc, "procedure did not return");

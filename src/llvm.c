@@ -668,6 +668,11 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                 break;
             }
 
+            if ((ast->flags & AST_FLAG_WAS_USED) != AST_FLAG_WAS_USED)
+            {
+                break;
+            }
+
             String mangled_name = ast->proc.name;
             if ((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN)
             {
@@ -795,12 +800,17 @@ static void llvm_codegen_ast(
             break;
         }
 
+        if ((ast->flags & AST_FLAG_WAS_USED) != AST_FLAG_WAS_USED)
+        {
+            break;
+        }
+
         assert(ast->type_info->kind == TYPE_POINTER);
 
         LLVMValueRef fun = ast->proc.value.value;
         assert(fun);
 
-        if (ast->proc.flags & PROC_FLAG_HAS_BODY)
+        if (ast->flags & AST_FLAG_FUNCTION_HAS_BODY)
         {
             size_t param_count = ast->proc.params.len;
             for (size_t i = 0; i < param_count; i++)
@@ -3803,7 +3813,12 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
         return;
     }
 
-    if ((ast->proc.flags & PROC_FLAG_HAS_BODY) != PROC_FLAG_HAS_BODY)
+    if ((ast->flags & AST_FLAG_WAS_USED) != AST_FLAG_WAS_USED)
+    {
+        return;
+    }
+
+    if ((ast->flags & AST_FLAG_FUNCTION_HAS_BODY) != AST_FLAG_FUNCTION_HAS_BODY)
     {
         return;
     }
