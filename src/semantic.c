@@ -307,6 +307,12 @@ static void instantiate_template(
         break;
     }
 
+    case AST_FOREACH: {
+        INSTANTIATE_AST(foreach_stmt.iterator);
+        INSTANTIATE_AST(foreach_stmt.stmt);
+        break;
+    }
+
     case AST_COMPOUND_LIT: {
         INSTANTIATE_AST(compound.type_expr);
         INSTANTIATE_ARRAY(compound.values);
@@ -1379,6 +1385,31 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_FOREACH: {
+        assert(!ast->scope);
+        ast->scope = bump_alloc(&a->compiler->bump, sizeof(Scope));
+        memset(ast->scope, 0, sizeof(*ast->scope));
+        scope_init(
+            ast->scope,
+            a->compiler,
+            SCOPE_DEFAULT,
+            2, // Small number, because there's only gonna be 2 declarations
+               // max
+            ast);
+        if (a->scope_stack.len > 0)
+        {
+            ast->scope->parent = *array_last(&a->scope_stack);
+        }
+
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        create_scopes_ast(a, ast->foreach_stmt.iterator);
+        create_scopes_ast(a, ast->foreach_stmt.stmt);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
     case AST_TYPEDEF: {
         if (ast->type_def.template_params.len == 0)
         {
@@ -1519,6 +1550,11 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         sym_name = ast->decl.name;
+        break;
+    }
+
+    case AST_FOREACH: {
+        sym_name = ast->foreach_stmt.elem_name;
         break;
     }
 
@@ -1731,6 +1767,17 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         if (ast->for_stmt.cond) register_symbol_ast(a, ast->for_stmt.cond);
         if (ast->for_stmt.inc) register_symbol_ast(a, ast->for_stmt.inc);
         register_symbol_ast(a, ast->for_stmt.stmt);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_FOREACH: {
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast(a, ast->foreach_stmt.iterator);
+        register_symbol_ast(a, ast->foreach_stmt.stmt);
         array_pop(&a->operand_scope_stack);
         array_pop(&a->scope_stack);
         break;
@@ -2383,6 +2430,60 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_FOREACH: {
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+        analyze_ast(a, ast->foreach_stmt.iterator, NULL);
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+
+        if (!ast->foreach_stmt.iterator->type_info)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        if (!is_type_iterable(ast->foreach_stmt.iterator->type_info))
+        {
+            compile_error(
+                a->compiler,
+                ast->foreach_stmt.iterator->loc,
+                "type is not iterable");
+            break;
+        }
+
+        switch (ast->foreach_stmt.iterator->type_info->kind)
+        {
+        case TYPE_ARRAY:
+        case TYPE_DYNAMIC_ARRAY:
+        case TYPE_SLICE: {
+            ast->type_info = ast->foreach_stmt.iterator->type_info->array.sub;
+            if (ast->flags & AST_FLAG_FOREACH_PTR)
+            {
+                ast->type_info =
+                    create_pointer_type(a->compiler, ast->type_info);
+            }
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        array_push(&a->scope_stack, ast->scope);
+        array_push(&a->operand_scope_stack, ast->scope);
+
+        array_push(&a->break_stack, ast);
+        array_push(&a->continue_stack, ast);
+        analyze_ast(a, ast->foreach_stmt.stmt, NULL);
+        array_pop(&a->continue_stack);
+        array_pop(&a->break_stack);
+
+        array_pop(&a->operand_scope_stack);
+        array_pop(&a->scope_stack);
+
+        break;
+    }
+
     case AST_BREAK: {
         if (a->break_stack.len == 0)
         {
@@ -2551,6 +2652,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             case AST_ENUM_FIELD:
             case AST_STRUCT_FIELD:
             case AST_PROC_PARAM:
+            case AST_FOREACH:
             case AST_VAR_DECL:
             case AST_CONST_DECL: {
                 ast->type_info = sym->type_info;

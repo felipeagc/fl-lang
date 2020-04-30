@@ -997,6 +997,12 @@ static void llvm_codegen_ast(
                 break;
             }
 
+            case AST_FOREACH: {
+                assert(sym->foreach_stmt.value.value);
+                if (out_value) *out_value = sym->foreach_stmt.value;
+                break;
+            }
+
             case AST_PROC_PARAM: {
                 assert(sym->proc_param.value.value);
                 if (out_value) *out_value = sym->proc_param.value;
@@ -3555,6 +3561,168 @@ static void llvm_codegen_ast(
 
             if (ast->for_stmt.inc)
                 llvm_codegen_ast(l, mod, ast->for_stmt.inc, false, NULL);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+                LLVMBuildBr(mod->builder, cond_bb);
+        }
+
+        // Merge
+        LLVMPositionBuilderAtEnd(mod->builder, merge_bb);
+
+        array_pop(&l->operand_scope_stack);
+        array_pop(&l->scope_stack);
+        break;
+    }
+
+    case AST_FOREACH: {
+        array_push(&l->scope_stack, ast->scope);
+        array_push(&l->operand_scope_stack, ast->scope);
+
+        LLVMValueRef current_ptr_ptr = NULL;
+        if (ast->flags & AST_FLAG_FOREACH_PTR)
+        {
+            assert(ast->type_info->kind == TYPE_POINTER);
+            current_ptr_ptr = build_alloca(l, mod, ast->type_info);
+            ast->foreach_stmt.value.is_lvalue = true;
+            ast->foreach_stmt.value.value = current_ptr_ptr;
+        }
+        else
+        {
+            current_ptr_ptr = build_alloca(
+                l, mod, create_pointer_type(l->compiler, ast->type_info));
+            ast->foreach_stmt.value.is_lvalue = true;
+            ast->foreach_stmt.value.value =
+                build_alloca(l, mod, ast->type_info);
+        }
+
+        AstValue iterator_value = {0};
+        llvm_codegen_ast(
+            l, mod, ast->foreach_stmt.iterator, false, &iterator_value);
+
+        LLVMValueRef first = NULL;
+        LLVMValueRef last = NULL;
+
+        LLVMValueRef fun =
+            LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+        assert(fun);
+
+        Ast *iterator = ast->foreach_stmt.iterator;
+
+        LLVMValueRef indices[2];
+
+        switch (iterator->type_info->kind)
+        {
+        case TYPE_ARRAY: {
+            unsigned index_count = 0;
+            if (iterator_value.is_lvalue)
+            {
+                index_count++;
+                indices[index_count - 1] =
+                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+            }
+
+            index_count++;
+
+            indices[index_count - 1] =
+                LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+            first = LLVMBuildGEP(
+                mod->builder, iterator_value.value, indices, index_count, "");
+
+            indices[index_count - 1] = LLVMConstInt(
+                llvm_type(l, &UINT_TYPE),
+                iterator->type_info->array.size,
+                false);
+            last = LLVMBuildGEP(
+                mod->builder, iterator_value.value, indices, index_count, "");
+
+            break;
+        }
+
+        case TYPE_DYNAMIC_ARRAY:
+        case TYPE_SLICE: {
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            first = LLVMBuildLoad(
+                mod->builder,
+                LLVMBuildGEP(
+                    mod->builder, iterator_value.value, indices, 2, ""),
+                "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef len = LLVMBuildLoad(
+                mod->builder,
+                LLVMBuildGEP(
+                    mod->builder, iterator_value.value, indices, 2, ""),
+                "");
+
+            indices[0] = len;
+            last = LLVMBuildGEP(mod->builder, first, indices, 1, "");
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        LLVMBuildStore(mod->builder, first, current_ptr_ptr);
+
+        LLVMBasicBlockRef cond_bb = LLVMAppendBasicBlock(fun, "");
+        LLVMBasicBlockRef stmts_bb = LLVMAppendBasicBlock(fun, "");
+        LLVMBasicBlockRef inc_bb = LLVMAppendBasicBlock(fun, "");
+        LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "");
+
+        LLVMBuildBr(mod->builder, cond_bb);
+
+        // Cond
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, cond_bb);
+
+            LLVMValueRef current_ptr =
+                LLVMBuildLoad(mod->builder, current_ptr_ptr, "");
+
+            LLVMValueRef cond =
+                LLVMBuildICmp(mod->builder, LLVMIntNE, current_ptr, last, "");
+
+            LLVMBuildCondBr(mod->builder, cond, stmts_bb, merge_bb);
+        }
+
+        // Stmts
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, stmts_bb);
+
+            if ((ast->flags & AST_FLAG_FOREACH_PTR) != AST_FLAG_FOREACH_PTR)
+            {
+                // Copy based for
+                LLVMValueRef current_ptr =
+                    LLVMBuildLoad(mod->builder, current_ptr_ptr, "");
+                LLVMBuildStore(
+                    mod->builder,
+                    LLVMBuildLoad(mod->builder, current_ptr, ""),
+                    ast->foreach_stmt.value.value);
+            }
+
+            array_push(&l->break_block_stack, merge_bb);
+            array_push(&l->continue_block_stack, inc_bb);
+            llvm_codegen_ast(l, mod, ast->for_stmt.stmt, false, NULL);
+            array_pop(&l->continue_block_stack);
+            array_pop(&l->break_block_stack);
+
+            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
+                LLVMBuildBr(mod->builder, inc_bb);
+        }
+
+        // Increment
+        {
+            LLVMPositionBuilderAtEnd(mod->builder, inc_bb);
+
+            LLVMValueRef current_ptr =
+                LLVMBuildLoad(mod->builder, current_ptr_ptr, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef next =
+                LLVMBuildGEP(mod->builder, current_ptr, indices, 1, "");
+
+            LLVMBuildStore(mod->builder, next, current_ptr_ptr);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
                 LLVMBuildBr(mod->builder, cond_bb);

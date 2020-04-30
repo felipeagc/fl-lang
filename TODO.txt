@@ -15,8 +15,6 @@ Key/val struct literal
 
 Proper module/package system
 
-Untyped integer type
-
 TODO:
 - attributes with values
 - #[link_name="blabla"]

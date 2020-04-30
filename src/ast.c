@@ -77,6 +77,7 @@ typedef enum AstType {
     AST_SWITCH,
     AST_WHILE,
     AST_FOR,
+    AST_FOREACH,
     AST_BREAK,
     AST_CONTINUE,
     AST_COMPOUND_LIT,
@@ -112,6 +113,7 @@ typedef enum AstFlags {
     AST_FLAG_PUBLIC = 1 << 2,
     AST_FLAG_USING = 1 << 3,
     AST_FLAG_IS_TEMPLATE = 1 << 4,
+    AST_FLAG_FOREACH_PTR = 1 << 5,
 } AstFlags;
 
 typedef struct AstAttribute
@@ -202,6 +204,13 @@ struct Ast
 
             struct Ast *stmt;
         } for_stmt;
+        struct
+        {
+            String elem_name;
+            struct Ast *iterator;
+            struct Ast *stmt;
+            AstValue value;
+        } foreach_stmt;
         struct
         {
             ArrayOfAst fields;

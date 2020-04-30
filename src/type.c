@@ -156,6 +156,13 @@ static inline bool is_type_basic(TypeInfo *type)
         type->kind == TYPE_FLOAT || type->kind == TYPE_ENUM);
 }
 
+static inline bool is_type_iterable(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_ARRAY || type->kind == TYPE_SLICE ||
+        type->kind == TYPE_DYNAMIC_ARRAY);
+}
+
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind != expected->kind)
@@ -355,6 +362,17 @@ static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
     scope->type_info = type;
     scope_set(scope, STR("min"), min_ast);
     scope_set(scope, STR("max"), max_ast);
+}
+
+static inline TypeInfo *
+create_pointer_type(Compiler *compiler, TypeInfo *subtype)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_POINTER;
+    ty->ptr.sub = subtype;
+
+    return ty;
 }
 
 static inline TypeInfo *

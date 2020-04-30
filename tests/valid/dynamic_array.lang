@@ -2,12 +2,20 @@ import "core:c";
 import arrays "core:arrays";
 
 func main() {
-    var arr: [dyn]i32;
+    {
+        var arr: [dyn]i32;
+        arrays.push(i32)(&arr, 1);
+        arrays.push(i32)(&arr, 2);
+        if (arr.len != 2) abort();
+        arrays.free(i32)(&arr);
+    }
 
-    arrays.push(i32)(&arr, 1);
-    arrays.push(i32)(&arr, 2);
-
-    if (arr.len != 2) abort();
-
-    arrays.free(i32)(&arr);
+    {
+        var arr: [dyn]i32;
+        arrays.push(i32)(&arr, 1);
+        arrays.push(i32)(&arr, 2);
+        arrays.push(i32)(&arr, 3);
+        for (*a in arr) printf(c"Hello: %d\n", a.*);
+        for (a in arr) printf(c"Hello: %d\n", a);
+    }
 }
