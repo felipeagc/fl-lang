@@ -119,6 +119,7 @@ typedef enum AstFlags {
 typedef struct AstAttribute
 {
     String name;
+    struct Ast *value;
 } AstAttribute;
 
 typedef struct Ast Ast;

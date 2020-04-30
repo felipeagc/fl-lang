@@ -1168,15 +1168,35 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         while (parser_peek(p, 0)->type != TOKEN_RBRACK &&
                !parser_is_at_end(p, 0))
         {
+            AstAttribute attr = {0};
+
             Token *name_tok = parser_next(p, 1);
             if (name_tok->type == TOKEN_IDENT)
             {
-                AstAttribute attr = {.name = name_tok->str};
-                array_push(&attributes, attr);
+                attr.name = name_tok->str;
             }
             else
             {
                 res = false;
+            }
+
+            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            {
+                parser_next(p, 1);
+                Ast *value = bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (parse_expr(p, value, false))
+                {
+                    attr.value = value;
+                }
+                else
+                {
+                    res = false;
+                }
+            }
+
+            if (res)
+            {
+                array_push(&attributes, attr);
             }
 
             if (parser_peek(p, 0)->type != TOKEN_RBRACK)
