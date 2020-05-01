@@ -113,7 +113,7 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_VARIADIC_ARG;
         ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         memset(ast->expr, 0, sizeof(*ast->expr));
-        if (!parse_expr(p, ast->expr, true)) res = false;
+        if (!parse_expr(p, ast->expr, parsing_type)) res = false;
 
         break;
     }

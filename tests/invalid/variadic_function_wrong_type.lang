@@ -1,0 +1,12 @@
+func variadic2(a: ..i32) {
+
+}
+
+func variadic(a: ..i32) {
+    variadic2(1, ..a);
+}
+
+func main() {
+    variadic(1, 2, 3);
+}
+

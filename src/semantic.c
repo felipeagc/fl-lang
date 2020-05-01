@@ -3222,15 +3222,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             TypeInfo *slice_type =
                 proc_ty->proc.params.ptr[proc_ty->proc.params.len - 1];
             assert(slice_type);
+            assert(slice_type->kind == TYPE_SLICE);
             TypeInfo *variadic_type = slice_type->array.sub;
             assert(variadic_type);
-
-            for (size_t i = (proc_ty->proc.params.len - 1);
-                 i < ast->proc_call.params.len;
-                 ++i)
-            {
-                analyze_ast(a, &ast->proc_call.params.ptr[i], variadic_type);
-            }
 
             size_t variadic_arg_count =
                 ast->proc_call.params.len - (proc_ty->proc.params.len - 1);
@@ -3241,10 +3235,19 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (variadic_arg_count == 1 &&
                 slice_param->type == AST_VARIADIC_ARG)
             {
+                analyze_ast(a, slice_param, slice_type);
                 *slice_param = *slice_param->expr;
             }
             else
             {
+                for (size_t i = (proc_ty->proc.params.len - 1);
+                     i < ast->proc_call.params.len;
+                     ++i)
+                {
+                    analyze_ast(
+                        a, &ast->proc_call.params.ptr[i], variadic_type);
+                }
+
                 Ast *compound = bump_alloc(&a->compiler->bump, sizeof(Ast));
                 memset(compound, 0, sizeof(Ast));
                 compound->type = AST_COMPOUND_LIT;
@@ -3264,8 +3267,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
                 analyze_ast(a, compound, slice_type);
 
-                ast->proc_call.params.len = proc_ty->proc.params.len;
-                *slice_param = *compound;
+                ast->proc_call.params.len = proc_ty->proc.params.len - 1;
+                array_push(&ast->proc_call.params, *compound);
             }
         }
         else
@@ -4123,7 +4126,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_VARIADIC_ARG: {
-        analyze_ast(a, ast->expr, NULL);
+        analyze_ast(a, ast->expr, expected_type);
+        ast->type_info = ast->expr->type_info;
         break;
     }
 
