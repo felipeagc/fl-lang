@@ -2079,7 +2079,16 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            default: assert(0); break;
+            default: {
+                assert(ast->compound.values.len == 1);
+                llvm_codegen_ast(
+                    l,
+                    mod,
+                    &ast->compound.values.ptr[0],
+                    is_const,
+                    &result_value);
+                break;
+            }
             }
         }
         else
@@ -2190,7 +2199,16 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            default: assert(0); break;
+            default: {
+                assert(ast->compound.values.len == 1);
+                llvm_codegen_ast(
+                    l,
+                    mod,
+                    &ast->compound.values.ptr[0],
+                    is_const,
+                    &result_value);
+                break;
+            }
             }
         }
 

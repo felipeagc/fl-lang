@@ -378,7 +378,8 @@ static void init_any_type(Compiler *compiler, TypeInfo *type)
     static Ast ptr_ast = {.type = AST_BUILTIN_PTR, .flags = AST_FLAG_PUBLIC};
     scope_set(type->scope, STR("ptr"), &ptr_ast);
 
-    static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO, .flags = AST_FLAG_PUBLIC};
+    static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO,
+                                .flags = AST_FLAG_PUBLIC};
     scope_set(type->scope, STR("type_info"), &type_info_ast);
 }
 
@@ -807,4 +808,16 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
 
     type->size = size;
     return type->size;
+}
+
+static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
+{
+    return (
+        (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_POINTER) ||
+        (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_INT) ||
+        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_POINTER) ||
+        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_INT) ||
+        (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_FLOAT) ||
+        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_FLOAT) ||
+        (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT));
 }

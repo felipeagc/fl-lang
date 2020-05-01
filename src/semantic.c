@@ -3518,14 +3518,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             // Check if type is castable
 
-            if (!((dest_ty->kind == TYPE_POINTER &&
-                   src_ty->kind == TYPE_POINTER) ||
-                  (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_INT) ||
-                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_POINTER) ||
-                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_INT) ||
-                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_FLOAT) ||
-                  (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_FLOAT) ||
-                  (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT)))
+            if (!is_type_castable(src_ty, dest_ty))
             {
                 compile_error(a->compiler, ast->loc, "invalid cast");
                 break;
@@ -3929,14 +3922,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         ast->compound.compound_type = ast->compound.type_expr->as_type;
-        TypeInfo *compound_type = ast->compound.compound_type;
-        ast->type_info = compound_type;
+        ast->type_info = ast->compound.compound_type;
 
-        switch (compound_type->kind)
+        switch (ast->type_info->kind)
         {
         case TYPE_VECTOR:
         case TYPE_ARRAY: {
-            if ((ast->compound.values.len) != compound_type->array.size &&
+            if ((ast->compound.values.len) != ast->type_info->array.size &&
                 (ast->compound.values.len) != 1 &&
                 (ast->compound.values.len) != 0)
             {
@@ -3950,7 +3942,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                  value != ast->compound.values.ptr + ast->compound.values.len;
                  ++value)
             {
-                analyze_ast(a, value, compound_type->array.sub);
+                analyze_ast(a, value, ast->type_info->array.sub);
             }
 
             break;
@@ -3958,7 +3950,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TYPE_STRUCT: {
             if ((ast->compound.values.len) !=
-                    (compound_type->structure.fields.len) &&
+                    (ast->type_info->structure.fields.len) &&
                 (ast->compound.values.len) != 0)
             {
                 compile_error(
@@ -3972,17 +3964,24 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 analyze_ast(
                     a,
                     &ast->compound.values.ptr[i],
-                    compound_type->structure.fields.ptr[i]);
+                    ast->type_info->structure.fields.ptr[i]);
             }
 
             break;
         }
 
         default: {
+            if (ast->compound.values.len == 1)
+            {
+                analyze_ast(
+                    a, &ast->compound.values.ptr[0], ast->type_info);
+                break;
+            }
+
             compile_error(
                 a->compiler,
                 ast->compound.type_expr->loc,
-                "type unsupported by compound literal");
+                "invalid compound literal");
             break;
         }
         }
