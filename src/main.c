@@ -193,6 +193,8 @@ static void compiler_init(Compiler *compiler)
         init_numeric_type(compiler, &FLOAT_TYPE);
         init_numeric_type(compiler, &DOUBLE_TYPE);
 
+        init_any_type(compiler, &ANY_TYPE);
+
         STRING_TYPE = create_slice_type(compiler, &I8_TYPE);
     }
 

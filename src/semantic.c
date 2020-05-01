@@ -192,6 +192,11 @@ static void instantiate_template(
         break;
     }
 
+    case AST_TO_ANY: {
+        INSTANTIATE_AST(expr);
+        break;
+    }
+
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         if (ast->decl.type_expr) INSTANTIATE_AST(decl.type_expr);
@@ -322,6 +327,7 @@ static void instantiate_template(
     case AST_TYPE:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
+    case AST_BUILTIN_TYPE_INFO:
     case AST_BUILTIN_CAP:
     case AST_BUILTIN_MAX:
     case AST_BUILTIN_MIN:
@@ -490,6 +496,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
                     break;
                 }
 
+                case AST_BUILTIN_TYPE_INFO:
                 case AST_BUILTIN_LEN:
                 case AST_BUILTIN_PTR:
                 case AST_BUILTIN_CAP: {
@@ -768,6 +775,16 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             }
             break;
         }
+
+        case TOKEN_INTRINSIC: {
+            if (string_equals(ast->primary.tok->str, STR("Any")))
+            {
+                ast->as_type = &ANY_TYPE;
+            }
+
+            break;
+        }
+
         default: break;
         }
         break;
@@ -914,8 +931,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         // We need to set the type here in advance because of recursive type
         // stuff
-        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-        memset(ty, 0, sizeof(*ty));
+        TypeInfo *ty = create_named_struct_type(
+            a->compiler, ast->scope, ast->structure.is_union);
         ast->as_type = ty;
 
         for (Ast *field = ast->structure.fields.ptr;
@@ -931,10 +948,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (res)
         {
-            ty->kind = TYPE_STRUCT;
-            ty->structure.fields = fields;
-            ty->scope = ast->scope;
-            ty->structure.is_union = ast->structure.is_union;
+            set_struct_type_fields(ty, &fields);
         }
         else
         {
@@ -1173,6 +1187,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
             }
             break;
 
+        case TYPE_ANY:
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
@@ -1511,10 +1526,12 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TO_ANY:
     case AST_TYPE:
     case AST_STRUCT_FIELD_ALIAS:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
+    case AST_BUILTIN_TYPE_INFO:
     case AST_BUILTIN_CAP:
     case AST_BUILTIN_MAX:
     case AST_BUILTIN_MIN:
@@ -1992,7 +2009,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             if (!ast->decl.type_expr->as_type)
             {
-                assert(a->compiler->errors.len > 0);
+                compile_error(
+                    a->compiler,
+                    ast->decl.type_expr->loc,
+                    "expression is not a type");
                 break;
             }
 
@@ -2630,6 +2650,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
+        case TOKEN_INTRINSIC: {
+            if (string_equals(ast->primary.tok->str, STR("Any")))
+            {
+                ast->type_info = &TYPE_OF_TYPE;
+            }
+
+            break;
+        }
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(
                 *array_last(&a->scope_stack),
@@ -2715,6 +2744,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             case AST_BUILTIN_MIN:
             case AST_BUILTIN_CAP:
             case AST_BUILTIN_PTR:
+            case AST_BUILTIN_TYPE_INFO:
             case AST_BUILTIN_LEN:
             case AST_BUILTIN_VEC_ACCESS: {
                 analyze_ast(a, sym, NULL);
@@ -2796,6 +2826,30 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info->kind = TYPE_POINTER;
             ast->type_info->ptr.sub = type->array.sub;
             break;
+
+        case TYPE_ANY: {
+            ast->type_info = &VOID_PTR_TYPE;
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_BUILTIN_TYPE_INFO: {
+        Scope *scope = *array_last(&a->scope_stack);
+        TypeInfo *type = scope->type_info;
+        assert(type);
+
+        switch (type->kind)
+        {
+        case TYPE_ANY: {
+            ast->type_info =
+                create_pointer_type(a->compiler, a->compiler->type_info_type);
+            break;
+        }
 
         default: assert(0); break;
         }
@@ -4081,6 +4135,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
         }
 
+        if (ast->type_info->kind != TYPE_ANY && expected_type->kind == TYPE_ANY)
+        {
+            Ast *wrapped = bump_alloc(&a->compiler->bump, sizeof(Ast));
+            *wrapped = *ast;
+
+            add_rtti_type_info(a->compiler, wrapped->type_info);
+
+            ast->type = AST_TO_ANY;
+            ast->expr = wrapped;
+            ast->type_info = &ANY_TYPE;
+        }
+
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {
@@ -4398,6 +4464,11 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TO_ANY: {
+        check_used_asts(a, ast->expr);
+        break;
+    }
+
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         if (ast->decl.type_expr) check_used_asts(a, ast->decl.type_expr);
@@ -4574,6 +4645,7 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     case AST_TYPE:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
+    case AST_BUILTIN_TYPE_INFO:
     case AST_BUILTIN_CAP:
     case AST_BUILTIN_MAX:
     case AST_BUILTIN_MIN:

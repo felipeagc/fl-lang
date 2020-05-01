@@ -88,6 +88,17 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_ANY: {
+        LLVMTypeRef field_types[2] = {
+            LLVMPointerType(LLVMVoidType(), 0), // ptr
+            LLVMPointerType(
+                llvm_type(l, l->compiler->type_info_type), 0), // type_info
+        };
+
+        type->ref = LLVMStructType(field_types, 2, false);
+        break;
+    }
+
     case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
@@ -1035,6 +1046,7 @@ static void llvm_codegen_ast(
             case AST_BUILTIN_MIN:
             case AST_BUILTIN_CAP:
             case AST_BUILTIN_PTR:
+            case AST_BUILTIN_TYPE_INFO:
             case AST_BUILTIN_LEN:
             case AST_BUILTIN_VEC_ACCESS: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
@@ -1892,6 +1904,66 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_TO_ANY: {
+        AstValue result_value = {0};
+        assert(!is_const);
+        assert(ast->expr->type_info->rtti_index > 0);
+
+        result_value.is_lvalue = true;
+        if (out_value && out_value->value)
+        {
+            result_value.value = out_value->value;
+        }
+        else
+        {
+            result_value.value = build_alloca(l, mod, ast->type_info);
+        }
+
+        AstValue val = {0};
+        llvm_codegen_ast(l, mod, ast->expr, false, &val);
+        LLVMValueRef ptr_val = val.value;
+        if (!val.is_lvalue)
+        {
+            ptr_val = build_alloca(l, mod, ast->expr->type_info);
+            LLVMBuildStore(mod->builder, val.value, ptr_val);
+        }
+        ptr_val = LLVMBuildPointerCast(
+            mod->builder, ptr_val, LLVMPointerType(LLVMVoidType(), 0), "");
+
+        LLVMValueRef indices[2];
+
+        // Store pointer
+        {
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, ptr_val, ptr_ptr);
+        }
+
+        // Store type info pointer
+        {
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(
+                LLVMInt32Type(), ast->expr->type_info->rtti_index, false);
+            LLVMValueRef type_info_ptr = LLVMBuildGEP(
+                mod->builder, mod->rtti_type_infos, indices, 2, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef type_info_ptr_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, type_info_ptr, type_info_ptr_ptr);
+        }
+
+        if (out_value)
+        {
+            *out_value = result_value;
+        }
+
+        break;
+    }
+
     case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
@@ -2203,6 +2275,7 @@ static void llvm_codegen_ast(
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE: {
             AstValue slice_value = (*array_last(&l->scope_stack))->value;
+            assert(slice_value.value);
 
             LLVMValueRef field_ptr = NULL;
             uint32_t field_index = 0; // ptr index
@@ -2238,7 +2311,7 @@ static void llvm_codegen_ast(
 
         case TYPE_ARRAY: {
             AstValue array_value = (*array_last(&l->scope_stack))->value;
-
+            assert(array_value.value);
             assert(array_value.is_lvalue);
 
             LLVMValueRef indices[2] = {
@@ -2252,6 +2325,91 @@ static void llvm_codegen_ast(
                 LLVMBuildGEP(mod->builder, array_value.value, indices, 2, "");
 
             if (out_value) *out_value = result_value;
+            break;
+        }
+
+        case TYPE_ANY: {
+            AstValue any_value = (*array_last(&l->scope_stack))->value;
+            assert(any_value.value);
+
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 0; // ptr index
+
+            if (any_value.is_lvalue)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, any_value.value, indices, 2, "");
+            }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, any_value.value, indices, 1, "");
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            result_value.value = field_ptr;
+
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case AST_BUILTIN_TYPE_INFO: {
+        Scope *scope = *array_last(&l->scope_stack);
+        assert(scope->type_info);
+
+        TypeInfo *type = scope->type_info;
+
+        switch (type->kind)
+        {
+        case TYPE_ANY: {
+            AstValue any_value = (*array_last(&l->scope_stack))->value;
+
+            LLVMValueRef field_ptr = NULL;
+            uint32_t field_index = 1; // type_info index
+
+            if (any_value.is_lvalue)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, any_value.value, indices, 2, "");
+            }
+            else
+            {
+                LLVMValueRef indices[1] = {
+                    LLVMConstInt(LLVMInt32Type(), field_index, false),
+                };
+
+                field_ptr =
+                    LLVMBuildGEP(mod->builder, any_value.value, indices, 1, "");
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            result_value.value = field_ptr;
+
+            if (out_value) *out_value = result_value;
+
             break;
         }
 

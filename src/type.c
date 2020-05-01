@@ -16,6 +16,7 @@ typedef enum TypeKind {
     TYPE_VOID = 14,
     TYPE_NAMESPACE = 15,
     TYPE_TEMPLATE = 16,
+    TYPE_ANY = 17,
 } TypeKind;
 
 typedef enum TypeFlags {
@@ -132,6 +133,8 @@ static TypeInfo BOOL_INT_TYPE = {
     .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
 
 static TypeInfo *STRING_TYPE = NULL;
+
+static TypeInfo ANY_TYPE = {.kind = TYPE_ANY};
 
 static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
 
@@ -270,6 +273,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
 
+    case TYPE_ANY:
     case TYPE_NAMESPACE:
     case TYPE_BOOL:
     case TYPE_VOID:
@@ -344,7 +348,7 @@ end:
     return type;
 }
 
-static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
+static void init_numeric_type(Compiler *compiler, TypeInfo *type)
 {
     Ast *min_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     Ast *max_ast = bump_alloc(&compiler->bump, sizeof(Ast));
@@ -364,8 +368,20 @@ static inline void init_numeric_type(Compiler *compiler, TypeInfo *type)
     scope_set(scope, STR("max"), max_ast);
 }
 
-static inline TypeInfo *
-create_pointer_type(Compiler *compiler, TypeInfo *subtype)
+static void init_any_type(Compiler *compiler, TypeInfo *type)
+{
+    type->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(type->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    type->scope->type_info = type;
+
+    static Ast ptr_ast = {.type = AST_BUILTIN_PTR, .flags = AST_FLAG_PUBLIC};
+    scope_set(type->scope, STR("ptr"), &ptr_ast);
+
+    static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO, .flags = AST_FLAG_PUBLIC};
+    scope_set(type->scope, STR("type_info"), &type_info_ast);
+}
+
+static TypeInfo *create_pointer_type(Compiler *compiler, TypeInfo *subtype)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
@@ -375,7 +391,7 @@ create_pointer_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
-static inline TypeInfo *
+static TypeInfo *
 create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
@@ -399,7 +415,7 @@ create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     return ty;
 }
 
-static inline TypeInfo *
+static TypeInfo *
 create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
@@ -451,7 +467,7 @@ create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     return ty;
 }
 
-static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
+static TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
@@ -474,7 +490,7 @@ static inline TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
-static inline TypeInfo *
+static TypeInfo *
 create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
@@ -501,6 +517,24 @@ create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
+// scope param can be null
+static TypeInfo *
+create_named_struct_type(Compiler *compiler, Scope *scope, bool is_union)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_STRUCT;
+    ty->scope = scope;
+    ty->structure.is_union = is_union;
+    return ty;
+}
+
+static void
+set_struct_type_fields(TypeInfo *struct_type, ArrayOfTypeInfoPtr *fields)
+{
+    struct_type->structure.fields = *fields;
+}
+
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
     if (type->type_def)
@@ -519,6 +553,8 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     case TYPE_BOOL: sb_append(sb, STR("b")); break;
 
     case TYPE_NAMESPACE: sb_append(sb, STR("n")); break;
+
+    case TYPE_ANY: sb_append(sb, STR("Q")); break;
 
     case TYPE_INT: {
         if (type->integer.is_signed)
@@ -645,6 +681,7 @@ static uint32_t align_of_type(TypeInfo *type)
         align = align_of_type(type->enumeration.underlying_type);
         break;
 
+    case TYPE_ANY: align = PTR_SIZE; break;
     case TYPE_POINTER: align = PTR_SIZE; break;
     case TYPE_SLICE: align = PTR_SIZE; break;
     case TYPE_DYNAMIC_ARRAY: align = PTR_SIZE; break;
@@ -695,6 +732,7 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
         size = size_of_type(compiler, type->enumeration.underlying_type);
         break;
 
+    case TYPE_ANY: size = PTR_SIZE * 2; break;
     case TYPE_POINTER: size = PTR_SIZE; break;
     case TYPE_SLICE: size = PTR_SIZE * 2; break;
     case TYPE_DYNAMIC_ARRAY: size = PTR_SIZE * 3; break;

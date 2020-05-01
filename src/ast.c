@@ -90,10 +90,13 @@ typedef enum AstType {
     AST_BUILTIN_CAP,
     AST_BUILTIN_MAX,
     AST_BUILTIN_MIN,
+    AST_BUILTIN_TYPE_INFO,
 
     AST_BUILTIN_VEC_ACCESS,
 
+    // Internal use:
     AST_TYPE,
+    AST_TO_ANY,
 } AstType;
 
 typedef struct AstValue

@@ -1,0 +1,16 @@
+import c "core:c";
+import runtime "core:runtime";
+
+func main() {
+    {
+        var a: @Any = 123;
+        if (a.type_info.kind != runtime.TypeKind.Int) c.abort();
+    }
+
+    {
+        var hello = 123;
+        var a: @Any = hello;
+        if (a.ptr != cast(*void)&hello) c.abort();
+        if (a.type_info.kind != runtime.TypeKind.Int) c.abort();
+    }
+}
