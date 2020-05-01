@@ -6,7 +6,7 @@ func main() {
     const other_int = some_int;
 }
 
-import "core:c";
+import "core:c"
 
 const some_int: i32 = 123;
 const puts_func = puts;

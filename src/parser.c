@@ -1160,7 +1160,461 @@ static bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
 }
 
 static bool
-parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
+parse_stmt(Parser *p, Ast *ast, bool need_semi)
+{
+    memset(ast, 0, sizeof(*ast));
+    ast->loc = parser_peek(p, 0)->loc;
+    bool res = true;
+
+    Token *tok = parser_peek(p, 0);
+    switch (tok->type)
+    {
+    case TOKEN_USING: {
+        parser_next(p, 1);
+        ast->type = AST_USING;
+
+        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->expr, false)) res = false;
+
+        break;
+    }
+
+    case TOKEN_DEFER: {
+        parser_next(p, 1);
+        ast->type = AST_DEFER;
+
+        ast->stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->stmt, false)) res = false;
+
+        break;
+    }
+
+    case TOKEN_LCURLY: {
+        parser_next(p, 1);
+        need_semi = false;
+
+        ast->type = AST_BLOCK;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
+        {
+            Ast stmt = {0};
+            if (!parse_stmt(p, &stmt, true)) res = false;
+            array_push(&ast->block.stmts, stmt);
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
+    case TOKEN_EXTERN: {
+        parser_next(p, 1);
+
+        ast->flags |= AST_FLAG_EXTERN;
+
+        switch (parser_peek(p, 0)->type)
+        {
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        default: res = false; break;
+        }
+
+        break;
+    }
+
+    case TOKEN_STATIC: {
+        parser_next(p, 1);
+
+        ast->flags |= AST_FLAG_STATIC;
+
+        switch (parser_peek(p, 0)->type)
+        {
+        case TOKEN_VAR: {
+            goto parse_var_decl;
+            break;
+        }
+
+        default: res = false; break;
+        }
+
+        break;
+    }
+
+    parse_var_decl:
+    case TOKEN_VAR:
+    case TOKEN_CONST: {
+        Token *kind = parser_next(p, 1);
+
+        if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
+        if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
+
+        Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+        if (!ident_tok)
+            res = false;
+        else
+            ast->decl.name = ident_tok->str;
+
+        ast->decl.type_expr = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_COLON)
+        {
+            parser_next(p, 1);
+
+            ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
+        }
+
+        ast->decl.value_expr = NULL;
+        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+        {
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.value_expr, false)) res = false;
+        }
+        else if (kind->type == TOKEN_CONST)
+        {
+            // Constants must have initializers
+            compile_error(
+                p->compiler,
+                ident_tok->loc,
+                "constant declaration must have initializer");
+        }
+
+        break;
+    }
+
+    case TOKEN_RETURN: {
+        parser_next(p, 1);
+
+        ast->type = AST_RETURN;
+        need_semi = true;
+
+        if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+        {
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->expr, false)) res = false;
+        }
+
+        break;
+    }
+
+    case TOKEN_VERSION: {
+        parser_next(p, 1);
+
+        ast->type = AST_VERSION_BLOCK;
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
+
+        Token *version_ident = parser_consume(p, TOKEN_IDENT);
+        if (version_ident)
+            ast->version_block.version = version_ident->str;
+        else
+            res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
+        {
+            Ast stmt = {0};
+            if (!parse_stmt(p, &stmt, true)) res = false;
+            array_push(&ast->version_block.stmts, stmt);
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
+    case TOKEN_IF: {
+        parser_next(p, 1);
+
+        ast->type = AST_IF;
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
+
+        ast->if_stmt.cond_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->if_stmt.cond_expr, false)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true))
+            res = false;
+
+        if (parser_peek(p, 0)->type == TOKEN_ELSE)
+        {
+            parser_next(p, 1);
+
+            ast->if_stmt.else_stmt =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->if_stmt.else_stmt, true))
+                res = false;
+        }
+
+        break;
+    }
+
+    case TOKEN_SWITCH: {
+        parser_next(p, 1);
+        need_semi = false;
+
+        ast->type = AST_SWITCH;
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
+
+        ast->switch_stmt.expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->switch_stmt.expr, false)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        if (!parser_consume(p, TOKEN_LCURLY))
+        {
+            res = false;
+            break;
+        }
+
+        memset(&ast->switch_stmt.vals, 0, sizeof(ast->switch_stmt.vals));
+        memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
+        ast->switch_stmt.else_stmt = NULL;
+
+        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+               !parser_is_at_end(p, 0))
+        {
+            if (parser_peek(p, 0)->type == TOKEN_ELSE)
+            {
+                parser_next(p, 1);
+                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true)) res = false;
+
+                if (res)
+                {
+                    ast->switch_stmt.else_stmt =
+                        bump_alloc(&p->compiler->bump, sizeof(Ast));
+                    *ast->switch_stmt.else_stmt = stmt;
+                }
+            }
+            else
+            {
+                Ast val = {0};
+                if (!parse_expr(p, &val, false)) res = false;
+
+                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true)) res = false;
+
+                if (res)
+                {
+                    array_push(&ast->switch_stmt.vals, val);
+                    array_push(&ast->switch_stmt.stmts, stmt);
+                }
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
+    case TOKEN_WHILE: {
+        parser_next(p, 1);
+
+        ast->type = AST_WHILE;
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
+
+        ast->while_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_expr(p, ast->while_stmt.cond, false)) res = false;
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+        ast->while_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        if (!parse_stmt(p, ast->while_stmt.stmt, true)) res = false;
+
+        break;
+    }
+
+    case TOKEN_FOR: {
+        parser_next(p, 1);
+
+        need_semi = false;
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            break;
+        }
+
+        if ((parser_peek(p, 0)->type == TOKEN_IDENT &&
+             parser_peek(p, 1)->type == TOKEN_IN) ||
+            (parser_peek(p, 0)->type == TOKEN_ASTERISK &&
+             parser_peek(p, 1)->type == TOKEN_IDENT &&
+             parser_peek(p, 2)->type == TOKEN_IN))
+        {
+            // Foreach
+            ast->type = AST_FOREACH;
+
+            if (parser_peek(p, 0)->type == TOKEN_ASTERISK)
+            {
+                parser_next(p, 1);
+                ast->flags |= AST_FLAG_FOREACH_PTR;
+            }
+
+            Token *elem_name_tok = parser_consume(p, TOKEN_IDENT);
+            if (!elem_name_tok)
+            {
+                res = false;
+                break;
+            }
+            ast->foreach_stmt.elem_name = elem_name_tok->str;
+
+            if (!parser_consume(p, TOKEN_IN))
+            {
+                res = false;
+                break;
+            }
+
+            ast->foreach_stmt.iterator =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->foreach_stmt.iterator, false)) res = false;
+
+            if (!parser_consume(p, TOKEN_RPAREN))
+            {
+                res = false;
+                break;
+            }
+
+            ast->foreach_stmt.stmt =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->foreach_stmt.stmt, true)) res = false;
+        }
+        else
+        {
+            // C-style For
+            ast->type = AST_FOR;
+
+            if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+            {
+                ast->for_stmt.init =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_stmt(p, ast->for_stmt.init, false))
+                    res = false;
+            }
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+            {
+                ast->for_stmt.cond =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->for_stmt.cond, false)) res = false;
+            }
+
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                ast->for_stmt.inc = bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_stmt(p, ast->for_stmt.inc, false)) res = false;
+            }
+
+            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+
+            ast->for_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_stmt(p, ast->for_stmt.stmt, true)) res = false;
+        }
+
+        break;
+    }
+
+    case TOKEN_BREAK: {
+        parser_next(p, 1);
+        ast->type = AST_BREAK;
+        need_semi = true;
+        break;
+    }
+
+    case TOKEN_CONTINUE: {
+        parser_next(p, 1);
+        ast->type = AST_CONTINUE;
+        need_semi = true;
+        break;
+    }
+
+    default: {
+        Ast expr = {0};
+        if (!parse_expr(p, &expr, false)) res = false;
+
+        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+        {
+            ast->type = AST_VAR_ASSIGN;
+
+            ast->assign.assigned_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->assign.assigned_expr = expr;
+
+            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+            ast->assign.value_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->assign.value_expr, false)) res = false;
+        }
+        else
+        {
+            ast->type = AST_EXPR_STMT;
+
+            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            *ast->expr = expr;
+        }
+
+        break;
+    }
+    }
+
+    if (need_semi)
+    {
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+    }
+
+    Location last_loc = parser_peek(p, -1)->loc;
+    ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
+
+    return res;
+}
+
+static bool parse_top_level_stmt(Parser *p, Ast *ast)
 {
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
@@ -1222,42 +1676,42 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         switch (parser_peek(p, 0)->type)
         {
         case TOKEN_FN: {
-            goto parse_fn_decl;
+            goto parse_top_level_fn_decl;
             break;
         }
 
         case TOKEN_EXTERN: {
-            goto parse_extern_decl;
+            goto parse_top_level_extern_decl;
             break;
         }
 
         case TOKEN_STATIC: {
-            goto parse_static_decl;
+            goto parse_top_level_static_decl;
             break;
         }
 
         case TOKEN_PUB: {
-            goto parse_pub_decl;
+            goto parse_top_level_pub_decl;
             break;
         }
 
         case TOKEN_VAR: {
-            goto parse_var_decl;
+            goto parse_top_level_var_decl;
             break;
         }
 
         case TOKEN_CONST: {
-            goto parse_const_decl;
+            goto parse_top_level_const_decl;
             break;
         }
 
         case TOKEN_TYPEDEF: {
-            goto parse_typedef_decl;
+            goto parse_top_level_typedef_decl;
             break;
         }
 
         case TOKEN_IMPORT: {
-            goto parse_import_decl;
+            goto parse_top_level_import_decl;
             break;
         }
 
@@ -1267,46 +1721,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    case TOKEN_USING: {
-        parser_next(p, 1);
-        ast->type = AST_USING;
-
-        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->expr, false)) res = false;
-
-        break;
-    }
-
-    case TOKEN_DEFER: {
-        parser_next(p, 1);
-        ast->type = AST_DEFER;
-
-        ast->stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->stmt, inside_procedure, false)) res = false;
-
-        break;
-    }
-
-    case TOKEN_LCURLY: {
-        parser_next(p, 1);
-        need_semi = false;
-
-        ast->type = AST_BLOCK;
-
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-               !parser_is_at_end(p, 0))
-        {
-            Ast stmt = {0};
-            if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
-            array_push(&ast->block.stmts, stmt);
-        }
-
-        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
-
-        break;
-    }
-
-    parse_pub_decl:
+    parse_top_level_pub_decl:
     case TOKEN_PUB: {
         parser_next(p, 1);
 
@@ -1315,37 +1730,37 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         switch (parser_peek(p, 0)->type)
         {
         case TOKEN_FN: {
-            goto parse_fn_decl;
+            goto parse_top_level_fn_decl;
             break;
         }
 
         case TOKEN_CONST: {
-            goto parse_const_decl;
+            goto parse_top_level_const_decl;
             break;
         }
 
         case TOKEN_VAR: {
-            goto parse_var_decl;
+            goto parse_top_level_var_decl;
             break;
         }
 
         case TOKEN_TYPEDEF: {
-            goto parse_typedef_decl;
+            goto parse_top_level_typedef_decl;
             break;
         }
 
         case TOKEN_EXTERN: {
-            goto parse_extern_decl;
+            goto parse_top_level_extern_decl;
             break;
         }
 
         case TOKEN_STATIC: {
-            goto parse_static_decl;
+            goto parse_top_level_static_decl;
             break;
         }
 
         case TOKEN_IMPORT: {
-            goto parse_import_decl;
+            goto parse_top_level_import_decl;
             break;
         }
 
@@ -1355,7 +1770,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    parse_extern_decl:
+    parse_top_level_extern_decl:
     case TOKEN_EXTERN: {
         parser_next(p, 1);
 
@@ -1364,12 +1779,12 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         switch (parser_peek(p, 0)->type)
         {
         case TOKEN_FN: {
-            goto parse_fn_decl;
+            goto parse_top_level_fn_decl;
             break;
         }
 
         case TOKEN_VAR: {
-            goto parse_var_decl;
+            goto parse_top_level_var_decl;
             break;
         }
 
@@ -1379,7 +1794,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    parse_static_decl:
+    parse_top_level_static_decl:
     case TOKEN_STATIC: {
         parser_next(p, 1);
 
@@ -1388,7 +1803,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         switch (parser_peek(p, 0)->type)
         {
         case TOKEN_VAR: {
-            goto parse_var_decl;
+            goto parse_top_level_var_decl;
             break;
         }
 
@@ -1398,12 +1813,11 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    parse_fn_decl:
+    parse_top_level_fn_decl:
     case TOKEN_FN: {
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
-        need_semi = false;
 
         Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
         if (!proc_name_tok)
@@ -1542,7 +1956,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                    !parser_is_at_end(p, 0))
             {
                 Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true, true)) res = false;
+                if (!parse_stmt(p, &stmt, true)) res = false;
                 array_push(&ast->proc.stmts, stmt);
             }
 
@@ -1551,13 +1965,13 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         else
         {
             ast->flags = ast->flags & ~AST_FLAG_FUNCTION_HAS_BODY;
-            need_semi = true;
+            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
         }
 
         break;
     }
 
-    parse_import_decl:
+    parse_top_level_import_decl:
     case TOKEN_IMPORT: {
         parser_next(p, 1);
         ast->type = AST_IMPORT;
@@ -1578,8 +1992,8 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    parse_var_decl:
-    parse_const_decl:
+    parse_top_level_var_decl:
+    parse_top_level_const_decl:
     case TOKEN_VAR:
     case TOKEN_CONST: {
         Token *kind = parser_next(p, 1);
@@ -1619,10 +2033,12 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                 "constant declaration must have initializer");
         }
 
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
+
         break;
     }
 
-    parse_typedef_decl:
+    parse_top_level_typedef_decl:
     case TOKEN_TYPEDEF: {
         parser_next(p, 1);
 
@@ -1664,20 +2080,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         ast->type_def.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
         if (!parse_expr(p, ast->type_def.type_expr, true)) res = false;
 
-        break;
-    }
-
-    case TOKEN_RETURN: {
-        parser_next(p, 1);
-
-        ast->type = AST_RETURN;
-        need_semi = true;
-
-        if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
-        {
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->expr, false)) res = false;
-        }
+        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
 
         break;
     }
@@ -1686,7 +2089,6 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         parser_next(p, 1);
 
         ast->type = AST_VERSION_BLOCK;
-        need_semi = false;
 
         if (!parser_consume(p, TOKEN_LPAREN))
         {
@@ -1712,7 +2114,7 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
                !parser_is_at_end(p, 0))
         {
             Ast stmt = {0};
-            if (!parse_stmt(p, &stmt, inside_procedure, true)) res = false;
+            if (!parse_top_level_stmt(p, &stmt)) res = false;
             array_push(&ast->version_block.stmts, stmt);
         }
 
@@ -1721,285 +2123,17 @@ parse_stmt(Parser *p, Ast *ast, bool inside_procedure, bool need_semi)
         break;
     }
 
-    case TOKEN_IF: {
-        parser_next(p, 1);
-
-        ast->type = AST_IF;
-        need_semi = false;
-
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        ast->if_stmt.cond_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->if_stmt.cond_expr, false)) res = false;
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-        ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->if_stmt.cond_stmt, inside_procedure, true))
-            res = false;
-
-        if (parser_peek(p, 0)->type == TOKEN_ELSE)
-        {
-            parser_next(p, 1);
-
-            ast->if_stmt.else_stmt =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->if_stmt.else_stmt, inside_procedure, true))
-                res = false;
-        }
-
-        break;
-    }
-
-    case TOKEN_SWITCH: {
-        parser_next(p, 1);
-        need_semi = false;
-
-        ast->type = AST_SWITCH;
-
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        ast->switch_stmt.expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->switch_stmt.expr, false)) res = false;
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-        if (!parser_consume(p, TOKEN_LCURLY))
-        {
-            res = false;
-            break;
-        }
-
-        memset(&ast->switch_stmt.vals, 0, sizeof(ast->switch_stmt.vals));
-        memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
-        ast->switch_stmt.else_stmt = NULL;
-
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-               !parser_is_at_end(p, 0))
-        {
-            if (parser_peek(p, 0)->type == TOKEN_ELSE)
-            {
-                parser_next(p, 1);
-                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
-
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true, true)) res = false;
-
-                if (res)
-                {
-                    ast->switch_stmt.else_stmt =
-                        bump_alloc(&p->compiler->bump, sizeof(Ast));
-                    *ast->switch_stmt.else_stmt = stmt;
-                }
-            }
-            else
-            {
-                Ast val = {0};
-                if (!parse_expr(p, &val, false)) res = false;
-
-                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
-
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true, true)) res = false;
-
-                if (res)
-                {
-                    array_push(&ast->switch_stmt.vals, val);
-                    array_push(&ast->switch_stmt.stmts, stmt);
-                }
-            }
-        }
-
-        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
-
-        break;
-    }
-
-    case TOKEN_WHILE: {
-        parser_next(p, 1);
-
-        ast->type = AST_WHILE;
-        need_semi = false;
-
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        ast->while_stmt.cond = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_expr(p, ast->while_stmt.cond, false)) res = false;
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-        ast->while_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->while_stmt.stmt, true, true)) res = false;
-
-        break;
-    }
-
-    case TOKEN_FOR: {
-        parser_next(p, 1);
-
-        need_semi = false;
-
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        if ((parser_peek(p, 0)->type == TOKEN_IDENT &&
-             parser_peek(p, 1)->type == TOKEN_IN) ||
-            (parser_peek(p, 0)->type == TOKEN_ASTERISK &&
-             parser_peek(p, 1)->type == TOKEN_IDENT &&
-             parser_peek(p, 2)->type == TOKEN_IN))
-        {
-            // Foreach
-            ast->type = AST_FOREACH;
-
-            if (parser_peek(p, 0)->type == TOKEN_ASTERISK)
-            {
-                parser_next(p, 1);
-                ast->flags |= AST_FLAG_FOREACH_PTR;
-            }
-
-            Token *elem_name_tok = parser_consume(p, TOKEN_IDENT);
-            if (!elem_name_tok)
-            {
-                res = false;
-                break;
-            }
-            ast->foreach_stmt.elem_name = elem_name_tok->str;
-
-            if (!parser_consume(p, TOKEN_IN))
-            {
-                res = false;
-                break;
-            }
-
-            ast->foreach_stmt.iterator =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->foreach_stmt.iterator, false)) res = false;
-
-            if (!parser_consume(p, TOKEN_RPAREN))
-            {
-                res = false;
-                break;
-            }
-
-            ast->foreach_stmt.stmt =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->foreach_stmt.stmt, true, true)) res = false;
-        }
-        else
-        {
-            // C-style For
-            ast->type = AST_FOR;
-
-            if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
-            {
-                ast->for_stmt.init =
-                    bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_stmt(p, ast->for_stmt.init, true, false))
-                    res = false;
-            }
-
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
-            if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
-            {
-                ast->for_stmt.cond =
-                    bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_expr(p, ast->for_stmt.cond, false)) res = false;
-            }
-
-            if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
-
-            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
-            {
-                ast->for_stmt.inc = bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_stmt(p, ast->for_stmt.inc, true, false)) res = false;
-            }
-
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-            ast->for_stmt.stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->for_stmt.stmt, true, true)) res = false;
-        }
-
-        break;
-    }
-
-    case TOKEN_BREAK: {
-        parser_next(p, 1);
-        ast->type = AST_BREAK;
-        need_semi = true;
-        break;
-    }
-
-    case TOKEN_CONTINUE: {
-        parser_next(p, 1);
-        ast->type = AST_CONTINUE;
-        need_semi = true;
-        break;
-    }
-
     default: {
-        Ast expr = {0};
-        if (!parse_expr(p, &expr, false)) res = false;
-
-        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
-        {
-            ast->type = AST_VAR_ASSIGN;
-
-            ast->assign.assigned_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            *ast->assign.assigned_expr = expr;
-
-            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
-
-            ast->assign.value_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->assign.value_expr, false)) res = false;
-
-            if (!inside_procedure)
-            {
-                // TODO: maybe this shouldn't be a parser error
-                compile_error(
-                    p->compiler,
-                    tok->loc,
-                    "assignment must be inside procedure",
-                    tok->loc.length,
-                    tok->loc.buf);
-
-                res = false;
-                break;
-            }
-        }
-        else
-        {
-            ast->type = AST_EXPR_STMT;
-
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            *ast->expr = expr;
-        }
-
+        res = false;
+        compile_error(
+            p->compiler,
+            tok->loc,
+            "invalid token for top level declaration",
+            tok->loc.length,
+            tok->loc.buf);
+        parser_next(p, 1);
         break;
     }
-    }
-
-    if (need_semi)
-    {
-        if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
     }
 
     Location last_loc = parser_peek(p, -1)->loc;
@@ -2021,7 +2155,7 @@ static void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     while (!parser_is_at_end(p, 0))
     {
         Ast stmt = {0};
-        if (parse_stmt(p, &stmt, false, true))
+        if (parse_top_level_stmt(p, &stmt))
         {
             array_push(&p->ast->block.stmts, stmt);
         }

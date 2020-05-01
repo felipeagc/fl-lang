@@ -1,5 +1,5 @@
-import runtime "core:runtime";
-import "core:c";
+import runtime "core:runtime"
+import "core:c"
 
 func main() {
     // Integer

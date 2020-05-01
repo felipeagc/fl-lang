@@ -540,6 +540,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("var", TOKEN_VAR);
             LEX_MATCH_STR("const", TOKEN_CONST);
             LEX_MATCH_STR("func", TOKEN_FN);
+            LEX_MATCH_STR("module", TOKEN_MODULE);
             LEX_MATCH_STR("in", TOKEN_IN);
             LEX_MATCH_STR("cast", TOKEN_CAST);
             LEX_MATCH_STR("import", TOKEN_IMPORT);

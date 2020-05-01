@@ -1,5 +1,5 @@
-import "core:c";
-import "core:thread";
+import "core:c"
+import "core:thread"
 
 var my_val: i32 = 123;
 var mtx: Mutex;

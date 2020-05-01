@@ -1,6 +1,6 @@
-import "sdl.lang";
-import c "core:c";
-import fmt "core:fmt";
+import "sdl.lang"
+import c "core:c"
+import fmt "core:fmt"
 
 func main() {
     SDL_Init(SDL_INIT_EVERYTHING);

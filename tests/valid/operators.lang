@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 const const1: float = -3 * 5.8 + 9.1;
 const const2: i32 = (123 + 321) * 2;

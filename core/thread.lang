@@ -1,7 +1,7 @@
 typedef ThreadStart func* (arg: *void) -> *void;
 
 version (posix) {
-    import "core:posix";
+    import "core:posix"
     pub typedef Thread pthread_t;
     pub typedef Mutex pthread_mutex_t;
     pub typedef Cond pthread_cond_t;

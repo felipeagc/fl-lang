@@ -1,9 +1,9 @@
-import c "core:c";
-import os "core:os";
-import fmt "core:fmt";
-import files "core:files";
-import strings "core:strings";
-import arrays "core:arrays";
+import c "core:c"
+import os "core:os"
+import fmt "core:fmt"
+import files "core:files"
+import strings "core:strings"
+import arrays "core:arrays"
 
 typedef TestRun struct {
     pid: os.Handle,

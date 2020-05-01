@@ -1,4 +1,4 @@
-import c "c.lang";
+import c "c.lang"
 
 pub func to_c_str_alloc(str: string) -> *char {
     var cstr: *char = c.malloc(str.len + 1);

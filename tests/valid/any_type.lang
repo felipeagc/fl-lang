@@ -1,6 +1,6 @@
-import c "core:c";
-import fmt "core:fmt";
-import runtime "core:runtime";
+import c "core:c"
+import fmt "core:fmt"
+import runtime "core:runtime"
 
 func main() {
     {

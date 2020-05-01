@@ -1,4 +1,4 @@
-pub import fmt "core:fmt";
+pub import fmt "core:fmt"
 
 pub const array_size = 5;
 pub const some_const: i32 = 512;

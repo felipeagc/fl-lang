@@ -1,4 +1,4 @@
-import fmt "core:fmt";
+import fmt "core:fmt"
 
 typedef MyFunc func* ();
 

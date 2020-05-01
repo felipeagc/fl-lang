@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 typedef Struct2 struct {
     a: i32,

@@ -1,8 +1,8 @@
 version (posix) {
-    import posix "core:posix";
-    import c "core:c";
-    import strings "core:strings";
-    import arrays "core:arrays";
+    import posix "core:posix"
+    import c "core:c"
+    import strings "core:strings"
+    import arrays "core:arrays"
 
     pub func get_cwd_alloc() -> string {
         var buf = posix.getcwd(null, 0);

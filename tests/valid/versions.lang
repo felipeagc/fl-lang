@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 func main() {
     version (linux) {

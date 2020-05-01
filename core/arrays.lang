@@ -1,4 +1,4 @@
-import c "core:c";
+import c "core:c"
 
 const DEFAULT_ARRAY_CAP: uint = 8;
 

@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 typedef Vec3 @vector_type(float, 3);
 

@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 pub typedef Test struct {
     test: *Test,

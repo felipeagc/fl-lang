@@ -1,4 +1,4 @@
-import c "core:c";
+import c "core:c"
 
 func main() {
     if (@size_of(int) != @size_of(*void)) c.abort();

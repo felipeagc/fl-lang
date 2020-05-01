@@ -1,7 +1,7 @@
 version(posix) {
-    import posix "core:posix";
-    import strings "core:strings";
-    import c "core:c";
+    import posix "core:posix"
+    import strings "core:strings"
+    import c "core:c"
 
     extern var environ: **char;
 

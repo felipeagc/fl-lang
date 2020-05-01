@@ -1,6 +1,6 @@
-import c "core:c";
-import os "core:os";
-import runtime "core:runtime";
+import c "core:c"
+import os "core:os"
+import runtime "core:runtime"
 
 pub func print(str: string) {
     var buf: [_]byte = void;

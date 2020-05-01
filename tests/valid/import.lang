@@ -1,5 +1,5 @@
-import hello "imported.lang";
-import fmt "core:fmt";
+import hello "imported.lang"
+import fmt "core:fmt"
 
 func main() {
     hello.say_hello();

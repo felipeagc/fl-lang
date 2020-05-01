@@ -1,4 +1,4 @@
-import "core:c";
+import "core:c"
 
 const DEFAULT_TABLE_SIZE: u64 = 32;
 
