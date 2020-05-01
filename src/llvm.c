@@ -1967,8 +1967,6 @@ static void llvm_codegen_ast(
     case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
-        TypeInfo *compound_type = ast->compound.compound_type;
-
         if (!is_const)
         {
             result_value.is_lvalue = true;
@@ -1985,7 +1983,7 @@ static void llvm_codegen_ast(
             {
             case TYPE_VECTOR:
             case TYPE_ARRAY: {
-                if (ast->compound.values.len != compound_type->array.size &&
+                if (ast->compound.values.len != ast->type_info->array.size &&
                     ast->compound.values.len == 1)
                 {
                     // Only got one value, replicate it
@@ -1993,7 +1991,7 @@ static void llvm_codegen_ast(
                     llvm_codegen_ast(
                         l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
-                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    for (size_t i = 0; i < ast->type_info->array.size; ++i)
                     {
                         LLVMValueRef indices[2] = {
                             LLVMConstInt(LLVMInt32Type(), 0, false),
@@ -2009,13 +2007,13 @@ static void llvm_codegen_ast(
                 {
                     LLVMBuildStore(
                         mod->builder,
-                        LLVMConstNull(llvm_type(l, compound_type)),
+                        LLVMConstNull(llvm_type(l, ast->type_info)),
                         result_value.value);
                 }
                 else
                 {
                     assert(
-                        ast->compound.values.len == compound_type->array.size);
+                        ast->compound.values.len == ast->type_info->array.size);
 
                     for (Ast *value = ast->compound.values.ptr;
                          value !=
@@ -2046,14 +2044,14 @@ static void llvm_codegen_ast(
                 {
                     LLVMBuildStore(
                         mod->builder,
-                        LLVMConstNull(llvm_type(l, compound_type)),
+                        LLVMConstNull(llvm_type(l, ast->type_info)),
                         result_value.value);
                 }
                 else
                 {
                     assert(
                         (ast->compound.values.len) ==
-                        (compound_type->structure.fields.len));
+                        (ast->type_info->structure.fields.len));
 
                     for (Ast *value = ast->compound.values.ptr;
                          value !=
@@ -2100,7 +2098,7 @@ static void llvm_codegen_ast(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * ast->compound.values.len);
 
-                if ((ast->compound.values.len) != compound_type->array.size &&
+                if ((ast->compound.values.len) != ast->type_info->array.size &&
                     (ast->compound.values.len) == 1)
                 {
                     // Only got one value, replicate it
@@ -2108,7 +2106,7 @@ static void llvm_codegen_ast(
                     llvm_codegen_ast(
                         l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
-                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    for (size_t i = 0; i < ast->type_info->array.size; ++i)
                     {
                         values[i] = val.value;
                     }
@@ -2129,7 +2127,7 @@ static void llvm_codegen_ast(
                 }
 
                 result_value.value =
-                    LLVMConstVector(values, compound_type->array.size);
+                    LLVMConstVector(values, ast->type_info->array.size);
 
                 break;
             }
@@ -2139,7 +2137,7 @@ static void llvm_codegen_ast(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * ast->compound.values.len);
 
-                if ((ast->compound.values.len) != compound_type->array.size &&
+                if ((ast->compound.values.len) != ast->type_info->array.size &&
                     (ast->compound.values.len) == 1)
                 {
                     // Only got one value, replicate it
@@ -2147,7 +2145,7 @@ static void llvm_codegen_ast(
                     llvm_codegen_ast(
                         l, mod, &ast->compound.values.ptr[0], is_const, &val);
 
-                    for (size_t i = 0; i < compound_type->array.size; ++i)
+                    for (size_t i = 0; i < ast->type_info->array.size; ++i)
                     {
                         values[i] = val.value;
                     }
@@ -2170,7 +2168,7 @@ static void llvm_codegen_ast(
                 result_value.value = LLVMConstArray(
                     llvm_type(l, ast->type_info->array.sub),
                     values,
-                    compound_type->array.size);
+                    ast->type_info->array.size);
 
                 break;
             }

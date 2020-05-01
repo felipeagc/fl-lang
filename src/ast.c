@@ -242,7 +242,6 @@ struct Ast
         {
             struct Ast *type_expr;
             ArrayOfAst values;
-            struct TypeInfo* compound_type;
         } compound;
         struct
         {

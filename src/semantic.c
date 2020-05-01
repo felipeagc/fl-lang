@@ -3252,9 +3252,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 memset(compound, 0, sizeof(Ast));
                 compound->type = AST_COMPOUND_LIT;
 
-                compound->compound.compound_type = create_array_type(
+                compound->type_info = create_array_type(
                     a->compiler, variadic_type, variadic_arg_count);
-                compound->type_info = compound->compound.compound_type;
 
                 for (size_t i = (proc_ty->proc.params.len - 1);
                      i < ast->proc_call.params.len;
@@ -3890,7 +3889,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (!ast->compound.type_expr)
         {
             assert(ast->type_info);
-            assert(ast->compound.compound_type);
             break;
         }
 
@@ -3921,8 +3919,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        ast->compound.compound_type = ast->compound.type_expr->as_type;
-        ast->type_info = ast->compound.compound_type;
+        ast->type_info = ast->compound.type_expr->as_type;
 
         switch (ast->type_info->kind)
         {
@@ -3973,8 +3970,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         default: {
             if (ast->compound.values.len == 1)
             {
-                analyze_ast(
-                    a, &ast->compound.values.ptr[0], ast->type_info);
+                analyze_ast(a, &ast->compound.values.ptr[0], ast->type_info);
                 break;
             }
 
