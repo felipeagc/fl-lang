@@ -16,10 +16,10 @@ pub func eprint(str: string) {
     os.write_to_stream(os.get_stderr(), buf);
 }
 
-pub func printf(fmt: string, args: [_]@Any) {
+pub func printf(fmt: string, args: ..@Any) {
     var buf: [4096]char = void;
     var str = buf[0..0];
-    sprintf(fmt, &str, args);
+    sprintf(fmt, &str, ..args);
     print(str);
 }
 
@@ -85,7 +85,7 @@ func unsigned_itoa(into: *string, num: u64, base: u64) {
     }
 }
 
-pub func sprintf(fmt: string, into: *string, args: [_]@Any) {
+pub func sprintf(fmt: string, into: *string, args: ..@Any) {
     var argi: uint = 0;
 
     for (ch in fmt) {

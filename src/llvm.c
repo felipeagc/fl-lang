@@ -1967,7 +1967,7 @@ static void llvm_codegen_ast(
     case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
-        TypeInfo *compound_type = ast->compound.type_expr->as_type;
+        TypeInfo *compound_type = ast->compound.compound_type;
 
         if (!is_const)
         {

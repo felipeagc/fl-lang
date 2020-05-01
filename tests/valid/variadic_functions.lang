@@ -1,0 +1,11 @@
+import fmt "core:fmt";
+
+func variadic1(numbers: ..i32) {
+    for (n in numbers) {
+        fmt.printf("%\n", n);
+    }
+}
+
+func main() {
+    variadic1(1, 2, 3, 4, 5);
+}

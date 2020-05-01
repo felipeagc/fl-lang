@@ -197,6 +197,11 @@ static void instantiate_template(
         break;
     }
 
+    case AST_VARIADIC_ARG: {
+        INSTANTIATE_AST(expr);
+        break;
+    }
+
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
         if (ast->decl.type_expr) INSTANTIATE_AST(decl.type_expr);
@@ -906,6 +911,15 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
+    case AST_VARIADIC_ARG: {
+        if (!ast_as_type(a, scope, ast->expr, false)) break;
+
+        TypeInfo *ty = create_slice_type(a->compiler, ast->expr->as_type);
+
+        ast->as_type = ty;
+        break;
+    }
+
     case AST_SLICE_TYPE: {
         if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
 
@@ -1527,6 +1541,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_VARIADIC_ARG:
     case AST_TO_ANY:
     case AST_TYPE:
     case AST_STRUCT_FIELD_ALIAS:
@@ -2086,6 +2101,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->proc_param.type_expr->as_type);
         }
 
+        if (!ast->proc_param.type_expr->as_type)
+        {
+            compile_error(
+                a->compiler,
+                ast->proc_param.type_expr->loc,
+                "could not resolve type for function parameter");
+        }
+
         ast->type_info = ast->proc_param.type_expr->as_type;
 
         if (ast->flags & AST_FLAG_USING)
@@ -2271,16 +2294,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
 
-        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
-        {
-            ty->flags |= TYPE_FLAG_C_VARARGS;
-        }
-
-        if (ast->flags & AST_FLAG_EXTERN)
-        {
-            ty->flags |= TYPE_FLAG_EXTERN;
-        }
-
         bool valid_type = true;
 
         for (Ast *param = ast->proc.params.ptr;
@@ -2294,6 +2307,31 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
+            if (param->decl.type_expr->type == AST_VARIADIC_ARG &&
+                param != array_last(&ast->proc.params))
+            {
+                compile_error(
+                    a->compiler,
+                    param->loc,
+                    "variadic parameter must be the last one");
+                valid_type = false;
+            }
+
+            if (param->decl.type_expr->type == AST_VARIADIC_ARG)
+            {
+                if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "function cannot be c-vararg and vararg at the same "
+                        "time");
+                    valid_type = false;
+                }
+
+                ast->flags |= AST_FLAG_FUNCTION_IS_VARARGS;
+            }
+
             if ((ty->flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
                 is_type_compound(param->decl.type_expr->as_type))
             {
@@ -2301,6 +2339,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     a->compiler,
                     param->loc,
                     "extern functions cannot have compound parameters");
+                valid_type = false;
             }
 
             array_push(&ty->proc.params, param->decl.type_expr->as_type);
@@ -2324,6 +2363,21 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             valid_type = false;
         }
 
+        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
+        {
+            ty->flags |= TYPE_FLAG_C_VARARGS;
+        }
+
+        if (ast->flags & AST_FLAG_FUNCTION_IS_VARARGS)
+        {
+            ty->flags |= TYPE_FLAG_VARARGS;
+        }
+
+        if (ast->flags & AST_FLAG_EXTERN)
+        {
+            ty->flags |= TYPE_FLAG_EXTERN;
+        }
+
         if (valid_type)
         {
             TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
@@ -2331,6 +2385,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ptr_ty->kind = TYPE_POINTER;
             ptr_ty->ptr.sub = ty;
             ast->type_info = ptr_ty;
+        }
+        else
+        {
+            assert(a->compiler->errors.len > 0);
         }
         break;
     }
@@ -3114,9 +3172,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         assert(proc_ty);
         ast->type_info = proc_ty->proc.return_type;
 
-        if ((proc_ty->flags & TYPE_FLAG_C_VARARGS) != TYPE_FLAG_C_VARARGS)
+        if (proc_ty->flags & TYPE_FLAG_C_VARARGS)
         {
-            if ((ast->proc_call.params.len) != (proc_ty->proc.params.len))
+            if ((ast->proc_call.params.len) < (proc_ty->proc.params.len))
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "wrong parameter count for function call");
+                break;
+            }
+        }
+        else if (proc_ty->flags & TYPE_FLAG_VARARGS)
+        {
+            if ((ast->proc_call.params.len) < (proc_ty->proc.params.len - 1))
             {
                 compile_error(
                     a->compiler,
@@ -3127,7 +3196,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         else
         {
-            if ((ast->proc_call.params.len) < (proc_ty->proc.params.len))
+            if ((ast->proc_call.params.len) != (proc_ty->proc.params.len))
             {
                 compile_error(
                     a->compiler,
@@ -3140,14 +3209,77 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         assert(a->operand_scope_stack.len > 0);
 
         array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
-        for (size_t i = 0; i < ast->proc_call.params.len; ++i)
+        if (proc_ty->flags & TYPE_FLAG_VARARGS)
         {
-            TypeInfo *param_expected_type = NULL;
-            if (i < proc_ty->proc.params.len)
+            for (size_t i = 0; i < (proc_ty->proc.params.len - 1); ++i)
             {
-                param_expected_type = proc_ty->proc.params.ptr[i];
+                analyze_ast(
+                    a,
+                    &ast->proc_call.params.ptr[i],
+                    proc_ty->proc.params.ptr[i]);
             }
-            analyze_ast(a, &ast->proc_call.params.ptr[i], param_expected_type);
+
+            TypeInfo *slice_type =
+                proc_ty->proc.params.ptr[proc_ty->proc.params.len - 1];
+            assert(slice_type);
+            TypeInfo *variadic_type = slice_type->array.sub;
+            assert(variadic_type);
+
+            for (size_t i = (proc_ty->proc.params.len - 1);
+                 i < ast->proc_call.params.len;
+                 ++i)
+            {
+                analyze_ast(a, &ast->proc_call.params.ptr[i], variadic_type);
+            }
+
+            size_t variadic_arg_count =
+                ast->proc_call.params.len - (proc_ty->proc.params.len - 1);
+
+            Ast *slice_param =
+                &ast->proc_call.params.ptr[proc_ty->proc.params.len - 1];
+
+            if (variadic_arg_count == 1 &&
+                slice_param->type == AST_VARIADIC_ARG)
+            {
+                *slice_param = *slice_param->expr;
+            }
+            else
+            {
+                Ast *compound = bump_alloc(&a->compiler->bump, sizeof(Ast));
+                memset(compound, 0, sizeof(Ast));
+                compound->type = AST_COMPOUND_LIT;
+
+                compound->compound.compound_type = create_array_type(
+                    a->compiler, variadic_type, variadic_arg_count);
+                compound->type_info = compound->compound.compound_type;
+
+                for (size_t i = (proc_ty->proc.params.len - 1);
+                     i < ast->proc_call.params.len;
+                     ++i)
+                {
+                    array_push(
+                        &compound->compound.values,
+                        ast->proc_call.params.ptr[i]);
+                }
+
+                analyze_ast(a, compound, slice_type);
+
+                ast->proc_call.params.len = proc_ty->proc.params.len;
+                *slice_param = *compound;
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < ast->proc_call.params.len; ++i)
+            {
+                TypeInfo *param_expected_type = NULL;
+                if (i < proc_ty->proc.params.len)
+                {
+                    param_expected_type = proc_ty->proc.params.ptr[i];
+                }
+                analyze_ast(
+                    a, &ast->proc_call.params.ptr[i], param_expected_type);
+            }
         }
         array_pop(&a->scope_stack);
         break;
@@ -3759,6 +3891,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_COMPOUND_LIT: {
+        if (!ast->compound.type_expr)
+        {
+            assert(ast->type_info);
+            assert(ast->compound.compound_type);
+            break;
+        }
+
         if (ast->compound.type_expr->type == AST_ARRAY_TYPE &&
             !ast->compound.type_expr->array_type.size)
         {
@@ -3786,7 +3925,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *compound_type = ast->compound.type_expr->as_type;
+        ast->compound.compound_type = ast->compound.type_expr->as_type;
+        TypeInfo *compound_type = ast->compound.compound_type;
         ast->type_info = compound_type;
 
         switch (compound_type->kind)
@@ -3979,6 +4119,11 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         ast->type_info = create_slice_type(a->compiler, subtype);
 
+        break;
+    }
+
+    case AST_VARIADIC_ARG: {
+        analyze_ast(a, ast->expr, NULL);
         break;
     }
 
@@ -4414,6 +4559,12 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_TYPE: {
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
+             ++param)
+        {
+            check_used_asts(a, param);
+        }
         break;
     }
 
@@ -4432,6 +4583,13 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         }
         else
         {
+            for (Ast *param = ast->proc.params.ptr;
+                 param != ast->proc.params.ptr + ast->proc.params.len;
+                 ++param)
+            {
+                check_used_asts(a, param);
+            }
+
             array_push(&a->scope_stack, ast->scope);
             array_push(&a->operand_scope_stack, ast->scope);
             for (Ast *stmt = ast->proc.stmts.ptr;
@@ -4447,6 +4605,10 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_PARAM: {
+        if (ast->proc_param.type_expr)
+            check_used_asts(a, ast->proc_param.type_expr);
+        if (ast->proc_param.value_expr)
+            check_used_asts(a, ast->proc_param.value_expr);
         break;
     }
 
@@ -4501,6 +4663,11 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     }
 
     case AST_TO_ANY: {
+        check_used_asts(a, ast->expr);
+        break;
+    }
+
+    case AST_VARIADIC_ARG: {
         check_used_asts(a, ast->expr);
         break;
     }
@@ -4667,7 +4834,8 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     }
 
     case AST_COMPOUND_LIT: {
-        check_used_asts(a, ast->compound.type_expr);
+        if (ast->compound.type_expr)
+            check_used_asts(a, ast->compound.type_expr);
 
         for (Ast *value = ast->compound.values.ptr;
              value != ast->compound.values.ptr + ast->compound.values.len;

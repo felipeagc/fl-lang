@@ -16,6 +16,6 @@ func main() {
     }
 
     {
-        fmt.printf("hello % %\n", []@Any{-123456, 123456});
+        fmt.printf("hello % %\n", -123456, 123456);
     }
 }

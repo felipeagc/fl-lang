@@ -23,6 +23,7 @@ typedef enum TypeFlags {
     TYPE_FLAG_DISTINCT = 1 << 0,
     TYPE_FLAG_EXTERN = 1 << 1,
     TYPE_FLAG_C_VARARGS = 1 << 2,
+    TYPE_FLAG_VARARGS = 1 << 3,
     TYPE_FLAG_CAN_CHANGE = 1 << 10,
 } TypeFlags;
 

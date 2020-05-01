@@ -107,6 +107,17 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
 
+    case TOKEN_DOTDOT: {
+        parser_next(p, 1);
+
+        ast->type = AST_VARIADIC_ARG;
+        ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+        memset(ast->expr, 0, sizeof(*ast->expr));
+        if (!parse_expr(p, ast->expr, true)) res = false;
+
+        break;
+    }
+
     default: {
         parser_next(p, 1);
         res = false;
@@ -478,7 +489,6 @@ static bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
         while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
                !parser_is_at_end(p, 0))
         {
-
             Ast value = {0};
             if (parse_expr(p, &value, parsing_type))
             {

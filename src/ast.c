@@ -84,6 +84,7 @@ typedef enum AstType {
     AST_DISTINCT_TYPE,
     AST_USING,
     AST_DEFER,
+    AST_VARIADIC_ARG,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -117,6 +118,7 @@ typedef enum AstFlags {
     AST_FLAG_FUNCTION_IS_C_VARARGS = 1 << 8,
     AST_FLAG_WAS_USED = 1 << 9,
     AST_FLAG_TEMPLATE_INSTANTIATION = 1 << 10,
+    AST_FLAG_FUNCTION_IS_VARARGS = 1 << 11,
 } AstFlags;
 
 typedef struct AstAttribute
@@ -240,6 +242,7 @@ struct Ast
         {
             struct Ast *type_expr;
             ArrayOfAst values;
+            struct TypeInfo* compound_type;
         } compound;
         struct
         {
