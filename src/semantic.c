@@ -529,9 +529,10 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
     }
 
     case AST_SUBSCRIPT: {
-        if (is_expr_assignable(compiler, scope, ast->subscript.left))
+        res = true;
+        if (is_expr_const(compiler, scope, ast->subscript.left))
         {
-            res = true;
+            res = false;
         }
 
         break;
@@ -894,7 +895,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             break;
         }
 
-        if (resolves && size <= 0)
+        if (resolves && size < 0)
         {
             break;
         }
@@ -1657,6 +1658,30 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         register_symbol_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
         array_pop(&a->operand_scope_stack);
         array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_SWITCH: {
+        register_symbol_ast(a, ast->switch_stmt.expr);
+
+        for (Ast *val = ast->switch_stmt.vals.ptr;
+             val != ast->switch_stmt.vals.ptr + ast->switch_stmt.vals.len;
+             ++val)
+        {
+            register_symbol_ast(a, val);
+        }
+
+        for (Ast *stmt = ast->switch_stmt.stmts.ptr;
+             stmt != ast->switch_stmt.stmts.ptr + ast->switch_stmt.stmts.len;
+             ++stmt)
+        {
+            register_symbol_ast(a, stmt);
+        }
+
+        if (ast->switch_stmt.else_stmt)
+        {
+            register_symbol_ast(a, ast->switch_stmt.else_stmt);
+        }
         break;
     }
 
@@ -3400,7 +3425,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     }
 
     case AST_UNARY_EXPR: {
-        TypeInfo *sub_expected_type = NULL;
+        TypeInfo *operand_expected_type = NULL;
 
         switch (ast->unop.type)
         {
@@ -3408,15 +3433,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case UNOP_ADDRESS: {
             if (expected_type && expected_type->kind == TYPE_POINTER)
             {
-                sub_expected_type = expected_type->ptr.sub;
+                operand_expected_type = expected_type->ptr.sub;
             }
             break;
         }
-        case UNOP_NEG: sub_expected_type = expected_type; break;
+        case UNOP_NEG: operand_expected_type = expected_type; break;
         case UNOP_NOT: break;
         }
 
-        analyze_ast(a, ast->unop.sub, sub_expected_type);
+        if (expected_type && (expected_type->kind == TYPE_ANY))
+        {
+            operand_expected_type = NULL;
+        }
+
+        analyze_ast(a, ast->unop.sub, operand_expected_type);
 
         if (!ast->unop.sub->type_info)
         {
@@ -3496,8 +3526,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_DIV:
         case BINOP_MOD: {
             TypeInfo *operand_expected_type = expected_type;
-
-            if (expected_type && expected_type->kind == TYPE_VECTOR)
+            if (expected_type && (expected_type->kind == TYPE_VECTOR ||
+                                  expected_type->kind == TYPE_ANY))
             {
                 operand_expected_type = NULL;
             }
@@ -3582,8 +3612,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case BINOP_BITAND:
         case BINOP_BITOR:
         case BINOP_BITXOR: {
-            analyze_ast(a, ast->binop.left, expected_type);
-            analyze_ast(a, ast->binop.right, expected_type);
+            TypeInfo *operand_expected_type = expected_type;
+            if (expected_type && (expected_type->kind == TYPE_ANY))
+            {
+                operand_expected_type = NULL;
+            }
+
+            analyze_ast(a, ast->binop.left, operand_expected_type);
+            analyze_ast(a, ast->binop.right, operand_expected_type);
 
             TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
             TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);

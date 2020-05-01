@@ -1,5 +1,6 @@
 import c "core:c";
 import os "core:os";
+import runtime "core:runtime";
 
 pub func print(str: string) {
     var buf: [_]byte = void;
@@ -13,4 +14,111 @@ pub func eprint(str: string) {
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stderr(), buf);
+}
+
+pub func printf(fmt: string, args: [_]@Any) {
+    var buf: [4096]char = void;
+    var str = buf[0..0];
+    sprintf(fmt, &str, args);
+    print(str);
+}
+
+func signed_itoa(into: *string, num: i64, base: i64) {
+    var buf: [32]char;
+    var len: uint = 0;
+    var n = num;
+    var negative = n < 0;
+
+    if (negative) n = -n;
+
+    while (n > 0) {
+        var rem = n % base;
+        n /= base;
+
+        var ch: char = void;
+        if (rem <= 10) {
+            ch = cast(char)rem + '0';
+        } else {
+            ch = cast(char)rem + 'A';
+        }
+
+        buf[len] = ch;
+        len += 1;
+    }
+
+    if (negative) {
+        into.*[into.*.len] = '-';
+        into.*.len += 1;
+    }
+
+    while (len) {
+        len -= 1;
+        into.*[into.*.len] = buf[len];
+        into.*.len += 1;
+    }
+}
+
+func unsigned_itoa(into: *string, num: u64, base: u64) {
+    var buf: [32]char;
+    var len: uint = 0;
+
+    var n = num;
+    while (n > 0) {
+        var rem = n % base;
+        n /= base;
+
+        var ch: char = void;
+        if (rem <= 10) {
+            ch = cast(char)rem + '0';
+        } else {
+            ch = cast(char)rem + 'A';
+        }
+
+        buf[len] = ch;
+        len += 1;
+    }
+
+    while (len) {
+        len -= 1;
+        into.*[into.*.len] = buf[len];
+        into.*.len += 1;
+    }
+}
+
+pub func sprintf(fmt: string, into: *string, args: [_]@Any) {
+    var argi: uint = 0;
+
+    for (ch in fmt) {
+        if (ch == '%') {
+            switch (args[argi].type_info.kind) {
+                runtime.TypeKind.Int => {
+                    if (args[argi].type_info.integer.is_signed) {
+                        var num: i64 = void;
+                        switch (args[argi].type_info.integer.num_bits) {
+                            8  => num = cast(i64)(cast(*i8)args[argi].ptr).*;
+                            16 => num = cast(i64)(cast(*i16)args[argi].ptr).*;
+                            32 => num = cast(i64)(cast(*i32)args[argi].ptr).*;
+                            64 => num = cast(i64)(cast(*i64)args[argi].ptr).*;
+                        }
+                        signed_itoa(into, num, 10);
+                    } else {
+                        var num: u64 = void;
+                        switch (args[argi].type_info.integer.num_bits) {
+                            8  => num = cast(u64)(cast(*u8)args[argi].ptr).*;
+                            16 => num = cast(u64)(cast(*u16)args[argi].ptr).*;
+                            32 => num = cast(u64)(cast(*u32)args[argi].ptr).*;
+                            64 => num = cast(u64)(cast(*u64)args[argi].ptr).*;
+                        }
+                        unsigned_itoa(into, num, 10);
+                    }
+                }
+                else => {}
+            }
+
+            argi += 1;
+        } else {
+            into.*[into.*.len] = ch;
+            into.*.len += 1;
+        }
+    }
 }

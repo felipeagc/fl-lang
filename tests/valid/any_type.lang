@@ -1,4 +1,5 @@
 import c "core:c";
+import fmt "core:fmt";
 import runtime "core:runtime";
 
 func main() {
@@ -12,5 +13,9 @@ func main() {
         var a: @Any = hello;
         if (a.ptr != cast(*void)&hello) c.abort();
         if (a.type_info.kind != runtime.TypeKind.Int) c.abort();
+    }
+
+    {
+        fmt.printf("hello % %\n", []@Any{-123456, 123456});
     }
 }

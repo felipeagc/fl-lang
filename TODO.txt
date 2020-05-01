@@ -21,7 +21,6 @@ TODO:
 - build scripts
 - windows support in core library
 
-- any type
 - aligned type
 - @memset, @memcmp
 
