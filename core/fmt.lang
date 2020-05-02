@@ -25,6 +25,13 @@ pub func printf(fmt: string, args: ..@Any) {
     print(str);
 }
 
+pub func eprintf(fmt: string, args: ..@Any) {
+    var buf: [4096]char = void;
+    var str = buf[0..0];
+    sprintf(fmt, &str, ..args);
+    eprint(str);
+}
+
 func signed_itoa(into: *string, num: i64, base: i64) {
     var buf: [32]char;
     var len: uint = 0;

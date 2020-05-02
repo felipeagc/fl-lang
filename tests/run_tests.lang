@@ -37,7 +37,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
                 run.pid = pid;
                 run.path = path;
                 arrays.push(TestRun)(&runs, run);
-                c.printf(c"Testing '%.*s'\n", cast(c.Int)path.len, path.ptr);
+                fmt.eprintf("Testing '%'\n", path);
             }
         }
     }
@@ -56,10 +56,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
     var local_failures: uint = 0;
     for (*run in runs) {
         if (run.status != expected_status) {
-            c.printf(c"Failed '%.*s' with code %d\n", 
-                        cast(c.Int) run.path.len,
-                        run.path.ptr,
-                        run.status);
+            fmt.eprintf("Failed '%' with code %\n", run.path, run.status);
             local_failures += 1;
         }
     }
