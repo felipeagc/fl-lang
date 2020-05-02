@@ -416,6 +416,7 @@ create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
     ty->scope->type_info = ty;
 
     Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
     ptr_ast->type = AST_BUILTIN_PTR;
     ptr_ast->flags = AST_FLAG_PUBLIC;
     scope_set(ty->scope, STR("ptr"), ptr_ast);

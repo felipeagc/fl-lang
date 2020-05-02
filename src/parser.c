@@ -2175,7 +2175,7 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
             array_push(&ast->version_block.stmts, stmt);
         }
 
-        if (parser_peek(p, 0)->type == TOKEN_ELSE)
+        if (!parser_is_at_end(p, 0) && parser_peek(p, 0)->type == TOKEN_ELSE)
         {
             parser_next(p, 1);
 

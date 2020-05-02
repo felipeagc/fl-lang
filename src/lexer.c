@@ -673,10 +673,4 @@ void lex_file(Lexer *l, Compiler *compiler, SourceFile *file)
     {
         lex_token(l);
     }
-
-    /* for (Token *tok = l->tokens; tok != l->tokens + array_size(l->tokens); */
-    /*      ++tok) */
-    /* { */
-    /*     print_token(tok); */
-    /* } */
 }
