@@ -1,3 +1,5 @@
+module c
+
 pub typedef Int i32;
 pub typedef Size uint;
 pub typedef File struct {};

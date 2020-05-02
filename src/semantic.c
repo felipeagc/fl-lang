@@ -802,9 +802,18 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_TYPEDEF: {
         ast->as_type = ast_as_type(a, scope, ast->type_def.type_expr, false);
-        if (ast->type_def.type_expr->as_type)
+        if (ast->type_def.type_expr->as_type &&
+            !is_type_basic(ast->type_def.type_expr->as_type))
         {
-            ast->type_def.type_expr->as_type->type_def = ast;
+            sb_reset(&a->compiler->sb);
+            if (ast->loc.file->module_name.len > 0)
+            {
+                sb_append(&a->compiler->sb, ast->loc.file->module_name);
+                sb_append_char(&a->compiler->sb, '.');
+            }
+            sb_append(&a->compiler->sb, ast->type_def.name);
+            ast->type_def.type_expr->as_type->pretty_name =
+                sb_build(&a->compiler->sb, &a->compiler->bump);
         }
         break;
     }
@@ -865,6 +874,31 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             create_scopes_ast(a, cloned_ast);
             register_symbol_asts(a, cloned_ast, 1);
             analyze_asts(a, cloned_ast, 1);
+
+            if (cloned_ast->as_type && !is_type_basic(cloned_ast->as_type))
+            {
+                sb_reset(&a->compiler->sb);
+                if (ast->loc.file->module_name.len > 0)
+                {
+                    sb_append(&a->compiler->sb, ast->loc.file->module_name);
+                    sb_append_char(&a->compiler->sb, '.');
+                }
+                sb_append(&a->compiler->sb, sym->type_def.name);
+                sb_append_char(&a->compiler->sb, '(');
+                for (size_t i = 0; i < ast->proc_call.params.len; ++i)
+                {
+                    if (i > 0)
+                    {
+                        sb_append(&a->compiler->sb, STR(", "));
+                    }
+                    Ast *param = &ast->proc_call.params.ptr[i];
+                    print_pretty_type(
+                        &a->compiler->sb, ast_as_type(a, scope, param, false));
+                }
+                sb_append_char(&a->compiler->sb, ')');
+                cloned_ast->as_type->pretty_name =
+                    sb_build(&a->compiler->sb, &a->compiler->bump);
+            }
 
             ast->as_type = cloned_ast->as_type;
             ast->type_info = cloned_ast->type_info;
@@ -1680,6 +1714,18 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_MODULE_DECL: {
+        if (ast->loc.file->module_name.len != 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "duplicate module declaration");
+            break;
+        }
+        ast->loc.file->module_name = ast->module.name;
+
+        break;
+    }
+
     case AST_SWITCH: {
         register_symbol_ast(a, ast->switch_stmt.expr);
 
@@ -1881,18 +1927,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     {
     case AST_UNINITIALIZED: assert(0); break;
 
-    case AST_MODULE_DECL: {
-        if (ast->loc.file->module_name.len != 0)
-        {
-            compile_error(
-                a->compiler, ast->loc, "duplicate module declaration");
-            break;
-        }
-        ast->loc.file->module_name = ast->module.name;
-
-        break;
-    }
-
     case AST_RETURN: {
         Scope *scope = *array_last(&a->scope_stack);
 
@@ -1970,10 +2004,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->type_def.template_params.len == 0)
         {
             analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
-            if (ast->type_def.type_expr->as_type)
-            {
-                ast->type_def.type_expr->as_type->type_def = ast;
-            }
         }
         break;
     }
@@ -4348,9 +4378,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             // Type mismatch
             sb_reset(&a->compiler->sb);
             sb_append(&a->compiler->sb, STR("wrong type, expected "));
-            print_mangled_type(&a->compiler->sb, expected_type);
+            print_pretty_type(&a->compiler->sb, expected_type);
             sb_append(&a->compiler->sb, STR(", got "));
-            print_mangled_type(&a->compiler->sb, ast->type_info);
+            print_pretty_type(&a->compiler->sb, ast->type_info);
             String error = sb_build(&a->compiler->sb, &a->compiler->bump);
             compile_error(a->compiler, ast->loc, "%.*s", PRINT_STR(error));
 
@@ -4492,34 +4522,6 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count)
         }
     }
 }
-
-#define CHECK_USED_AST(ELEM)                                                   \
-    do                                                                         \
-    {                                                                          \
-        clone_into->ELEM = bump_alloc(&compiler->bump, sizeof(Ast));           \
-        instantiate_template(                                                  \
-            compiler,                                                          \
-            clone_into->ELEM,                                                  \
-            ast->ELEM,                                                         \
-            names_to_replace,                                                  \
-            replacements);                                                     \
-    } while (0)
-
-#define CHECK_USED_AST_ARRAY(ARRAY)                                            \
-    do                                                                         \
-    {                                                                          \
-        memset(&clone_into->ARRAY, 0, sizeof(clone_into->ARRAY));              \
-        array_add(&clone_into->ARRAY, ast->ARRAY.len);                         \
-        for (size_t i = 0; i < ast->ARRAY.len; ++i)                            \
-        {                                                                      \
-            instantiate_template(                                              \
-                compiler,                                                      \
-                &clone_into->ARRAY.ptr[i],                                     \
-                &ast->ARRAY.ptr[i],                                            \
-                names_to_replace,                                              \
-                replacements);                                                 \
-        }                                                                      \
-    } while (0)
 
 static void check_used_asts(Analyzer *a, Ast *ast)
 {

@@ -180,6 +180,15 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     return type->ref;
 }
 
+enum {
+    TYPEINFO_KIND_INDEX = 0,
+    TYPEINFO_ALIGN_INDEX = 1,
+    TYPEINFO_SIZE_INDEX = 2,
+    TYPEINFO_FLAGS_INDEX = 3,
+    TYPEINFO_NAME_INDEX = 4,
+    TYPEINFO_INFO_INDEX = 5,
+};
+
 static void
 generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
 {
@@ -197,7 +206,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         llvm_type(l, type_info_type->structure.fields.ptr[0]),
         type_info->kind,
         false);
-    indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_KIND_INDEX, false);
     LLVMBuildStore(
         mod->builder,
         kind_value,
@@ -207,7 +216,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         llvm_type(l, type_info_type->structure.fields.ptr[1]),
         type_info->align,
         false);
-    indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_ALIGN_INDEX, false);
     LLVMBuildStore(
         mod->builder,
         align_value,
@@ -217,7 +226,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         llvm_type(l, type_info_type->structure.fields.ptr[2]),
         type_info->size,
         false);
-    indices[1] = LLVMConstInt(LLVMInt32Type(), 2, false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_SIZE_INDEX, false);
     LLVMBuildStore(
         mod->builder,
         size_value,
@@ -227,16 +236,55 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         llvm_type(l, type_info_type->structure.fields.ptr[3]),
         type_info->flags,
         false);
-    indices[1] = LLVMConstInt(LLVMInt32Type(), 3, false);
+    indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_FLAGS_INDEX, false);
     LLVMBuildStore(
         mod->builder,
         flags_value,
         LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
 
-    indices[1] = LLVMConstInt(LLVMInt32Type(), 4, false);
+    if (type_info->pretty_name.len > 0)
+    {
+        indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_NAME_INDEX, false);
+        LLVMValueRef name_slice_ptr =
+            LLVMBuildGEP(mod->builder, ptr, indices, 2, "");
+
+        LLVMValueRef str_ptr = LLVMAddGlobal(
+            mod->mod,
+            LLVMArrayType(LLVMInt8Type(), type_info->pretty_name.len),
+            "");
+        LLVMSetLinkage(str_ptr, LLVMInternalLinkage);
+        LLVMSetGlobalConstant(str_ptr, true);
+        LLVMSetInitializer(
+            str_ptr,
+            LLVMConstString(
+                type_info->pretty_name.ptr, type_info->pretty_name.len, true));
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        str_ptr = LLVMConstGEP(str_ptr, indices, 2);
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        LLVMValueRef ptr_ptr =
+            LLVMBuildGEP(mod->builder, name_slice_ptr, indices, 2, "");
+        LLVMBuildStore(mod->builder, str_ptr, ptr_ptr);
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+        LLVMValueRef len_ptr =
+            LLVMBuildGEP(mod->builder, name_slice_ptr, indices, 2, "");
+        LLVMBuildStore(
+            mod->builder,
+            LLVMConstInt(
+                llvm_type(l, &UINT_TYPE), type_info->pretty_name.len, false),
+            len_ptr);
+    }
+
+    indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_INFO_INDEX, false);
     LLVMValueRef union_ptr = LLVMBuildGEP(mod->builder, ptr, indices, 2, "");
 
-    TypeInfo *info_union = type_info_type->structure.fields.ptr[4];
+    TypeInfo *info_union =
+        type_info_type->structure.fields.ptr[TYPEINFO_INFO_INDEX];
 
     TypeInfo *field = NULL;
     LLVMValueRef value_ptr = NULL;
@@ -731,8 +779,7 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                     LLVMAttributeFunctionIndex,
                     LLVMCreateEnumAttribute(
                         LLVMGetGlobalContext(),
-                        LLVMGetEnumAttributeKindForName(
-                            attrib.ptr, attrib.len),
+                        LLVMGetEnumAttributeKindForName(attrib.ptr, attrib.len),
                         0));
             }
 
@@ -931,11 +978,9 @@ static void llvm_codegen_ast(
                 LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.len),
                 "");
 
-            // set as internal linkage and constant
             LLVMSetLinkage(glob, LLVMInternalLinkage);
             LLVMSetGlobalConstant(glob, true);
 
-            // Initialize with string:
             LLVMSetInitializer(
                 glob,
                 LLVMConstString(

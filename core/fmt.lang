@@ -1,3 +1,5 @@
+module fmt
+
 import c "core:c"
 import os "core:os"
 import runtime "core:runtime"
@@ -90,28 +92,44 @@ pub func sprintf(fmt: string, into: *string, args: ..@Any) {
 
     for (ch in fmt) {
         if (ch == '%') {
-            switch (args[argi].type_info.kind) {
+            var arg = &args[argi];
+            switch (arg.type_info.kind) {
                 runtime.TypeKind.Int => {
-                    if (args[argi].type_info.integer.is_signed) {
+                    if (arg.type_info.integer.is_signed) {
                         var num: i64 = void;
-                        switch (args[argi].type_info.integer.num_bits) {
-                            8  => num = cast(i64)(cast(*i8)args[argi].ptr).*;
-                            16 => num = cast(i64)(cast(*i16)args[argi].ptr).*;
-                            32 => num = cast(i64)(cast(*i32)args[argi].ptr).*;
-                            64 => num = cast(i64)(cast(*i64)args[argi].ptr).*;
+                        switch (arg.type_info.integer.num_bits) {
+                            8  => num = cast(i64)(cast(*i8)arg.ptr).*;
+                            16 => num = cast(i64)(cast(*i16)arg.ptr).*;
+                            32 => num = cast(i64)(cast(*i32)arg.ptr).*;
+                            64 => num = cast(i64)(cast(*i64)arg.ptr).*;
                         }
                         signed_itoa(into, num, 10);
                     } else {
                         var num: u64 = void;
-                        switch (args[argi].type_info.integer.num_bits) {
-                            8  => num = cast(u64)(cast(*u8)args[argi].ptr).*;
-                            16 => num = cast(u64)(cast(*u16)args[argi].ptr).*;
-                            32 => num = cast(u64)(cast(*u32)args[argi].ptr).*;
-                            64 => num = cast(u64)(cast(*u64)args[argi].ptr).*;
+                        switch (arg.type_info.integer.num_bits) {
+                            8  => num = cast(u64)(cast(*u8)arg.ptr).*;
+                            16 => num = cast(u64)(cast(*u16)arg.ptr).*;
+                            32 => num = cast(u64)(cast(*u32)arg.ptr).*;
+                            64 => num = cast(u64)(cast(*u64)arg.ptr).*;
                         }
                         unsigned_itoa(into, num, 10);
                     }
                 }
+
+                runtime.TypeKind.Slice => {
+                    var sub = arg.type_info.array.sub;
+                    if (sub.kind == runtime.TypeKind.Int &&
+                        sub.integer.num_bits == 8 &&
+                        sub.integer.is_signed)
+                    {
+                        var str = cast(*string)(arg.ptr);
+                        for (ch in str.*) {
+                            into.*[into.*.len] = ch;
+                            into.*.len += 1;
+                        }
+                    }
+                }
+
                 else => {}
             }
 

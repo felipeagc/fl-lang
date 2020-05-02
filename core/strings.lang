@@ -1,3 +1,5 @@
+module strings
+
 import c "c.lang"
 
 pub func to_c_str_alloc(str: string) -> *char {

@@ -1,3 +1,5 @@
+module runtime
+
 pub typedef TypeKind enum u32 {
     Type = 2,
     Function = 3,
@@ -29,6 +31,7 @@ pub typedef TypeInfo struct {
     align: u32,
     size: u32,
     flags: u32,
+    name: string,
     using info: union {
         integer: struct {
             num_bits: u8,

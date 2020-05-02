@@ -1,5 +1,11 @@
 import runtime "core:runtime"
+import fmt "core:fmt"
 import "core:c"
+
+typedef MyStruct struct {
+    a: i32,
+    b: string
+};
 
 func main() {
     // Integer
@@ -35,13 +41,11 @@ func main() {
 
     // Struct
     {
-        var t = @type_info_of(runtime.TypeInfo);
+        var t = @type_info_of(MyStruct);
         if (t.kind != runtime.TypeKind.Struct) abort();
-        if (t.structure.fields.len != 5) abort();
-        if (t.structure.fields[0].kind != runtime.TypeKind.Enum) abort();
-        if (t.structure.fields[1].kind != runtime.TypeKind.Int) abort();
-        if (t.structure.fields[2].kind != runtime.TypeKind.Int) abort();
-        if (t.structure.fields[3].kind != runtime.TypeKind.Int) abort();
+        if (t.structure.fields.len != 2) abort();
+        if (t.structure.fields[0].kind != runtime.TypeKind.Int) abort();
+        if (t.structure.fields[1].kind != runtime.TypeKind.Slice) abort();
     }
 
     // Function

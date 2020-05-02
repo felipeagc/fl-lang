@@ -1,3 +1,5 @@
+module files
+
 version (posix) {
     import posix "core:posix"
     import c "core:c"

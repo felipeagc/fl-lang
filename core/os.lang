@@ -1,3 +1,5 @@
+module os
+
 version(posix) {
     import posix "core:posix"
     import strings "core:strings"

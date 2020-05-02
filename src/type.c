@@ -36,7 +36,7 @@ struct TypeInfo
     uint32_t rtti_index;
     LLVMTypeRef ref;
     struct Scope *scope;
-    struct Ast *type_def;
+    String pretty_name;
 
     union
     {
@@ -228,9 +228,18 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     }
 
     case TYPE_STRUCT: {
-        if (received->type_def || expected->type_def)
+        if ((received->pretty_name.len > 0) || (expected->pretty_name.len > 0))
         {
-            if (received->type_def != expected->type_def)
+            if ((received->pretty_name.len > 0) &&
+                (expected->pretty_name.len > 0))
+            {
+                if (!string_equals(
+                        received->pretty_name, expected->pretty_name))
+                {
+                    return NULL;
+                }
+            }
+            else
             {
                 return NULL;
             }
@@ -539,9 +548,13 @@ set_struct_type_fields(TypeInfo *struct_type, ArrayOfTypeInfoPtr *fields)
 
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
-    if (type->type_def)
+    if (type->pretty_name.len > 0)
     {
-        sb_sprintf(sb, "T%p", type->type_def);
+        sb_sprintf(
+            sb,
+            "T%zu%.*s",
+            type->pretty_name.len,
+            PRINT_STR(type->pretty_name));
         return;
     }
 
@@ -645,6 +658,126 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
             print_mangled_type(sb, type->structure.fields.ptr[i]);
         }
         sb_append(sb, STR("E"));
+        break;
+    }
+
+    case TYPE_UNINITIALIZED:
+    case TYPE_NONE: assert(0); break;
+    }
+}
+
+static void print_pretty_type(StringBuilder *sb, TypeInfo *type)
+{
+    if (type->pretty_name.len > 0)
+    {
+        assert(!is_type_basic(type));
+        sb_sprintf(sb, "%.*s", PRINT_STR(type->pretty_name));
+        return;
+    }
+
+    switch (type->kind)
+    {
+    case TYPE_TYPE: sb_append(sb, STR("@Type")); break;
+    case TYPE_TEMPLATE: sb_append(sb, STR("@Template")); break;
+
+    case TYPE_VOID: sb_append(sb, STR("void")); break;
+
+    case TYPE_BOOL: sb_append(sb, STR("bool")); break;
+
+    case TYPE_NAMESPACE: sb_append(sb, STR("@Namespace")); break;
+
+    case TYPE_ANY: sb_append(sb, STR("@Any")); break;
+
+    case TYPE_INT: {
+        if (type->integer.is_signed)
+        {
+            switch (type->integer.num_bits)
+            {
+            case 8: sb_append(sb, STR("i8")); break;
+            case 16: sb_append(sb, STR("i16")); break;
+            case 32: sb_append(sb, STR("i32")); break;
+            case 64: sb_append(sb, STR("i64")); break;
+            default: assert(0); break;
+            }
+        }
+        else
+        {
+            switch (type->integer.num_bits)
+            {
+            case 8: sb_append(sb, STR("u8")); break;
+            case 16: sb_append(sb, STR("u16")); break;
+            case 32: sb_append(sb, STR("u32")); break;
+            case 64: sb_append(sb, STR("u64")); break;
+            default: assert(0); break;
+            }
+        }
+
+        break;
+    }
+
+    case TYPE_FLOAT: {
+        switch (type->integer.num_bits)
+        {
+        case 32: sb_append(sb, STR("float")); break;
+        case 64: sb_append(sb, STR("double")); break;
+        default: assert(0); break;
+        }
+
+        break;
+    }
+
+    case TYPE_ENUM:
+        sb_append(sb, STR("enum "));
+        print_pretty_type(sb, type->enumeration.underlying_type);
+        break;
+
+    case TYPE_PROC: {
+        sb_append(sb, STR("func "));
+        for (size_t i = 0; i < type->proc.params.len; ++i)
+        {
+            if (i > 0) sb_append(sb, STR(", "));
+            print_pretty_type(sb, type->proc.params.ptr[i]);
+        }
+        sb_append(sb, STR(" -> "));
+        print_pretty_type(sb, type->proc.return_type);
+        break;
+    }
+
+    case TYPE_POINTER:
+        sb_append(sb, STR("*"));
+        print_pretty_type(sb, type->ptr.sub);
+        break;
+
+    case TYPE_ARRAY:
+        sb_sprintf(sb, "[%zu]", type->array.size);
+        print_pretty_type(sb, type->array.sub);
+        break;
+
+    case TYPE_VECTOR: {
+        sb_sprintf(sb, "@vector_type(");
+        print_pretty_type(sb, type->array.sub);
+        sb_sprintf(sb, ", %zu)", type->array.size);
+        break;
+    }
+
+    case TYPE_SLICE:
+        sb_append(sb, STR("[_]"));
+        print_pretty_type(sb, type->array.sub);
+        break;
+
+    case TYPE_DYNAMIC_ARRAY:
+        sb_append(sb, STR("[dyn]"));
+        print_pretty_type(sb, type->array.sub);
+        break;
+
+    case TYPE_STRUCT: {
+        sb_append(sb, STR("struct{"));
+        for (size_t i = 0; i < type->structure.fields.len; ++i)
+        {
+            if (i > 0) sb_append(sb, STR(", "));
+            print_pretty_type(sb, type->structure.fields.ptr[i]);
+        }
+        sb_append(sb, STR("}"));
         break;
     }
 

@@ -1,3 +1,5 @@
+module thread
+
 typedef ThreadStart func* (arg: *void) -> *void;
 
 version (posix) {

@@ -1,3 +1,5 @@
+module arrays
+
 import c "core:c"
 
 const DEFAULT_ARRAY_CAP: uint = 8;

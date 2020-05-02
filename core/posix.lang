@@ -1,3 +1,5 @@
+module posix
+
 pub typedef __u_char u8;
 pub typedef __u_short u16;
 pub typedef __u_int u32;
