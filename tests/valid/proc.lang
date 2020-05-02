@@ -1,3 +1,5 @@
+module main
+
 const hello: i32 = (123);
 var global_array: [5]i32;
 var global: i32 = 123;

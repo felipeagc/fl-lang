@@ -32,6 +32,11 @@ static String mangle_function_name(LLContext *l, Ast *ast)
 
     sb_reset(&l->compiler->sb);
     sb_append(&l->compiler->sb, STR("_F")); // mangled function prefix
+    if (ast->loc.file->module_name.len > 0)
+    {
+        sb_append(&l->compiler->sb, ast->loc.file->module_name);
+        sb_append_char(&l->compiler->sb, '.');
+    }
     sb_append(&l->compiler->sb, ast->proc.name);
 
     if (ast->proc.template_params.len > 0)
@@ -147,7 +152,13 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_STRUCT: {
         if (!type->structure.is_union)
         {
-            type->ref = LLVMStructCreateNamed(LLVMGetGlobalContext(), "");
+            char *struct_name = "";
+            if (type->pretty_name.len > 0)
+            {
+                struct_name = bump_c_str(&l->compiler->bump, type->pretty_name);
+            }
+            type->ref =
+                LLVMStructCreateNamed(LLVMGetGlobalContext(), struct_name);
             size_t field_count = type->structure.fields.len;
             LLVMTypeRef *field_types = bump_alloc(
                 &l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
@@ -4021,7 +4032,6 @@ static void llvm_codegen_ast(
 
     case AST_PROC_TYPE: break;
     case AST_TYPEDEF: break;
-    case AST_MODULE_DECL: break;
     default: assert(0); break;
     }
 }

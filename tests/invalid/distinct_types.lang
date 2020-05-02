@@ -1,3 +1,5 @@
+module main
+
 typedef MyInt distinct int;
 
 func main() {

@@ -126,8 +126,21 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
             return sym;
         }
 
-        if ((sym->loc.file == from_file ||
-             ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
+        if (sym->loc.file == from_file)
+        {
+            return sym;
+        }
+
+        if (sym->loc.file)
+        {
+            if (string_equals(
+                    sym->loc.file->module_name, from_file->module_name))
+            {
+                return sym;
+            }
+        }
+
+        if (sym->flags & AST_FLAG_PUBLIC)
         {
             return sym;
         }

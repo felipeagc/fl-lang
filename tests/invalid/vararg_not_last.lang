@@ -1,3 +1,5 @@
+module main
+
 func variadic(args: ..i32, a: i32) {
 
 }

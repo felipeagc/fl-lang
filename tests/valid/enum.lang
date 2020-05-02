@@ -1,3 +1,5 @@
+module main
+
 import "core:c"
 
 typedef MyEnum distinct enum u32 {

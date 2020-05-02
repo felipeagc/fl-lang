@@ -1,3 +1,5 @@
+module sdl
+
 pub const SDL_INIT_TIMER: Uint32          = 0x00000001;
 pub const SDL_INIT_AUDIO: Uint32          = 0x00000010;
 pub const SDL_INIT_VIDEO: Uint32          = 0x00000020;

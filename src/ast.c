@@ -85,7 +85,6 @@ typedef enum AstType {
     AST_USING,
     AST_DEFER,
     AST_VARIADIC_ARG,
-    AST_MODULE_DECL,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -120,6 +119,7 @@ typedef enum AstFlags {
     AST_FLAG_WAS_USED = 1 << 9,
     AST_FLAG_TEMPLATE_INSTANTIATION = 1 << 10,
     AST_FLAG_FUNCTION_IS_VARARGS = 1 << 11,
+    AST_FLAG_IS_TOP_LEVEL = 1 << 12,
 } AstFlags;
 
 typedef struct AstAttribute

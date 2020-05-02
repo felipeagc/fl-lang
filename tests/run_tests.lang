@@ -1,3 +1,5 @@
+module main
+
 import c "core:c"
 import os "core:os"
 import fmt "core:fmt"

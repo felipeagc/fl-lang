@@ -1,3 +1,5 @@
+module main
+
 import fmt "core:fmt"
 
 func variadic3(numbers: ..i32) {

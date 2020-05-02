@@ -1,3 +1,5 @@
+module main
+
 typedef MyEnum enum u32 {
     one = 1,
 };

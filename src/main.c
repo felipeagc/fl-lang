@@ -68,6 +68,11 @@ VSFindResult find_visual_studio_and_windows_sdk();
 typedef struct TypeInfo TypeInfo;
 typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
 
+typedef struct Module
+{
+    HashMap symbol_names;
+} Module;
+
 typedef struct Compiler
 {
     BumpAlloc bump;
@@ -76,6 +81,7 @@ typedef struct Compiler
     ArrayOfError errors;
     HashMap files;
     HashMap versions;
+    HashMap modules;
     struct LLContext *backend;
     String compiler_path;
     String compiler_dir;
@@ -88,6 +94,23 @@ typedef struct Compiler
     struct TypeInfo *type_info_type;
     ArrayOfTypeInfoPtr rtti_type_infos;
 } Compiler;
+
+static Module *get_module(Compiler *compiler, String module_name)
+{
+    Module *module = NULL;
+    if (hash_get(&compiler->modules, module_name, (void **)&module))
+    {
+        return module;
+    }
+
+    module = bump_alloc(&compiler->bump, sizeof(Module));
+    memset(module, 0, sizeof(Module));
+
+    hash_init(&module->symbol_names, 64);
+
+    hash_set(&compiler->modules, module_name, module);
+    return module;
+}
 
 static SourceFile *process_file(Compiler *compiler, String absolute_path);
 
@@ -156,6 +179,7 @@ static void compiler_init(Compiler *compiler)
     sb_init(&compiler->sb);
     hash_init(&compiler->files, 512);
     hash_init(&compiler->versions, 16);
+    hash_init(&compiler->modules, 16);
 
     compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));
     memset(compiler->backend, 0, sizeof(*compiler->backend));
@@ -231,6 +255,7 @@ static void compiler_init(Compiler *compiler)
 
 static void compiler_destroy(Compiler *compiler)
 {
+    hash_destroy(&compiler->modules);
     hash_destroy(&compiler->versions);
     hash_destroy(&compiler->files);
     sb_destroy(&compiler->sb);

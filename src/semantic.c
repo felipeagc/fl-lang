@@ -182,10 +182,6 @@ static void instantiate_template(
         break;
     }
 
-    case AST_MODULE_DECL: {
-        break;
-    }
-
     case AST_TYPEDEF: {
         INSTANTIATE_AST(type_def.type_expr);
         break;
@@ -1590,7 +1586,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_MODULE_DECL:
     case AST_VARIADIC_ARG:
     case AST_TO_ANY:
     case AST_TYPE:
@@ -1624,7 +1619,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     }
 }
 
-static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
+static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
 {
     Scope *scope = *array_last(&a->scope_stack);
     assert(scope);
@@ -1693,10 +1688,36 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
         {
             compile_error(
                 a->compiler,
-                *error_loc,
+                came_from->loc,
                 "duplicate declaration: '%.*s'",
                 PRINT_STR(sym_name));
             return;
+        }
+
+        if (came_from->flags & AST_FLAG_IS_TOP_LEVEL &&
+            (ast->type != AST_IMPORT))
+        {
+            String module_name = ast->loc.file->module_name;
+            Module *module = get_module(a->compiler, module_name);
+
+            Ast *found = NULL;
+            if (hash_get(&module->symbol_names, sym_name, (void **)&found))
+            {
+                compile_error(
+                    a->compiler,
+                    came_from->loc,
+                    "duplicate declaration in module '%.*s': '%.*s'",
+                    PRINT_STR(module_name),
+                    PRINT_STR(sym_name));
+                compile_error(
+                    a->compiler,
+                    found->loc,
+                    "duplicate declaration in module '%.*s': '%.*s'",
+                    PRINT_STR(module_name),
+                    PRINT_STR(sym_name));
+                return;
+            }
+            hash_set(&module->symbol_names, sym_name, ast);
         }
 
         scope_set(scope, sym_name, ast);
@@ -1722,18 +1743,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         register_symbol_asts(a, ast->block.stmts.ptr, ast->block.stmts.len);
         array_pop(&a->operand_scope_stack);
         array_pop(&a->scope_stack);
-        break;
-    }
-
-    case AST_MODULE_DECL: {
-        if (ast->loc.file->module_name.len != 0)
-        {
-            compile_error(
-                a->compiler, ast->loc, "duplicate module declaration");
-            break;
-        }
-        ast->loc.file->module_name = ast->module.name;
-
         break;
     }
 
@@ -1780,7 +1789,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
 
     case AST_CONST_DECL:
     case AST_VAR_DECL: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         if (ast->decl.type_expr)
         {
             register_symbol_ast(a, ast->decl.type_expr);
@@ -1793,7 +1802,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_PARAM: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         register_symbol_ast(a, ast->proc_param.type_expr);
         if (ast->proc_param.value_expr)
         {
@@ -1803,7 +1812,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_STRUCT_FIELD: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         register_symbol_ast(a, ast->struct_field.type_expr);
         if (ast->struct_field.value_expr)
         {
@@ -1813,12 +1822,12 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_ENUM_FIELD: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         break;
     }
 
     case AST_TYPEDEF: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         if (ast->type_def.template_params.len == 0)
         {
             register_symbol_ast(a, ast->type_def.type_expr);
@@ -1827,7 +1836,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_IMPORT: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         break;
     }
 
@@ -1902,7 +1911,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     case AST_FOREACH: {
         array_push(&a->scope_stack, ast->scope);
         array_push(&a->operand_scope_stack, ast->scope);
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
         register_symbol_ast(a, ast->foreach_stmt.iterator);
         register_symbol_ast(a, ast->foreach_stmt.stmt);
         array_pop(&a->operand_scope_stack);
@@ -1911,7 +1920,7 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
     }
 
     case AST_PROC_DECL: {
-        register_symbol_ast_leaf(a, ast, &ast->loc);
+        register_symbol_ast_leaf(a, ast, ast);
 
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
         {
@@ -2055,7 +2064,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             Scope *old_scope = sym->sym_scope;
             assert(old_scope);
 
-            register_symbol_ast_leaf(a, sym, &ast->loc);
+            register_symbol_ast_leaf(a, sym, ast);
 
             sym->sym_scope = old_scope;
         }
@@ -2202,7 +2211,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 Scope *old_scope = sym->sym_scope;
                 assert(old_scope);
 
-                register_symbol_ast_leaf(a, sym, &ast->loc);
+                register_symbol_ast_leaf(a, sym, ast);
 
                 sym->sym_scope = old_scope;
             }
@@ -2254,7 +2263,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
                     analyze_ast(a, field_alias, NULL);
 
-                    register_symbol_ast_leaf(a, field_alias, &ast->loc);
+                    register_symbol_ast_leaf(a, field_alias, ast);
                 }
             }
             array_pop(&a->scope_stack);
@@ -4607,10 +4616,6 @@ static void check_used_asts(Analyzer *a, Ast *ast)
 
     case AST_ENUM: {
         // TODO: check enum field values
-        break;
-    }
-
-    case AST_MODULE_DECL: {
         break;
     }
 

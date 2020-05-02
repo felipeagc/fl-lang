@@ -1,3 +1,5 @@
+module main
+
 const my_const: u64 = @size_of(i32);
 
 func main() {

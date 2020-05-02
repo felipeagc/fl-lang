@@ -24,6 +24,7 @@ typedef ARRAY_OF(char *) ArrayOfCharPtr;
 static inline bool string_equals(String a, String b)
 {
     if (a.len != b.len) return false;
+    if (a.len == 0) return true;
     return strncmp(a.ptr, b.ptr, a.len) == 0;
 }
 

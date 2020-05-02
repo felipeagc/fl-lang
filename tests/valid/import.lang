@@ -1,4 +1,7 @@
+module main
+
 import hello "imported.lang"
+import same_module "same_module.lang"
 import fmt "core:fmt"
 
 func main() {
@@ -17,4 +20,7 @@ func main() {
     fmt.print("Hello\n");
 
     hello.fmt.print("yo\n");
+
+    // Use a function that is private to this module
+    same_module.some_func();
 }

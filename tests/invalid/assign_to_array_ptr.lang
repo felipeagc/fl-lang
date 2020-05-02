@@ -1,3 +1,5 @@
+module main
+
 func main() {
     var arr: [1]i32;
     arr.ptr = null;

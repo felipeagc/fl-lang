@@ -1,3 +1,5 @@
+module main
+
 func return_int() -> i32 {
 
 }

@@ -1,3 +1,5 @@
+module main
+
 extern func puts(str: *i8);
 
 func add(a: i32, b: i32) {

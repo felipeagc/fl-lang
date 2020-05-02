@@ -1,3 +1,5 @@
+module main
+
 import "core:c"
 
 const const1: float = -3 * 5.8 + 9.1;

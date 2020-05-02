@@ -1,0 +1,5 @@
+module main
+
+func some_func() {
+
+}

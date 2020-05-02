@@ -1,1 +1,3 @@
+module main
+
 const my_const: i32;

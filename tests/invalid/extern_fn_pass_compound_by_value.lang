@@ -1,3 +1,5 @@
+module main
+
 typedef Vec3 struct {
     e: [3]float,
 };

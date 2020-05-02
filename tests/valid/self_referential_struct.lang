@@ -1,3 +1,5 @@
+module main
+
 import "core:c"
 
 pub typedef Test struct {

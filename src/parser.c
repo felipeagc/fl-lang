@@ -1664,6 +1664,8 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
     ast->loc = parser_peek(p, 0)->loc;
     bool res = true;
 
+    ast->flags |= AST_FLAG_IS_TOP_LEVEL;
+
     Token *tok = parser_peek(p, 0);
     switch (tok->type)
     {
@@ -2206,20 +2208,6 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
         break;
     }
 
-    case TOKEN_MODULE: {
-        parser_next(p, 1);
-
-        ast->type = AST_MODULE_DECL;
-
-        Token *name_tok = parser_consume(p, TOKEN_IDENT);
-        if (!name_tok)
-            res = false;
-        else
-            ast->module.name = name_tok->str;
-
-        break;
-    }
-
     default: {
         res = false;
         compile_error(
@@ -2248,6 +2236,18 @@ static void parse_file(Parser *p, Compiler *compiler, Lexer *lexer)
     p->ast = bump_alloc(&p->compiler->bump, sizeof(Ast));
     memset(p->ast, 0, sizeof(*p->ast));
     p->ast->type = AST_ROOT;
+
+    if (!(parser_peek(p, 0)->type == TOKEN_MODULE &&
+          parser_peek(p, 1)->type == TOKEN_IDENT))
+    {
+        compile_error(
+            p->compiler, parser_peek(p, 0)->loc, "expected module declaration");
+        return;
+    }
+
+    parser_next(p, 1);
+    Token *name_tok = parser_next(p, 1);
+    name_tok->loc.file->module_name = name_tok->str;
 
     while (!parser_is_at_end(p, 0))
     {

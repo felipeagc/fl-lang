@@ -1,3 +1,5 @@
+module main
+
 func main() {
     var hello: i32 = a;
 }

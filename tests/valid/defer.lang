@@ -1,3 +1,5 @@
+module main
+
 import "core:fmt"
 
 func main() {

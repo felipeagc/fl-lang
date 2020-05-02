@@ -1,3 +1,5 @@
+module main
+
 extern func printf(fmt: *char, ...);
 
 func some_func(a: *void) {

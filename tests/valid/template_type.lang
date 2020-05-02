@@ -1,3 +1,5 @@
+module main
+
 typedef Hello(T) struct {
     t: T 
 };

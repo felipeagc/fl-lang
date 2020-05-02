@@ -1,3 +1,5 @@
+module other_module
+
 pub import fmt "core:fmt"
 
 pub const array_size = 5;

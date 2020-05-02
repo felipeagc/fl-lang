@@ -1,3 +1,5 @@
+module main
+
 const ARRAY_SIZE: i64 = 5;
 
 typedef MyArrayType [ARRAY_SIZE]i32;

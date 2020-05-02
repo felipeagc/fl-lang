@@ -1,3 +1,5 @@
+module main
+
 import "sdl.lang"
 import c "core:c"
 import fmt "core:fmt"

@@ -1,3 +1,5 @@
+module main
+
 import runtime "core:runtime"
 import fmt "core:fmt"
 import "core:c"

@@ -1,3 +1,5 @@
+module main
+
 import fmt "core:fmt"
 
 typedef MyFunc func* ();
