@@ -142,6 +142,7 @@ static void instantiate_template(
 
     case AST_VERSION_BLOCK: {
         INSTANTIATE_ARRAY(version_block.stmts);
+        INSTANTIATE_ARRAY(version_block.else_stmts);
         break;
     }
 
@@ -1309,6 +1310,16 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
                 create_scopes_ast(a, stmt);
             }
         }
+        else
+        {
+            for (Ast *stmt = ast->version_block.else_stmts.ptr;
+                 stmt != ast->version_block.else_stmts.ptr +
+                             ast->version_block.else_stmts.len;
+                 ++stmt)
+            {
+                create_scopes_ast(a, stmt);
+            }
+        }
 
         break;
     }
@@ -1756,6 +1767,13 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
             register_symbol_asts(
                 a, ast->version_block.stmts.ptr, ast->version_block.stmts.len);
         }
+        else
+        {
+            register_symbol_asts(
+                a,
+                ast->version_block.else_stmts.ptr,
+                ast->version_block.else_stmts.len);
+        }
 
         break;
     }
@@ -1995,6 +2013,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             analyze_asts(
                 a, ast->version_block.stmts.ptr, ast->version_block.stmts.len);
+        }
+        else
+        {
+            analyze_asts(
+                a,
+                ast->version_block.else_stmts.ptr,
+                ast->version_block.else_stmts.len);
         }
 
         break;
@@ -4561,6 +4586,16 @@ static void check_used_asts(Analyzer *a, Ast *ast)
             for (Ast *stmt = ast->version_block.stmts.ptr;
                  stmt !=
                  ast->version_block.stmts.ptr + ast->version_block.stmts.len;
+                 ++stmt)
+            {
+                check_used_asts(a, stmt);
+            }
+        }
+        else
+        {
+            for (Ast *stmt = ast->version_block.else_stmts.ptr;
+                 stmt != ast->version_block.else_stmts.ptr +
+                             ast->version_block.else_stmts.len;
                  ++stmt)
             {
                 check_used_asts(a, stmt);

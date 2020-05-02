@@ -121,6 +121,12 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     default: {
         parser_next(p, 1);
         res = false;
+        compile_error(
+            p->compiler,
+            tok->loc,
+            "unexpected token: '%.*s'",
+            tok->loc.length,
+            tok->loc.buf);
         break;
     }
     }
@@ -1320,21 +1326,60 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY))
+        if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
-            res = false;
-            break;
-        }
+            if (!parser_consume(p, TOKEN_LCURLY))
+            {
+                res = false;
+                break;
+            }
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-               !parser_is_at_end(p, 0))
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                   !parser_is_at_end(p, 0))
+            {
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true)) res = false;
+                array_push(&ast->version_block.stmts, stmt);
+            }
+
+            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        }
+        else
         {
             Ast stmt = {0};
             if (!parse_stmt(p, &stmt, true)) res = false;
             array_push(&ast->version_block.stmts, stmt);
         }
 
-        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        if (parser_peek(p, 0)->type == TOKEN_ELSE)
+        {
+            parser_next(p, 1);
+
+            if (parser_peek(p, 0)->type == TOKEN_LCURLY)
+            {
+                if (!parser_consume(p, TOKEN_LCURLY))
+                {
+                    res = false;
+                    break;
+                }
+
+                while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                       !parser_is_at_end(p, 0))
+                {
+                    Ast stmt = {0};
+                    if (!parse_stmt(p, &stmt, true)) res = false;
+                    array_push(&ast->version_block.else_stmts, stmt);
+                }
+
+                if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+            }
+            else
+            {
+                Ast stmt = {0};
+                if (!parse_stmt(p, &stmt, true)) res = false;
+                array_push(&ast->version_block.else_stmts, stmt);
+            }
+        }
 
         break;
     }
@@ -1572,26 +1617,29 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
         Ast expr = {0};
         if (!parse_expr(p, &expr, false)) res = false;
 
-        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+        if (res)
         {
-            ast->type = AST_VAR_ASSIGN;
+            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            {
+                ast->type = AST_VAR_ASSIGN;
 
-            ast->assign.assigned_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            *ast->assign.assigned_expr = expr;
+                ast->assign.assigned_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                *ast->assign.assigned_expr = expr;
 
-            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+                if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
-            ast->assign.value_expr =
-                bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->assign.value_expr, false)) res = false;
-        }
-        else
-        {
-            ast->type = AST_EXPR_STMT;
+                ast->assign.value_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->assign.value_expr, false)) res = false;
+            }
+            else
+            {
+                ast->type = AST_EXPR_STMT;
 
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            *ast->expr = expr;
+                ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+                *ast->expr = expr;
+            }
         }
 
         break;
@@ -2099,21 +2147,60 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
 
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
-        if (!parser_consume(p, TOKEN_LCURLY))
+        if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
-            res = false;
-            break;
-        }
+            if (!parser_consume(p, TOKEN_LCURLY))
+            {
+                res = false;
+                break;
+            }
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-               !parser_is_at_end(p, 0))
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                   !parser_is_at_end(p, 0))
+            {
+                Ast stmt = {0};
+                if (!parse_top_level_stmt(p, &stmt)) res = false;
+                array_push(&ast->version_block.stmts, stmt);
+            }
+
+            if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        }
+        else
         {
             Ast stmt = {0};
             if (!parse_top_level_stmt(p, &stmt)) res = false;
             array_push(&ast->version_block.stmts, stmt);
         }
 
-        if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+        if (parser_peek(p, 0)->type == TOKEN_ELSE)
+        {
+            parser_next(p, 1);
+
+            if (parser_peek(p, 0)->type == TOKEN_LCURLY)
+            {
+                if (!parser_consume(p, TOKEN_LCURLY))
+                {
+                    res = false;
+                    break;
+                }
+
+                while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                       !parser_is_at_end(p, 0))
+                {
+                    Ast stmt = {0};
+                    if (!parse_top_level_stmt(p, &stmt)) res = false;
+                    array_push(&ast->version_block.else_stmts, stmt);
+                }
+
+                if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+            }
+            else
+            {
+                Ast stmt = {0};
+                if (!parse_top_level_stmt(p, &stmt)) res = false;
+                array_push(&ast->version_block.else_stmts, stmt);
+            }
+        }
 
         break;
     }

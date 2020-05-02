@@ -839,6 +839,15 @@ static void llvm_codegen_ast(
                 ast->version_block.stmts.len,
                 is_const);
         }
+        else
+        {
+            llvm_codegen_ast_children(
+                l,
+                mod,
+                ast->version_block.else_stmts.ptr,
+                ast->version_block.else_stmts.len,
+                is_const);
+        }
 
         break;
     }
