@@ -44,7 +44,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
 
     defer for (run in runs) {
         strings.free(run.path);
-    };
+    }
 
     for (*run in runs) {
         if (!os.wait_process(run.pid, &run.status)) {

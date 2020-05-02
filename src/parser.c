@@ -1186,9 +1186,10 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
     case TOKEN_DEFER: {
         parser_next(p, 1);
         ast->type = AST_DEFER;
+        need_semi = false;
 
         ast->stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->stmt, false)) res = false;
+        if (!parse_stmt(p, ast->stmt, true)) res = false;
 
         break;
     }

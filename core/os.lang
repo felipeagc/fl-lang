@@ -31,7 +31,7 @@ version(posix) {
         }
         defer for (var i: uint = 0; i < args.len; i += 1) {
             c.free(actual_args[i]);
-        };
+        }
 
         actual_args[args.len] = null; // null terminate the list
 
