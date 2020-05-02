@@ -25,20 +25,20 @@ static inline bool is_alphanum(char c)
 
 static inline bool lex_is_at_end(Lexer *l)
 {
-    return (l->pos >= l->file->content.length) ||
-           (l->file->content.buf[l->pos] == '\0');
+    return (l->pos >= l->file->content.len) ||
+           (l->file->content.ptr[l->pos] == '\0');
 }
 
 static inline char lex_next(Lexer *l, size_t count)
 {
-    char c = l->file->content.buf[l->pos];
+    char c = l->file->content.ptr[l->pos];
     l->pos += count;
     return c;
 }
 
 static inline char lex_peek(Lexer *l, size_t offset)
 {
-    return l->file->content.buf[l->pos + offset];
+    return l->file->content.ptr[l->pos + offset];
 }
 
 void lex_token(Lexer *l)
@@ -47,7 +47,7 @@ void lex_token(Lexer *l)
 
     Token tok = {0};
     tok.loc.file = l->file;
-    tok.loc.buf = &l->file->content.buf[l->pos];
+    tok.loc.buf = &l->file->content.ptr[l->pos];
     tok.loc.length = 0;
     tok.loc.line = l->line;
     tok.loc.col = l->col;
@@ -395,8 +395,8 @@ void lex_token(Lexer *l)
         lex_next(l, tok.loc.length);
 
         tok.type = TOKEN_INTRINSIC;
-        tok.str.buf = tok.loc.buf + 1;
-        tok.str.length = tok.loc.length - 1;
+        tok.str.ptr = tok.loc.buf + 1;
+        tok.str.len = tok.loc.length - 1;
         break;
     }
     case '\'': {
@@ -568,8 +568,8 @@ void lex_token(Lexer *l)
 
             if (tok.type == TOKEN_IDENT)
             {
-                tok.str.buf = tok.loc.buf;
-                tok.str.length = tok.loc.length;
+                tok.str.ptr = tok.loc.buf;
+                tok.str.len = tok.loc.length;
             }
 
             break;
@@ -601,8 +601,8 @@ void lex_token(Lexer *l)
 
                 char *str = bump_c_str(
                     &l->compiler->bump,
-                    (String){.buf = (tok.loc.buf + 2),
-                             .length = (tok.loc.length - 2)});
+                    (String){.ptr = (tok.loc.buf + 2),
+                             .len = (tok.loc.length - 2)});
 
                 tok.i64 = strtol(str, NULL, 16);
 
@@ -628,7 +628,7 @@ void lex_token(Lexer *l)
 
             char *str = bump_c_str(
                 &l->compiler->bump,
-                (String){.buf = tok.loc.buf, .length = tok.loc.length});
+                (String){.ptr = tok.loc.buf, .len = tok.loc.length});
 
             if (dot_ptr)
             {

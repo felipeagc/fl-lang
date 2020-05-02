@@ -74,31 +74,31 @@ static void *bump_alloc(BumpAlloc *alloc, size_t size)
 static String bump_strdup(BumpAlloc *alloc, String str)
 {
     String s;
-    s.length = str.length;
-    s.buf = bump_alloc(alloc, s.length);
-    memcpy(s.buf, str.buf, str.length);
+    s.len = str.len;
+    s.ptr = bump_alloc(alloc, s.len);
+    memcpy(s.ptr, str.ptr, str.len);
     return s;
 }
 
 static String bump_str_join(BumpAlloc *alloc, String a, String b)
 {
     String s;
-    s.length = a.length + b.length;
-    s.buf = bump_alloc(alloc, s.length);
-    memcpy(s.buf, a.buf, a.length);
-    memcpy(s.buf + a.length, b.buf, b.length);
+    s.len = a.len + b.len;
+    s.ptr = bump_alloc(alloc, s.len);
+    memcpy(s.ptr, a.ptr, a.len);
+    memcpy(s.ptr + a.len, b.ptr, b.len);
     return s;
 }
 
 static char *bump_c_str(BumpAlloc *alloc, String str)
 {
     char *s;
-    s = bump_alloc(alloc, str.length + 1);
-    for (size_t i = 0; i < str.length; i++)
+    s = bump_alloc(alloc, str.len + 1);
+    for (size_t i = 0; i < str.len; i++)
     {
-        s[i] = str.buf[i];
+        s[i] = str.ptr[i];
     }
-    s[str.length] = '\0';
+    s[str.len] = '\0';
     return s;
 }
 

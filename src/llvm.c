@@ -732,7 +732,7 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                     LLVMCreateEnumAttribute(
                         LLVMGetGlobalContext(),
                         LLVMGetEnumAttributeKindForName(
-                            attrib.buf, attrib.length),
+                            attrib.ptr, attrib.len),
                         0));
             }
 
@@ -928,7 +928,7 @@ static void llvm_codegen_ast(
         case TOKEN_STRING_LIT: {
             LLVMValueRef glob = LLVMAddGlobal(
                 mod->mod,
-                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
+                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.len),
                 "");
 
             // set as internal linkage and constant
@@ -939,8 +939,8 @@ static void llvm_codegen_ast(
             LLVMSetInitializer(
                 glob,
                 LLVMConstString(
-                    ast->primary.tok->str.buf,
-                    ast->primary.tok->str.length,
+                    ast->primary.tok->str.ptr,
+                    ast->primary.tok->str.len,
                     true));
 
             AstValue value = {0};
@@ -955,7 +955,7 @@ static void llvm_codegen_ast(
         case TOKEN_CSTRING_LIT: {
             LLVMValueRef glob = LLVMAddGlobal(
                 mod->mod,
-                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.length),
+                LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.len),
                 "");
 
             // set as internal linkage and constant
@@ -966,8 +966,8 @@ static void llvm_codegen_ast(
             LLVMSetInitializer(
                 glob,
                 LLVMConstString(
-                    ast->primary.tok->str.buf,
-                    ast->primary.tok->str.length,
+                    ast->primary.tok->str.ptr,
+                    ast->primary.tok->str.len,
                     true));
 
             LLVMValueRef zero = LLVMConstInt(LLVMInt32Type(), 0, false);
@@ -1202,7 +1202,7 @@ static void llvm_codegen_ast(
 
             LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
                 mod->mod,
-                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                LLVMLookupIntrinsicID(intrin_name.ptr, intrin_name.len),
                 &param_type,
                 1);
 
@@ -1225,7 +1225,7 @@ static void llvm_codegen_ast(
 
             LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
                 mod->mod,
-                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                LLVMLookupIntrinsicID(intrin_name.ptr, intrin_name.len),
                 &param_type,
                 1);
 
@@ -1248,7 +1248,7 @@ static void llvm_codegen_ast(
 
             LLVMValueRef intrinsic = LLVMGetIntrinsicDeclaration(
                 mod->mod,
-                LLVMLookupIntrinsicID(intrin_name.buf, intrin_name.length),
+                LLVMLookupIntrinsicID(intrin_name.ptr, intrin_name.len),
                 &param_type,
                 1);
 
@@ -3967,6 +3967,7 @@ static void llvm_codegen_ast(
 
     case AST_PROC_TYPE: break;
     case AST_TYPEDEF: break;
+    case AST_MODULE_DECL: break;
     default: assert(0); break;
     }
 }

@@ -102,8 +102,7 @@ compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, vl);
     va_end(vl);
 
-    String message = bump_strdup(
-        &compiler->bump, (String){.buf = buf, .length = strlen(buf)});
+    String message = bump_strdup(&compiler->bump, CSTR(buf));
 
     Error err = {.loc = loc, .message = message};
     array_push(&compiler->errors, err);
@@ -125,12 +124,10 @@ static void print_errors(Compiler *compiler)
             fprintf(
                 stderr,
                 "%.*s:%u:%u: error: %.*s\n",
-                (int)err->loc.file->path.length,
-                err->loc.file->path.buf,
+                PRINT_STR(err->loc.file->path),
                 err->loc.line,
                 err->loc.col,
-                (int)err->message.length,
-                err->message.buf);
+                PRINT_STR(err->message));
         }
         exit(1);
     }
@@ -249,20 +246,16 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
     FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
     if (!f)
     {
-        fprintf(
-            stderr,
-            "Failed to open file: %.*s",
-            (int)file->path.length,
-            file->path.buf);
+        fprintf(stderr, "Failed to open file: %.*s", PRINT_STR(file->path));
         abort();
     }
 
     fseek(f, 0, SEEK_END);
-    file->content.length = (uint32_t)ftell(f);
+    file->content.len = (uint32_t)ftell(f);
     fseek(f, 0, SEEK_SET);
 
-    file->content.buf = malloc(file->content.length);
-    fread(file->content.buf, 1, file->content.length, f);
+    file->content.ptr = malloc(file->content.len);
+    fread(file->content.ptr, 1, file->content.len, f);
     fclose(f);
 }
 
@@ -384,7 +377,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
         SourceFile *imported_file =
             process_file(compiler, ast->import.abs_path);
 
-        if (ast->import.name.buf == NULL)
+        if (ast->import.name.ptr == NULL)
         {
             array_push(&scope->siblings, imported_file->root->scope);
         }

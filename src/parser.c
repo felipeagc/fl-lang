@@ -181,8 +181,7 @@ static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
                     p->compiler,
                     expr.loc,
                     "unknown intrinsic: '%.*s'",
-                    (int)expr.primary.tok->str.length,
-                    expr.primary.tok->str.buf);
+                    PRINT_STR(expr.primary.tok->str));
                 res = false;
             }
 
@@ -1159,8 +1158,7 @@ static bool parse_expr(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
-static bool
-parse_stmt(Parser *p, Ast *ast, bool need_semi)
+static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
 {
     memset(ast, 0, sizeof(*ast));
     ast->loc = parser_peek(p, 0)->loc;
@@ -1359,8 +1357,7 @@ parse_stmt(Parser *p, Ast *ast, bool need_semi)
         if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         ast->if_stmt.cond_stmt = bump_alloc(&p->compiler->bump, sizeof(Ast));
-        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true))
-            res = false;
+        if (!parse_stmt(p, ast->if_stmt.cond_stmt, true)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_ELSE)
         {
@@ -1368,8 +1365,7 @@ parse_stmt(Parser *p, Ast *ast, bool need_semi)
 
             ast->if_stmt.else_stmt =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_stmt(p, ast->if_stmt.else_stmt, true))
-                res = false;
+            if (!parse_stmt(p, ast->if_stmt.else_stmt, true)) res = false;
         }
 
         break;
@@ -1529,8 +1525,7 @@ parse_stmt(Parser *p, Ast *ast, bool need_semi)
             {
                 ast->for_stmt.init =
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
-                if (!parse_stmt(p, ast->for_stmt.init, false))
-                    res = false;
+                if (!parse_stmt(p, ast->for_stmt.init, false)) res = false;
             }
 
             if (!parser_consume(p, TOKEN_SEMICOLON)) res = false;
@@ -2119,6 +2114,20 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
         }
 
         if (!parser_consume(p, TOKEN_RCURLY)) res = false;
+
+        break;
+    }
+
+    case TOKEN_MODULE: {
+        parser_next(p, 1);
+
+        ast->type = AST_MODULE_DECL;
+
+        Token *name_tok = parser_consume(p, TOKEN_IDENT);
+        if (!name_tok)
+            res = false;
+        else
+            ast->module.name = name_tok->str;
 
         break;
     }

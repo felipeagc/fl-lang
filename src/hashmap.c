@@ -18,9 +18,9 @@ static uint64_t hash_str(String str)
 {
     uint64_t hash = 5381;
 
-    for (uint64_t i = 0; i < str.length; ++i)
+    for (uint64_t i = 0; i < str.len; ++i)
     {
-        hash = ((hash << 5) + hash) + str.buf[i]; /* hash * 33 + c */
+        hash = ((hash << 5) + hash) + str.ptr[i]; /* hash * 33 + c */
     }
 
     return hash;

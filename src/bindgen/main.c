@@ -196,7 +196,7 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
             (char *)clang_getCString(clang_getCursorSpelling(decl));
         String struct_name = CSTR(struct_name_c);
 
-        if (struct_name.length == 0 || !named)
+        if (struct_name.len == 0 || !named)
         {
             if (cursor_kind == CXCursor_StructDecl)
             {
@@ -409,7 +409,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             (char *)clang_getCString(clang_getCursorSpelling(cursor));
         String struct_name = CSTR(struct_name_c);
 
-        if (struct_name.length == 0)
+        if (struct_name.len == 0)
         {
             break;
         }
@@ -432,7 +432,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             (char *)clang_getCString(clang_getCursorSpelling(cursor));
         String struct_name = CSTR(struct_name_c);
 
-        if (struct_name.length == 0)
+        if (struct_name.len == 0)
         {
             break;
         }
@@ -561,7 +561,7 @@ int main(int argc, char **argv)
                 clang_visitChildren(cursor, visitor, &sb);
 
                 String output = sb_build(&sb, &bump);
-                fprintf(stdout, "%.*s\n", (int)output.length, output.buf);
+                fprintf(stdout, "%.*s\n", PRINT_STR(output));
 
                 clang_disposeTranslationUnit(unit);
             }

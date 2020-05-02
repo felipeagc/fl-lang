@@ -1,6 +1,7 @@
 typedef struct SourceFile
 {
     String path;
+    String module_name;
     String content;
     struct Ast *root;
     struct Ast* main_function_ast;

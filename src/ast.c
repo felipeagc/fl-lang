@@ -85,6 +85,7 @@ typedef enum AstType {
     AST_USING,
     AST_DEFER,
     AST_VARIADIC_ARG,
+    AST_MODULE_DECL,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -159,6 +160,10 @@ struct Ast
             String path;
             String abs_path;
         } import;
+        struct
+        {
+            String name;
+        } module;
         struct
         {
             ArrayOfAst stmts;

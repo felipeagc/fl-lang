@@ -181,6 +181,10 @@ static void instantiate_template(
         break;
     }
 
+    case AST_MODULE_DECL: {
+        break;
+    }
+
     case AST_TYPEDEF: {
         INSTANTIATE_AST(type_def.type_expr);
         break;
@@ -1541,6 +1545,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_MODULE_DECL:
     case AST_VARIADIC_ARG:
     case AST_TO_ANY:
     case AST_TYPE:
@@ -1637,7 +1642,7 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
     default: return;
     }
 
-    if (sym_name.length > 0)
+    if (sym_name.len > 0)
     {
         if (scope_get_local(*array_last(&a->scope_stack), sym_name))
         {
@@ -1645,8 +1650,7 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Location *error_loc)
                 a->compiler,
                 *error_loc,
                 "duplicate declaration: '%.*s'",
-                (int)sym_name.length,
-                sym_name.buf);
+                PRINT_STR(sym_name));
             return;
         }
 
@@ -1876,6 +1880,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     switch (ast->type)
     {
     case AST_UNINITIALIZED: assert(0); break;
+
+    case AST_MODULE_DECL: {
+        if (ast->loc.file->module_name.len != 0)
+        {
+            compile_error(
+                a->compiler, ast->loc, "duplicate module declaration");
+            break;
+        }
+        ast->loc.file->module_name = ast->module.name;
+
+        break;
+    }
 
     case AST_RETURN: {
         Scope *scope = *array_last(&a->scope_stack);
@@ -2715,7 +2731,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case TOKEN_STRING_LIT: {
             ast->type_info = create_array_type(
-                a->compiler, &I8_TYPE, ast->primary.tok->str.length);
+                a->compiler, &I8_TYPE, ast->primary.tok->str.len);
             break;
         }
 
@@ -2754,8 +2770,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     a->compiler,
                     ast->loc,
                     "invalid identifier: '%.*s'",
-                    (int)ast->primary.tok->str.length,
-                    ast->primary.tok->str.buf);
+                    PRINT_STR(ast->primary.tok->str));
                 break;
             }
 
@@ -4554,6 +4569,11 @@ static void check_used_asts(Analyzer *a, Ast *ast)
     }
 
     case AST_ENUM: {
+        // TODO: check enum field values
+        break;
+    }
+
+    case AST_MODULE_DECL: {
         break;
     }
 

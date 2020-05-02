@@ -43,12 +43,12 @@ static inline void sb_append_char(StringBuilder *sb, char c)
 
 static inline void sb_append(StringBuilder *sb, String str)
 {
-    if (str.length + sb->len >= sb->cap)
+    if (str.len + sb->len >= sb->cap)
     {
         sb_grow(sb);
     }
-    strncpy(&sb->buf[sb->len], str.buf, str.length);
-    sb->len += str.length;
+    strncpy(&sb->buf[sb->len], str.ptr, str.len);
+    sb->len += str.len;
 }
 
 static inline void sb_sprintf(StringBuilder *sb, const char *fmt, ...)
@@ -57,14 +57,14 @@ static inline void sb_sprintf(StringBuilder *sb, const char *fmt, ...)
     va_start(vl, fmt);
     size_t len = vsnprintf(sb->scratch, sb->cap, fmt, vl);
     va_end(vl);
-    sb_append(sb, (String){.length = len, .buf = sb->scratch});
+    sb_append(sb, (String){.len = len, .ptr = sb->scratch});
 }
 
-static inline String sb_build(StringBuilder *sb, BumpAlloc* bump)
+static inline String sb_build(StringBuilder *sb, BumpAlloc *bump)
 {
     String result = {0};
-    result.length = sb->len;
-    result.buf = bump_alloc(bump, result.length);
-    strncpy(result.buf, sb->buf, result.length);
+    result.len = sb->len;
+    result.ptr = bump_alloc(bump, result.len);
+    strncpy(result.ptr, sb->buf, result.len);
     return result;
 }
