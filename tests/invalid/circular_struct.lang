@@ -1,0 +1,8 @@
+module main
+
+typedef Derp struct {
+    a: Derp
+};
+
+func main() {
+}

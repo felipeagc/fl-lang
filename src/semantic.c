@@ -4275,6 +4275,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
              ++field)
         {
             analyze_ast(a, field, NULL);
+            if (field->type_info)
+            {
+                if (exact_types(field->type_info, ast->as_type))
+                {
+                    compile_error(
+                        a->compiler, field->loc, "circular struct field");
+                }
+            }
         }
         break;
     }

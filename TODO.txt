@@ -6,14 +6,11 @@ Thread local variables
 Macros (?)
 
 Offsetof
-
 Attributes
-
-Multiple return values
-
 Key/val struct literal
 
-Proper module/package system
+Error handling
+"Methods" (functions associated with a type)
 
 TODO:
 - #[link_name="blabla"]
@@ -46,5 +43,6 @@ Safety:
 Bugs:
 - Duplicate extern declarations
 - Circular imports
-- Circular structs
-- Circular typedefs
+- Circular typedefs (typedef Type Type;)
+  typedef Type Type; // should not work
+  var a: i32 = a; // should not work
