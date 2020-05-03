@@ -7,9 +7,22 @@ typedef struct LLModule
     LLVMValueRef main_wrapper_fun;
     LLVMValueRef runtime_statup_fun;
     LLVMValueRef rtti_type_infos;
+
+    LLVMDIBuilderRef di_builder;
 } LLModule;
 
+enum {
+    DW_ATE_address = 1,
+    DW_ATE_boolean = 2,
+    DW_ATE_float = 4,
+    DW_ATE_signed = 5,
+    DW_ATE_signed_char = 6,
+    DW_ATE_unsigned = 7,
+    DW_ATE_unsigned_char = 8,
+};
+
 typedef ARRAY_OF(LLVMBasicBlockRef) ArrayOfBasicBlock;
+typedef ARRAY_OF(LLVMMetadataRef) ArrayOfMetadataRef;
 
 typedef struct LLContext
 {
@@ -19,6 +32,8 @@ typedef struct LLContext
     ArrayOfScopePtr operand_scope_stack;
     ArrayOfBasicBlock break_block_stack;
     ArrayOfBasicBlock continue_block_stack;
+    ArrayOfMetadataRef di_scope_stack;
+    ArrayOfMetadataRef di_location_stack;
 } LLContext;
 
 static void llvm_codegen_ast(
@@ -50,6 +65,23 @@ static String mangle_function_name(LLContext *l, Ast *ast)
     }
 
     return sb_build(&l->compiler->sb, &l->compiler->bump);
+}
+
+static LLVMMetadataRef llvm_get_di_file(LLContext *l, SourceFile *file)
+{
+    if (file->di_file) return file->di_file;
+
+    const char *c_file_path = bump_c_str(&l->compiler->bump, file->path);
+    const char *c_dir = get_path_dir(c_file_path);
+    const char *c_filename = get_path_filename(c_file_path);
+    file->di_file = LLVMDIBuilderCreateFile(
+        l->mod.di_builder,
+        c_filename,
+        strlen(c_filename),
+        c_dir,
+        strlen(c_dir));
+
+    return file->di_file;
 }
 
 static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
@@ -189,6 +221,202 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     }
 
     return type->ref;
+}
+
+static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
+{
+    if (type->debug_ref) return type->debug_ref;
+
+    switch (type->kind)
+    {
+    case TYPE_INT: {
+        const char *name = "";
+        LLVMDWARFTypeEncoding encoding = 0;
+        if (type->integer.is_signed)
+        {
+            encoding = DW_ATE_signed;
+            switch (type->integer.num_bits)
+            {
+            case 8: name = "i8"; break;
+            case 16: name = "i16"; break;
+            case 32: name = "i32"; break;
+            case 64: name = "i64"; break;
+            }
+        }
+        else
+        {
+            encoding = DW_ATE_unsigned;
+            switch (type->integer.num_bits)
+            {
+            case 8: name = "u8"; break;
+            case 16: name = "u16"; break;
+            case 32: name = "u32"; break;
+            case 64: name = "u64"; break;
+            }
+        }
+
+        type->debug_ref = LLVMDIBuilderCreateBasicType(
+            l->mod.di_builder,
+            name,
+            strlen(name),
+            type->integer.num_bits,
+            encoding,
+            0);
+
+        break;
+    }
+
+    case TYPE_FLOAT: {
+        const char *name = "";
+        LLVMDWARFTypeEncoding encoding = DW_ATE_float;
+
+        switch (type->floating.num_bits)
+        {
+        case 32: name = "float"; break;
+        case 64: name = "double"; break;
+        default: assert(0); break;
+        }
+
+        type->debug_ref = LLVMDIBuilderCreateBasicType(
+            l->mod.di_builder,
+            name,
+            strlen(name),
+            type->floating.num_bits,
+            encoding,
+            0);
+
+        break;
+    }
+
+    case TYPE_BOOL: {
+        const char *name = "bool";
+        type->debug_ref = LLVMDIBuilderCreateBasicType(
+            l->mod.di_builder,
+            name,
+            strlen(name),
+            BOOL_INT_TYPE.integer.num_bits,
+            DW_ATE_boolean,
+            0);
+        break;
+    }
+
+    case TYPE_VOID: {
+        assert(0);
+        break;
+    }
+
+    case TYPE_POINTER: {
+        if (type->ptr.sub->kind == TYPE_VOID)
+        {
+            type->debug_ref = LLVMDIBuilderCreateNullPtrType(l->mod.di_builder);
+            break;
+        }
+
+        String pretty_name = get_type_pretty_name(l->compiler, type);
+        type->debug_ref = LLVMDIBuilderCreatePointerType(
+            l->mod.di_builder,
+            llvm_debug_type(l, type->ptr.sub),
+            UINT_TYPE.integer.num_bits,
+            align_of_type(type) * 8,
+            0,
+            pretty_name.ptr,
+            pretty_name.len);
+        break;
+    }
+
+    case TYPE_ARRAY: {
+        type->debug_ref = LLVMDIBuilderCreateArrayType(
+            l->mod.di_builder,
+            type->array.size,
+            align_of_type(type) * 8,
+            llvm_debug_type(l, type->array.sub),
+            NULL,
+            0);
+        break;
+    }
+
+    case TYPE_VECTOR: {
+        const char *type_name = "@Vector";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_ANY: {
+        const char *type_name = "@Any";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_SLICE: {
+        const char *type_name = "@Slice";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_DYNAMIC_ARRAY: {
+        const char *type_name = "@DynamicArray";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_PROC: {
+        size_t param_count = type->proc.params.len;
+        LLVMMetadataRef *param_types =
+            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
+        for (size_t i = 0; i < param_count; i++)
+        {
+            TypeInfo *param_type = type->proc.params.ptr[i];
+            String pretty_name = get_type_pretty_name(l->compiler, param_type);
+            param_types[i] = llvm_debug_type(l, param_type);
+            if (is_type_compound(param_type))
+            {
+                param_types[i] = LLVMDIBuilderCreatePointerType(
+                    l->mod.di_builder,
+                    param_types[i],
+                    UINT_TYPE.integer.num_bits,
+                    align_of_type(&UINT_TYPE) * 8,
+                    0,
+                    pretty_name.ptr,
+                    pretty_name.len);
+            }
+        }
+
+        assert(type->file);
+
+        type->debug_ref = LLVMDIBuilderCreateSubroutineType(
+            l->mod.di_builder,
+            llvm_get_di_file(l, type->file),
+            param_types,
+            param_count,
+            0);
+
+        break;
+    }
+
+    case TYPE_STRUCT: {
+        const char *type_name = "@Struct";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_ENUM: {
+        type->debug_ref = llvm_debug_type(l, type->enumeration.underlying_type);
+        break;
+    }
+
+    case TYPE_NAMESPACE:
+    case TYPE_TYPE:
+    case TYPE_TEMPLATE:
+    case TYPE_NONE:
+    case TYPE_UNINITIALIZED: assert(0); break;
+    }
+
+    return type->debug_ref;
 }
 
 enum {
@@ -754,19 +982,37 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 
             char *fun_name_c = bump_c_str(&l->compiler->bump, mangled_name);
 
-            LLVMValueRef fun =
-                LLVMAddFunction(mod->mod, fun_name_c, llvm_fun_type);
-            ast->proc.value.value = fun;
+            ast->value = LLVMAddFunction(mod->mod, fun_name_c, llvm_fun_type);
+
+            if (ast->flags & AST_FLAG_FUNCTION_HAS_BODY)
+            {
+                ast->di_value = LLVMDIBuilderCreateFunction(
+                    mod->di_builder,
+                    llvm_get_di_file(l, ast->loc.file),
+                    fun_name_c,
+                    strlen(fun_name_c),
+                    fun_name_c,
+                    strlen(fun_name_c),
+                    llvm_get_di_file(l, ast->loc.file),
+                    ast->loc.line,
+                    llvm_debug_type(l, fun_type),
+                    false,
+                    true,
+                    ast->loc.line,
+                    LLVMDIFlagZero,
+                    false);
+                LLVMSetSubprogram(ast->value, ast->di_value);
+            }
 
             if (string_equals(ast->proc.name, STR("main")))
             {
-                mod->main_fun = fun;
+                mod->main_fun = ast->value;
             }
 
-            LLVMSetLinkage(fun, LLVMInternalLinkage);
+            LLVMSetLinkage(ast->value, LLVMInternalLinkage);
             if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN)
             {
-                LLVMSetLinkage(fun, LLVMExternalLinkage);
+                LLVMSetLinkage(ast->value, LLVMExternalLinkage);
             }
 
             bool is_inline = false;
@@ -786,7 +1032,7 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                 // Add alwaysinline attribute
                 String attrib = STR("alwaysinline");
                 LLVMAddAttributeAtIndex(
-                    fun,
+                    ast->value,
                     LLVMAttributeFunctionIndex,
                     LLVMCreateEnumAttribute(
                         LLVMGetGlobalContext(),
@@ -827,6 +1073,17 @@ llvm_codegen_deferred_stmts(LLContext *l, LLModule *mod, bool is_return)
 static void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
+    LLVMMetadataRef di_location = NULL;
+    if (l->di_scope_stack.len > 0)
+    {
+        di_location = LLVMDIBuilderCreateDebugLocation(
+            LLVMGetGlobalContext(),
+            ast->loc.line,
+            ast->loc.col,
+            *array_last(&l->di_scope_stack),
+            NULL);
+    }
+
     switch (ast->type)
     {
     case AST_BLOCK:
@@ -884,9 +1141,7 @@ static void llvm_codegen_ast(
         }
 
         assert(ast->type_info->kind == TYPE_POINTER);
-
-        LLVMValueRef fun = ast->proc.value.value;
-        assert(fun);
+        assert(ast->value);
 
         if (ast->flags & AST_FLAG_FUNCTION_HAS_BODY)
         {
@@ -901,7 +1156,7 @@ static void llvm_codegen_ast(
                 {
                     param->proc_param.value.is_lvalue = true;
                 }
-                param->proc_param.value.value = LLVMGetParam(fun, i);
+                param->proc_param.value.value = LLVMGetParam(ast->value, i);
 
                 char *param_name =
                     bump_c_str(&l->compiler->bump, param->proc_param.name);
@@ -918,7 +1173,11 @@ static void llvm_codegen_ast(
             }
         }
 
-        if (out_value) *out_value = ast->proc.value;
+        if (out_value)
+        {
+            out_value->is_lvalue = false;
+            out_value->value = ast->value;
+        }
 
         break;
     }
@@ -1073,8 +1332,12 @@ static void llvm_codegen_ast(
                     break;
                 }
 
-                assert(sym->proc.value.value);
-                if (out_value) *out_value = sym->proc.value;
+                assert(sym->value);
+                if (out_value)
+                {
+                    out_value->is_lvalue = false;
+                    out_value->value = sym->value;
+                }
                 break;
             }
 
@@ -1204,6 +1467,11 @@ static void llvm_codegen_ast(
         AstValue result_value = {0};
         result_value.value =
             LLVMBuildCall(mod->builder, fun, params, param_count, "");
+        if (di_location)
+        {
+            LLVMInstructionSetDebugLoc(result_value.value, di_location);
+        }
+
         if (out_value) *out_value = result_value;
 
         break;
@@ -4064,7 +4332,7 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
         return;
     }
 
-    LLVMValueRef fun = ast->proc.value.value;
+    LLVMValueRef fun = ast->value;
     assert(fun);
 
     LLVMBasicBlockRef alloca_block = LLVMAppendBasicBlock(fun, "allocas");
@@ -4078,8 +4346,10 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
 
     array_push(&l->scope_stack, ast->scope);
     array_push(&l->operand_scope_stack, ast->scope);
+    array_push(&l->di_scope_stack, ast->di_value);
     llvm_codegen_ast_children(
         l, mod, ast->proc.stmts.ptr, ast->proc.stmts.len, false);
+    array_pop(&l->di_scope_stack);
     array_pop(&l->operand_scope_stack);
     array_pop(&l->scope_stack);
 
@@ -4237,6 +4507,31 @@ static void llvm_generate_runtime_functions(LLContext *l, LLModule *mod)
     }
 }
 
+static void llvm_codegen_file(LLContext *l, SourceFile *file)
+{
+    const char *producer = "Felipe's compiler";
+    bool is_optimized = l->compiler->args.opt_level > 0;
+    file->di_cu = LLVMDIBuilderCreateCompileUnit(
+        l->mod.di_builder,
+        LLVMDWARFSourceLanguageC,
+        llvm_get_di_file(l, file),
+        producer,
+        strlen(producer),
+        is_optimized,
+        "",
+        0,
+        0,
+        "",
+        0,
+        LLVMDWARFEmissionFull,
+        0,
+        true,
+        false);
+
+    file->did_codegen = true;
+    llvm_codegen_ast(l, &l->mod, file->root, false, NULL);
+}
+
 static void llvm_init(LLContext *l, Compiler *compiler)
 {
     l->compiler = compiler;
@@ -4244,7 +4539,13 @@ static void llvm_init(LLContext *l, Compiler *compiler)
     memset(&l->mod, 0, sizeof(l->mod));
     l->mod.mod = LLVMModuleCreateWithName("main");
     l->mod.builder = LLVMCreateBuilder();
+    l->mod.di_builder = LLVMCreateDIBuilder(l->mod.mod);
     l->mod.data = LLVMGetModuleDataLayout(l->mod.mod);
+}
+
+static void llvm_finalize_module(LLContext *l)
+{
+    LLVMDIBuilderFinalize(l->mod.di_builder);
 }
 
 static void llvm_verify_module(LLContext *l)

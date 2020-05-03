@@ -6,6 +6,9 @@ typedef struct SourceFile
     struct Ast *root;
     struct Ast* main_function_ast;
     bool did_codegen;
+
+    LLVMMetadataRef di_file;
+    LLVMMetadataRef di_cu;
 } SourceFile;
 
 typedef struct Location

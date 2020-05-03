@@ -190,7 +190,7 @@ static void compiler_init(Compiler *compiler)
         &compiler->rtti_type_infos, &blank_type_info); // Reserve the 0 index
 
     char *c_compiler_path = get_exe_path();
-    char *c_compiler_dir = get_file_dir(c_compiler_path);
+    char *c_compiler_dir = get_path_dir(c_compiler_path);
     compiler->compiler_path = CSTR(c_compiler_path);
     compiler->compiler_dir = CSTR(c_compiler_dir);
     compiler->corelib_dir =
@@ -371,7 +371,7 @@ process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
         else
         {
             // Relative import
-            char *c_dir = get_file_dir(bump_c_str(&compiler->bump, file->path));
+            char *c_dir = get_path_dir(bump_c_str(&compiler->bump, file->path));
 
             size_t new_path_size = strlen(c_dir) + 1 + strlen(c_imported) + 1;
             char *c_new_path = bump_alloc(&compiler->bump, new_path_size);
@@ -460,12 +460,11 @@ static void compile_file(Compiler *compiler, String filepath)
 
     llvm_generate_runtime_variables(compiler->backend, &compiler->backend->mod);
 
-    file->did_codegen = true;
-    llvm_codegen_ast(
-        compiler->backend, &compiler->backend->mod, file->root, false, NULL);
+    llvm_codegen_file(compiler->backend, file);
 
     llvm_generate_runtime_functions(compiler->backend, &compiler->backend->mod);
 
+    llvm_finalize_module(compiler->backend);
     llvm_verify_module(compiler->backend);
     llvm_optimize_module(compiler->backend);
 

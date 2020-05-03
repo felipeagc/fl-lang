@@ -889,7 +889,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                         sb_append(&a->compiler->sb, STR(", "));
                     }
                     Ast *param = &ast->proc_call.params.ptr[i];
-                    print_pretty_type(
+                    print_type_pretty_name(
                         &a->compiler->sb, ast_as_type(a, scope, param, false));
                 }
                 sb_append_char(&a->compiler->sb, ')');
@@ -1030,6 +1030,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
+        ty->file = ast->loc.file;
 
         if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
         {
@@ -1133,6 +1134,12 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     default: break;
+    }
+
+    if (ast->as_type)
+    {
+        ast->as_type->file = ast->loc.file;
+        assert(ast->loc.file);
     }
 
     if (is_distinct && ast->as_type)
@@ -2373,6 +2380,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
         memset(ty, 0, sizeof(*ty));
         ty->kind = TYPE_PROC;
+        ty->file = ast->loc.file;
 
         bool valid_type = true;
 
@@ -2464,6 +2472,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             memset(ptr_ty, 0, sizeof(*ptr_ty));
             ptr_ty->kind = TYPE_POINTER;
             ptr_ty->ptr.sub = ty;
+            ptr_ty->file = ast->loc.file;
             ast->type_info = ptr_ty;
         }
         else
@@ -4417,12 +4426,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (!exact_types(ast->type_info, expected_type) &&
             !compatible_pointer_types(ast->type_info, expected_type))
         {
+            String expected_pretty_name =
+                get_type_pretty_name(a->compiler, expected_type);
+            String actual_pretty_name =
+                get_type_pretty_name(a->compiler, ast->type_info);
+
             // Type mismatch
             sb_reset(&a->compiler->sb);
             sb_append(&a->compiler->sb, STR("wrong type, expected "));
-            print_pretty_type(&a->compiler->sb, expected_type);
-            sb_append(&a->compiler->sb, STR(", got "));
-            print_pretty_type(&a->compiler->sb, ast->type_info);
+            sb_append(&a->compiler->sb, expected_pretty_name);
+            sb_append(&a->compiler->sb, STR(", received "));
+            sb_append(&a->compiler->sb, actual_pretty_name);
             String error = sb_build(&a->compiler->sb, &a->compiler->bump);
             compile_error(a->compiler, ast->loc, "%.*s", PRINT_STR(error));
 

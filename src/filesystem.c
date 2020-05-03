@@ -34,7 +34,7 @@ static bool file_exists(const char *path)
 #endif
 }
 
-static char *get_file_dir(const char *path)
+static char *get_path_dir(const char *path)
 {
     char *abs = get_absolute_path(path);
     for (int i = strlen(abs) - 1; i >= 0; i--)
@@ -46,6 +46,22 @@ static char *get_file_dir(const char *path)
         }
     }
     return abs;
+}
+
+static const char *get_path_filename(const char *path)
+{
+    char *abs = get_absolute_path(path);
+    for (int i = strlen(abs) - 1; i >= 0; i--)
+    {
+        if (abs[i] == '/')
+        {
+            if (i < (strlen(abs) - 1))
+            {
+                return &abs[i + 1];
+            }
+        }
+    }
+    return path;
 }
 
 static char *get_exe_path(void)

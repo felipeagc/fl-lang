@@ -35,6 +35,8 @@ struct TypeInfo
     uint32_t align;
     uint32_t rtti_index;
     LLVMTypeRef ref;
+    LLVMMetadataRef debug_ref;
+    SourceFile *file;
     struct Scope *scope;
     String pretty_name;
 
@@ -667,12 +669,12 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     }
 }
 
-static void print_pretty_type(StringBuilder *sb, TypeInfo *type)
+static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
 {
     if (type->pretty_name.len > 0)
     {
         assert(!is_type_basic(type));
-        sb_sprintf(sb, "%.*s", PRINT_STR(type->pretty_name));
+        sb_append(sb, type->pretty_name);
         return;
     }
 
@@ -729,46 +731,46 @@ static void print_pretty_type(StringBuilder *sb, TypeInfo *type)
 
     case TYPE_ENUM:
         sb_append(sb, STR("enum "));
-        print_pretty_type(sb, type->enumeration.underlying_type);
+        print_type_pretty_name(sb, type->enumeration.underlying_type);
         break;
 
     case TYPE_PROC: {
-        sb_append(sb, STR("func "));
+        sb_append(sb, STR("func("));
         for (size_t i = 0; i < type->proc.params.len; ++i)
         {
             if (i > 0) sb_append(sb, STR(", "));
-            print_pretty_type(sb, type->proc.params.ptr[i]);
+            print_type_pretty_name(sb, type->proc.params.ptr[i]);
         }
-        sb_append(sb, STR(" -> "));
-        print_pretty_type(sb, type->proc.return_type);
+        sb_append(sb, STR(") -> "));
+        print_type_pretty_name(sb, type->proc.return_type);
         break;
     }
 
     case TYPE_POINTER:
         sb_append(sb, STR("*"));
-        print_pretty_type(sb, type->ptr.sub);
+        print_type_pretty_name(sb, type->ptr.sub);
         break;
 
     case TYPE_ARRAY:
         sb_sprintf(sb, "[%zu]", type->array.size);
-        print_pretty_type(sb, type->array.sub);
+        print_type_pretty_name(sb, type->array.sub);
         break;
 
     case TYPE_VECTOR: {
         sb_sprintf(sb, "@vector_type(");
-        print_pretty_type(sb, type->array.sub);
+        print_type_pretty_name(sb, type->array.sub);
         sb_sprintf(sb, ", %zu)", type->array.size);
         break;
     }
 
     case TYPE_SLICE:
         sb_append(sb, STR("[_]"));
-        print_pretty_type(sb, type->array.sub);
+        print_type_pretty_name(sb, type->array.sub);
         break;
 
     case TYPE_DYNAMIC_ARRAY:
         sb_append(sb, STR("[dyn]"));
-        print_pretty_type(sb, type->array.sub);
+        print_type_pretty_name(sb, type->array.sub);
         break;
 
     case TYPE_STRUCT: {
@@ -776,7 +778,7 @@ static void print_pretty_type(StringBuilder *sb, TypeInfo *type)
         for (size_t i = 0; i < type->structure.fields.len; ++i)
         {
             if (i > 0) sb_append(sb, STR(", "));
-            print_pretty_type(sb, type->structure.fields.ptr[i]);
+            print_type_pretty_name(sb, type->structure.fields.ptr[i]);
         }
         sb_append(sb, STR("}"));
         break;
@@ -785,6 +787,18 @@ static void print_pretty_type(StringBuilder *sb, TypeInfo *type)
     case TYPE_UNINITIALIZED:
     case TYPE_NONE: assert(0); break;
     }
+}
+
+static String get_type_pretty_name(Compiler *compiler, TypeInfo *type)
+{
+    if (type->pretty_name.len > 0)
+    {
+        return type->pretty_name;
+    }
+
+    sb_reset(&compiler->sb);
+    print_type_pretty_name(&compiler->sb, type);
+    return sb_build(&compiler->sb, &compiler->bump);
 }
 
 #define PTR_SIZE 8

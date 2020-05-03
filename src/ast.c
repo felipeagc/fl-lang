@@ -145,6 +145,8 @@ struct Ast
     struct Scope *sym_scope; // Scope this symbol belongs to
     struct Ast *alias_to;
     ArrayOfAstAttribute attributes;
+    LLVMValueRef value;
+    LLVMMetadataRef di_value;
 
     union
     {
@@ -177,8 +179,6 @@ struct Ast
 
             ArrayOfString template_params;
             HashMap *template_cache;
-
-            AstValue value;
         } proc;
         struct
         {

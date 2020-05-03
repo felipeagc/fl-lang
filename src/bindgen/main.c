@@ -372,7 +372,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     const char *path = clang_getCString(cx_path);
     if (path)
     {
-        char *dir = get_file_dir(path);
+        char *dir = get_path_dir(path);
         if (strncmp(dir, g_dir, strlen(g_dir)) == 0)
         {
             same_dir = true;
@@ -527,7 +527,7 @@ int main(int argc, char **argv)
     if (argc == 2)
     {
         array_push(&g_to_parse, argv[1]);
-        g_dir = get_file_dir(argv[1]);
+        g_dir = get_path_dir(argv[1]);
 
         while (g_to_parse.len)
         {
