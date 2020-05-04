@@ -161,7 +161,6 @@ static void print_errors(Compiler *compiler)
 #include "lexer.c"
 #include "scope.c"
 #include "type.c"
-#include "printing.c"
 
 #include "parser.c"
 #include "semantic.c"

@@ -28,7 +28,8 @@ func main() {
         var e: SDL_Event;
         while (SDL_PollEvent(&e)) {
             switch (e.type) {
-                SDL_QUIT => should_close = true;
+                case SDL_QUIT:
+                    should_close = true;
             }
         }
 

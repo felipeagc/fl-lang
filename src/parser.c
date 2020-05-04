@@ -1447,36 +1447,62 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
         while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
                !parser_is_at_end(p, 0))
         {
-            if (parser_peek(p, 0)->type == TOKEN_ELSE)
+            if (parser_peek(p, 0)->type == TOKEN_DEFAULT)
             {
                 parser_next(p, 1);
-                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+                if (!parser_consume(p, TOKEN_COLON)) res = false;
 
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true)) res = false;
+                Ast block = {0};
+                block.type = AST_BLOCK;
+
+                while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                       parser_peek(p, 0)->type != TOKEN_CASE &&
+                       parser_peek(p, 0)->type != TOKEN_DEFAULT &&
+                       !parser_is_at_end(p, 0))
+                {
+                    Ast stmt = {0};
+                    if (!parse_stmt(p, &stmt, true)) res = false;
+                    array_push(&block.block.stmts, stmt);
+                }
 
                 if (res)
                 {
                     ast->switch_stmt.else_stmt =
                         bump_alloc(&p->compiler->bump, sizeof(Ast));
-                    *ast->switch_stmt.else_stmt = stmt;
+                    *ast->switch_stmt.else_stmt = block;
                 }
             }
-            else
+            else if (parser_peek(p, 0)->type == TOKEN_CASE)
             {
+                parser_next(p, 1);
                 Ast val = {0};
                 if (!parse_expr(p, &val, false)) res = false;
 
-                if (!parser_consume(p, TOKEN_FAT_ARROW)) res = false;
+                if (!parser_consume(p, TOKEN_COLON)) res = false;
 
-                Ast stmt = {0};
-                if (!parse_stmt(p, &stmt, true)) res = false;
+                Ast block = {0};
+                block.type = AST_BLOCK;
+
+                while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                       parser_peek(p, 0)->type != TOKEN_CASE &&
+                       parser_peek(p, 0)->type != TOKEN_DEFAULT &&
+                       !parser_is_at_end(p, 0))
+                {
+                    Ast stmt = {0};
+                    if (!parse_stmt(p, &stmt, true)) res = false;
+                    array_push(&block.block.stmts, stmt);
+                }
 
                 if (res)
                 {
                     array_push(&ast->switch_stmt.vals, val);
-                    array_push(&ast->switch_stmt.stmts, stmt);
+                    array_push(&ast->switch_stmt.stmts, block);
                 }
+            }
+            else
+            {
+                res = false;
+                break;
             }
         }
 
@@ -1615,6 +1641,28 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
     }
 
     default: {
+        if (parser_peek(p, 0)->type == TOKEN_IDENT &&
+            parser_peek(p, 1)->type == TOKEN_COLON &&
+            parser_peek(p, 2)->type == TOKEN_ASSIGN)
+        {
+            ast->type = AST_VAR_DECL;
+            ast->decl.type_expr = NULL;
+
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (!ident_tok)
+                res = false;
+            else
+                ast->decl.name = ident_tok->str;
+
+            parser_next(p, 1); // colon
+            parser_next(p, 1); // assign
+
+            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->decl.value_expr, false)) res = false;
+
+            break;
+        }
+
         Ast expr = {0};
         if (!parse_expr(p, &expr, false)) res = false;
 

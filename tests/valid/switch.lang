@@ -5,20 +5,19 @@ import "core:c"
 
 func main() {
     switch (4) {
-        1 => abort();
-        2 => abort();
-        else => fmt.print("None of the above!\n");
+    case 1: abort();
+    case 2: abort();
+    default: fmt.print("None of the above!\n");
     }
 
     switch (1) {
-        1 => {}
-        else => abort();
+    case 1:
+    default: abort();
     }
 
     switch (1) {
-        else => {
-            break;
-            abort();
-        }
+    default: 
+        break;
+        abort();
     }
 }

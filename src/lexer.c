@@ -314,12 +314,6 @@ void lex_token(Lexer *l)
             lex_next(l, 1);
             tok.type = TOKEN_EQUAL;
         }
-        else if (lex_peek(l, 0) == '>')
-        {
-            ++tok.loc.length;
-            lex_next(l, 1);
-            tok.type = TOKEN_FAT_ARROW;
-        }
         break;
     }
     case '!': {
@@ -552,6 +546,8 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("else", TOKEN_ELSE);
             LEX_MATCH_STR("while", TOKEN_WHILE);
             LEX_MATCH_STR("switch", TOKEN_SWITCH);
+            LEX_MATCH_STR("case", TOKEN_CASE);
+            LEX_MATCH_STR("default", TOKEN_DEFAULT);
             LEX_MATCH_STR("break", TOKEN_BREAK);
             LEX_MATCH_STR("continue", TOKEN_CONTINUE);
             LEX_MATCH_STR("for", TOKEN_FOR);

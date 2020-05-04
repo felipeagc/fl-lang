@@ -30,7 +30,6 @@ typedef enum TokenKind {
     TOKEN_COMMA,
 
     TOKEN_ARROW, // ->
-    TOKEN_FAT_ARROW, // =>
 
     TOKEN_NOT,    // !
     TOKEN_ASSIGN, // =
@@ -76,6 +75,8 @@ typedef enum TokenKind {
     TOKEN_FOR,
     TOKEN_WHILE,
     TOKEN_SWITCH,
+    TOKEN_CASE,
+    TOKEN_DEFAULT,
     TOKEN_BREAK,
     TOKEN_CONTINUE,
     TOKEN_IF,
@@ -153,7 +154,6 @@ static const char *token_strings[] = {
     [TOKEN_COMMA] = ",",
 
     [TOKEN_ARROW] = "->",
-    [TOKEN_FAT_ARROW] = "=>",
 
     [TOKEN_NOT] = "!",
     [TOKEN_ASSIGN] = "=",
@@ -199,6 +199,8 @@ static const char *token_strings[] = {
     [TOKEN_FOR] = "for",
     [TOKEN_WHILE] = "while",
     [TOKEN_SWITCH] = "switch",
+    [TOKEN_CASE] = "case",
+    [TOKEN_DEFAULT] = "default",
     [TOKEN_BREAK] = "break",
     [TOKEN_CONTINUE] = "continue",
     [TOKEN_IF] = "if",

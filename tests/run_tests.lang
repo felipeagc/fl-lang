@@ -7,7 +7,8 @@ import files "core:files"
 import strings "core:strings"
 import arrays "core:arrays"
 
-typedef TestRun struct {
+typedef TestRun struct
+{
     pid: os.Handle,
     path: string,
     status: i32,
@@ -15,15 +16,18 @@ typedef TestRun struct {
 
 var failures: uint = 0;
 
-func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
+func run_tests(batch_name: string, tests_path: string, expected_status: i32)
+{
     var entries = files.dir_entries_alloc(tests_path);
     defer files.dir_entries_free(entries);
 
     var runs: [dyn]TestRun;
     defer arrays.free(TestRun)(&runs);
 
-    for (entry in entries) {
-        if (strings.ends_with(entry, ".lang")) {
+    for (entry in entries) 
+    {
+        if (strings.ends_with(entry, ".lang"))
+        {
             var path = strings.concat_alloc(tests_path, entry);
 
             var pid = os.spawn_process(
@@ -31,10 +35,13 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
                 os.NULL_HANDLE,
                 os.NULL_HANDLE);
 
-            if (!pid) {
+            if (!pid)
+            {
                 fmt.eprint("Failed to spawn compiler process\n");
                 c.exit(1);
-            } else {
+            }
+            else
+            {
                 var run: TestRun;
                 run.pid = pid;
                 run.path = path;
@@ -44,20 +51,25 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
         }
     }
 
-    defer for (run in runs) {
+    defer for (run in runs)
+    {
         strings.free(run.path);
     }
 
-    for (*run in runs) {
-        if (!os.wait_process(run.pid, &run.status)) {
+    for (*run in runs)
+    {
+        if (!os.wait_process(run.pid, &run.status))
+        {
             fmt.eprint("Failed to wait for process\n");
             c.exit(1);
         }
     }
 
     var local_failures: uint = 0;
-    for (*run in runs) {
-        if (run.status != expected_status) {
+    for (*run in runs)
+    {
+        if (run.status != expected_status)
+        {
             fmt.eprintf("Failed '%' with code %\n", run.path, run.status);
             local_failures += 1;
         }
@@ -66,7 +78,8 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32) {
     failures += local_failures;
 }
 
-func main() {
+func main()
+{
     run_tests("Valid tests", "tests/valid/", 0);
     run_tests("Invalid tests", "tests/invalid/", 1);
 
@@ -74,9 +87,12 @@ func main() {
     fmt.eprint("                Results                  \n");
     fmt.eprint("=========================================\n");
 
-    if (failures == 0) {
+    if (failures == 0)
+    {
         fmt.eprint("Success!\n");
-    } else {
+    }
+    else
+    {
         fmt.eprint("Some tests failed!\n");
     }
 }

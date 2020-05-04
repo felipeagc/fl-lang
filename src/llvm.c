@@ -986,11 +986,18 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
 
             if (ast->flags & AST_FLAG_FUNCTION_HAS_BODY)
             {
+                sb_reset(&l->compiler->sb);
+                sb_append(&l->compiler->sb, ast->loc.file->module_name);
+                sb_append_char(&l->compiler->sb, '.');
+                sb_append(&l->compiler->sb, ast->proc.name);
+                String pretty_fun_name =
+                    sb_build(&l->compiler->sb, &l->compiler->bump);
+
                 ast->di_value = LLVMDIBuilderCreateFunction(
                     mod->di_builder,
                     llvm_get_di_file(l, ast->loc.file),
-                    fun_name_c,
-                    strlen(fun_name_c),
+                    pretty_fun_name.ptr,
+                    pretty_fun_name.len,
                     fun_name_c,
                     strlen(fun_name_c),
                     llvm_get_di_file(l, ast->loc.file),
@@ -1073,15 +1080,26 @@ llvm_codegen_deferred_stmts(LLContext *l, LLModule *mod, bool is_return)
 static void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value)
 {
-    LLVMMetadataRef di_location = NULL;
     if (l->di_scope_stack.len > 0)
     {
-        di_location = LLVMDIBuilderCreateDebugLocation(
+        LLVMMetadataRef di_location = LLVMDIBuilderCreateDebugLocation(
             LLVMGetGlobalContext(),
             ast->loc.line,
             ast->loc.col,
             *array_last(&l->di_scope_stack),
             NULL);
+        assert(di_location);
+        array_push(&l->di_location_stack, di_location);
+    }
+
+    if (l->di_location_stack.len > 0)
+    {
+        LLVMSetCurrentDebugLocation2(
+            mod->builder, *array_last(&l->di_location_stack));
+    }
+    else
+    {
+        LLVMSetCurrentDebugLocation2(mod->builder, NULL);
     }
 
     switch (ast->type)
@@ -1464,13 +1482,21 @@ static void llvm_codegen_ast(
         }
         array_pop(&l->scope_stack);
 
+        // TODO: this is a workaround for the location not being set after
+        // generating the parameters for some reason
+        if (l->di_location_stack.len > 0)
+        {
+            LLVMSetCurrentDebugLocation2(
+                mod->builder, *array_last(&l->di_location_stack));
+        }
+        else
+        {
+            LLVMSetCurrentDebugLocation2(mod->builder, NULL);
+        }
+
         AstValue result_value = {0};
         result_value.value =
             LLVMBuildCall(mod->builder, fun, params, param_count, "");
-        if (di_location)
-        {
-            LLVMInstructionSetDebugLoc(result_value.value, di_location);
-        }
 
         if (out_value) *out_value = result_value;
 
@@ -1743,6 +1769,8 @@ static void llvm_codegen_ast(
         ast->decl.value.is_lvalue = true;
         ast->decl.value.value = build_alloca(l, mod, ast->type_info);
 
+        LLVMValueRef to_store = NULL;
+
         if (!ast->decl.uninitialized)
         {
             if (ast->decl.value_expr)
@@ -1754,24 +1782,53 @@ static void llvm_codegen_ast(
 
                 if (init_value.value != ast->decl.value.value)
                 {
-                    LLVMValueRef to_store = load_val(mod, &init_value);
+                    to_store = load_val(mod, &init_value);
                     to_store = autocast_value(
                         l,
                         mod,
                         ast->decl.value_expr->type_info,
                         ast->type_info,
                         to_store);
-                    LLVMBuildStore(
-                        mod->builder, to_store, ast->decl.value.value);
                 }
             }
             else
             {
-                LLVMBuildStore(
-                    mod->builder,
-                    LLVMConstNull(llvm_ty),
-                    ast->decl.value.value);
+                to_store = LLVMConstNull(llvm_ty);
             }
+        }
+
+        if (to_store)
+        {
+            if (l->di_location_stack.len)
+            {
+                LLVMMetadataRef di_type = llvm_debug_type(l, ast->type_info);
+
+                LLVMMetadataRef di_variable = LLVMDIBuilderCreateAutoVariable(
+                    mod->di_builder,
+                    *array_last(&l->di_scope_stack),
+                    ast->decl.name.ptr,
+                    ast->decl.name.len,
+                    ast->loc.file->di_file,
+                    ast->loc.line,
+                    di_type,
+                    true,
+                    LLVMDIFlagZero,
+                    align_of_type(ast->type_info) * 8);
+                LLVMMetadataRef di_expr =
+                    LLVMDIBuilderCreateExpression(mod->di_builder, NULL, 0);
+
+                LLVMBasicBlockRef current_block =
+                    LLVMGetInsertBlock(mod->builder);
+                LLVMDIBuilderInsertDeclareAtEnd(
+                    mod->di_builder,
+                    ast->decl.value.value,
+                    di_variable,
+                    di_expr,
+                    *array_last(&l->di_location_stack),
+                    current_block);
+            }
+
+            LLVMBuildStore(mod->builder, to_store, ast->decl.value.value);
         }
 
         if (out_value) *out_value = ast->decl.value;
@@ -4301,6 +4358,21 @@ static void llvm_codegen_ast(
     case AST_PROC_TYPE: break;
     case AST_TYPEDEF: break;
     default: assert(0); break;
+    }
+
+    if (l->di_scope_stack.len > 0)
+    {
+        array_pop(&l->di_location_stack);
+    }
+
+    if (l->di_location_stack.len > 0)
+    {
+        LLVMSetCurrentDebugLocation2(
+            mod->builder, *array_last(&l->di_location_stack));
+    }
+    else
+    {
+        LLVMSetCurrentDebugLocation2(mod->builder, NULL);
     }
 }
 
