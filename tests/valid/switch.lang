@@ -3,6 +3,11 @@ module main
 import fmt "core:fmt"
 import "core:c"
 
+typedef MyEnum enum u32 {
+    One = 1,
+    Two = 2,
+};
+
 func main() {
     switch (4) {
     case 1: abort();
@@ -25,14 +30,23 @@ func main() {
     }
 
     switch (5) {
-        default: abort();
-        case 5:
-            continue;
-            abort();
-        case 6:
-            continue;
-        case 7:
-            fmt.print("Hello\n"); 
-            continue;
+    default: abort();
+
+    case 5:
+        continue;
+        abort();
+
+    case 6:
+        continue;
+
+    case 7:
+        fmt.print("Hello\n"); 
+        continue;
+    }
+
+    a := MyEnum.One;
+    switch (a) {
+    case MyEnum.One:
+    case MyEnum.Two: abort();
     }
 }

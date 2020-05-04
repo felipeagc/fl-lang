@@ -977,6 +977,21 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
                 mangled_name = mangle_function_name(l, ast);
             }
 
+            for (AstAttribute *attrib = ast->attributes.ptr;
+                 attrib != ast->attributes.ptr + ast->attributes.len;
+                 ++attrib)
+            {
+                if (string_equals(attrib->name, STR("link_name")))
+                {
+                    assert(attrib->value);
+                    assert(attrib->value->type == AST_PRIMARY);
+                    assert(
+                        attrib->value->primary.tok->type == TOKEN_STRING_LIT);
+
+                    mangled_name = attrib->value->primary.tok->str;
+                }
+            }
+
             TypeInfo *fun_type = ast->type_info->ptr.sub;
             LLVMTypeRef llvm_fun_type = llvm_type(l, fun_type);
 
@@ -4001,7 +4016,7 @@ static void llvm_codegen_ast(
 
             LLVMBasicBlockRef continue_bb = case_bbs[i + 1];
             if (i == (case_count - 1)) continue_bb = merge_bb;
-            
+
             array_push(&l->continue_block_stack, continue_bb);
             array_push(&l->break_block_stack, merge_bb);
             llvm_codegen_ast(

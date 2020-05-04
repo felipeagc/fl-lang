@@ -2470,6 +2470,35 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             assert(a->compiler->errors.len > 0);
         }
+
+        for (AstAttribute *attrib = ast->attributes.ptr;
+             attrib != ast->attributes.ptr + ast->attributes.len;
+             ++attrib)
+        {
+            if (string_equals(attrib->name, STR("link_name")))
+            {
+                if (!attrib->value ||
+                    (attrib->value->type != AST_PRIMARY ||
+                     attrib->value->primary.tok->type != TOKEN_STRING_LIT))
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "'link_name' attribute must have a string value");
+                    continue;
+                }
+
+                if ((ast->flags & AST_FLAG_EXTERN) != AST_FLAG_EXTERN)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "functions with 'link_name' must be extern");
+                    continue;
+                }
+            }
+        }
+
         break;
     }
 
