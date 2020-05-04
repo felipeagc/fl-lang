@@ -42,6 +42,7 @@ Safety:
 
 Bugs:
 - Duplicate extern declarations
+- Duplicate switch case values
 - Circular imports
 - Circular typedefs (typedef Type Type;)
   typedef Type Type; // should not work

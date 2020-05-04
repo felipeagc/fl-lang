@@ -3966,15 +3966,14 @@ static void llvm_codegen_ast(
 
         LLVMBasicBlockRef *case_bbs = bump_alloc(
             &l->compiler->bump, sizeof(LLVMBasicBlockRef) * case_count);
+        LLVMBasicBlockRef default_bb = NULL;
         for (size_t i = 0; i < case_count; ++i)
         {
             case_bbs[i] = LLVMAppendBasicBlock(fun, "");
-        }
-
-        LLVMBasicBlockRef default_bb = NULL;
-        if (ast->switch_stmt.else_stmt)
-        {
-            default_bb = LLVMAppendBasicBlock(fun, "");
+            if (ast->switch_stmt.vals.ptr[i].type == AST_UNINITIALIZED)
+            {
+                default_bb = case_bbs[i];
+            }
         }
 
         LLVMBasicBlockRef merge_bb = LLVMAppendBasicBlock(fun, "");
@@ -3988,9 +3987,11 @@ static void llvm_codegen_ast(
 
         for (size_t i = 0; i < case_count; ++i)
         {
+            Ast *case_val = &ast->switch_stmt.vals.ptr[i];
+            if (case_val->type == AST_NOTHING) continue;
+
             AstValue cond_val;
-            llvm_codegen_ast(
-                l, mod, &ast->switch_stmt.vals.ptr[i], true, &cond_val);
+            llvm_codegen_ast(l, mod, case_val, true, &cond_val);
             LLVMAddCase(switch_val, cond_val.value, case_bbs[i]);
         }
 
@@ -3998,23 +3999,14 @@ static void llvm_codegen_ast(
         {
             LLVMPositionBuilderAtEnd(mod->builder, case_bbs[i]);
 
+            LLVMBasicBlockRef continue_bb = case_bbs[i + 1];
+            if (i == (case_count - 1)) continue_bb = merge_bb;
+            
+            array_push(&l->continue_block_stack, continue_bb);
             array_push(&l->break_block_stack, merge_bb);
             llvm_codegen_ast(
                 l, mod, &ast->switch_stmt.stmts.ptr[i], false, NULL);
-            array_pop(&l->break_block_stack);
-
-            if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
-            {
-                LLVMBuildBr(mod->builder, merge_bb);
-            }
-        }
-
-        if (ast->switch_stmt.else_stmt)
-        {
-            LLVMPositionBuilderAtEnd(mod->builder, default_bb);
-
-            array_push(&l->break_block_stack, merge_bb);
-            llvm_codegen_ast(l, mod, ast->switch_stmt.else_stmt, false, NULL);
+            array_pop(&l->continue_block_stack);
             array_pop(&l->break_block_stack);
 
             if (!LLVMGetBasicBlockTerminator(LLVMGetInsertBlock(mod->builder)))
@@ -4355,8 +4347,10 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_PROC_TYPE: break;
+    case AST_NOTHING:
+    case AST_PROC_TYPE:
     case AST_TYPEDEF: break;
+
     default: assert(0); break;
     }
 

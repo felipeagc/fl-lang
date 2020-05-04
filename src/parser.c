@@ -1442,7 +1442,6 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
 
         memset(&ast->switch_stmt.vals, 0, sizeof(ast->switch_stmt.vals));
         memset(&ast->switch_stmt.stmts, 0, sizeof(ast->switch_stmt.stmts));
-        ast->switch_stmt.else_stmt = NULL;
 
         while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
                !parser_is_at_end(p, 0))
@@ -1467,9 +1466,9 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
 
                 if (res)
                 {
-                    ast->switch_stmt.else_stmt =
-                        bump_alloc(&p->compiler->bump, sizeof(Ast));
-                    *ast->switch_stmt.else_stmt = block;
+                    Ast val = {.type = AST_NOTHING};
+                    array_push(&ast->switch_stmt.vals, val);
+                    array_push(&ast->switch_stmt.stmts, block);
                 }
             }
             else if (parser_peek(p, 0)->type == TOKEN_CASE)

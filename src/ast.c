@@ -98,6 +98,7 @@ typedef enum AstType {
     // Internal use:
     AST_TYPE,
     AST_TO_ANY,
+    AST_NOTHING,
 } AstType;
 
 typedef struct AstValue
@@ -192,8 +193,6 @@ struct Ast
 
             ArrayOfAst vals;
             ArrayOfAst stmts;
-
-            struct Ast *else_stmt;
         } switch_stmt;
         struct
         {

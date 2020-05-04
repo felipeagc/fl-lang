@@ -300,7 +300,6 @@ static void instantiate_template(
         INSTANTIATE_AST(switch_stmt.expr);
         INSTANTIATE_ARRAY(switch_stmt.vals);
         INSTANTIATE_ARRAY(switch_stmt.stmts);
-        if (ast->switch_stmt.else_stmt) INSTANTIATE_AST(switch_stmt.else_stmt);
         break;
     }
 
@@ -330,6 +329,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_NOTHING:
     case AST_TYPE:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:
@@ -1428,11 +1428,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         {
             create_scopes_ast(a, stmt);
         }
-
-        if (ast->switch_stmt.else_stmt)
-        {
-            create_scopes_ast(a, ast->switch_stmt.else_stmt);
-        }
         break;
     }
 
@@ -1593,6 +1588,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_NOTHING:
     case AST_VARIADIC_ARG:
     case AST_TO_ANY:
     case AST_TYPE:
@@ -1768,11 +1764,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
              ++stmt)
         {
             register_symbol_ast(a, stmt);
-        }
-
-        if (ast->switch_stmt.else_stmt)
-        {
-            register_symbol_ast(a, ast->switch_stmt.else_stmt);
         }
         break;
     }
@@ -2537,20 +2528,34 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         assert((ast->switch_stmt.vals.len) == (ast->switch_stmt.stmts.len));
 
+        size_t default_count = 0;
+
         for (size_t i = 0; i < ast->switch_stmt.vals.len; ++i)
         {
-            analyze_ast(a, &ast->switch_stmt.vals.ptr[i], val_type);
+            Ast *case_value = &ast->switch_stmt.vals.ptr[i];
+            if (case_value->type != AST_NOTHING)
+            {
+                analyze_ast(a, case_value, val_type);
+            }
+            else
+            {
+                default_count += 1;
+            }
 
+            array_push(&a->continue_stack, ast);
             array_push(&a->break_stack, ast);
             analyze_ast(a, &ast->switch_stmt.stmts.ptr[i], NULL);
             array_pop(&a->break_stack);
+            array_pop(&a->continue_stack);
         }
 
-        if (ast->switch_stmt.else_stmt)
+        if (default_count > 1)
         {
-            array_push(&a->break_stack, ast);
-            analyze_ast(a, ast->switch_stmt.else_stmt, NULL);
-            array_pop(&a->break_stack);
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "switch can only have one default block");
+            break;
         }
 
         break;
@@ -4879,11 +4884,6 @@ static void check_used_asts(Analyzer *a, Ast *ast)
             check_used_asts(a, stmt);
         }
 
-        if (ast->switch_stmt.else_stmt)
-        {
-            check_used_asts(a, ast->switch_stmt.else_stmt);
-        }
-
         break;
     }
 
@@ -4929,6 +4929,7 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_NOTHING:
     case AST_TYPE:
     case AST_BUILTIN_LEN:
     case AST_BUILTIN_PTR:

@@ -7,17 +7,32 @@ func main() {
     switch (4) {
     case 1: abort();
     case 2: abort();
-    default: fmt.print("None of the above!\n");
+    default: 
+        fmt.print("None of the above!\n");
+        abort();
     }
 
     switch (1) {
     case 1:
-    default: abort();
+    default:
+        abort();
     }
 
     switch (1) {
     default: 
         break;
         abort();
+    }
+
+    switch (5) {
+        default: abort();
+        case 5:
+            continue;
+            abort();
+        case 6:
+            continue;
+        case 7:
+            fmt.print("Hello\n"); 
+            continue;
     }
 }
