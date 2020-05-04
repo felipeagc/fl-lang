@@ -40,19 +40,24 @@ func signed_itoa(into: *string, num: i64, base: i64) {
 
     if (negative) n = -n;
 
-    while (n > 0) {
-        var rem = n % base;
-        n /= base;
-
-        var ch: char = void;
-        if (rem <= 10) {
-            ch = cast(char)rem + '0';
-        } else {
-            ch = cast(char)rem + 'A';
-        }
-
-        buf[len] = ch;
+    if (n == 0) {
+        buf[len] = '0';
         len += 1;
+    } else {
+        while (n > 0) {
+            var rem = n % base;
+            n /= base;
+
+            var ch: char = void;
+            if (rem <= 10) {
+                ch = cast(char)rem + '0';
+            } else {
+                ch = cast(char)rem + 'A';
+            }
+
+            buf[len] = ch;
+            len += 1;
+        }
     }
 
     if (negative) {
@@ -70,21 +75,26 @@ func signed_itoa(into: *string, num: i64, base: i64) {
 func unsigned_itoa(into: *string, num: u64, base: u64) {
     var buf: [32]char;
     var len: uint = 0;
-
     var n = num;
-    while (n > 0) {
-        var rem = n % base;
-        n /= base;
 
-        var ch: char = void;
-        if (rem <= 10) {
-            ch = cast(char)rem + '0';
-        } else {
-            ch = cast(char)rem + 'A';
-        }
-
-        buf[len] = ch;
+    if (n == 0) {
+        buf[len] = '0';
         len += 1;
+    } else {
+        while (n > 0) {
+            var rem = n % base;
+            n /= base;
+
+            var ch: char = void;
+            if (rem <= 10) {
+                ch = cast(char)rem + '0';
+            } else {
+                ch = cast(char)rem + 'A';
+            }
+
+            buf[len] = ch;
+            len += 1;
+        }
     }
 
     while (len) {

@@ -491,22 +491,66 @@ static bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
         memset(&ast->compound, 0, sizeof(ast->compound));
         ast->compound.type_expr = type_expr;
 
-        while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
-               !parser_is_at_end(p, 0))
+        if (parser_peek(p, 0)->type == TOKEN_IDENT &&
+            parser_peek(p, 1)->type == TOKEN_ASSIGN)
         {
-            Ast value = {0};
-            if (parse_expr(p, &value, parsing_type))
-            {
-                array_push(&ast->compound.values, value);
-            }
-            else
-            {
-                res = false;
-            }
+            // Named struct initializer
+            ast->compound.is_named = true;
 
-            if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                   !parser_is_at_end(p, 0))
+            {
+                Token *ident = parser_consume(p, TOKEN_IDENT);
+                if (!ident)
+                {
+                    res = false;
+                    break;
+                }
 
-            if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                String name = ident->str;
+
+                if (!parser_consume(p, TOKEN_ASSIGN))
+                {
+                    res = false;
+                    break;
+                }
+
+                Ast value = {0};
+                if (parse_expr(p, &value, parsing_type))
+                {
+                    array_push(&ast->compound.names, name);
+                    array_push(&ast->compound.values, value);
+                }
+                else
+                {
+                    res = false;
+                }
+
+                if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
+
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+        else
+        {
+            // Nameless initializer
+            while (parser_peek(p, 0)->type != TOKEN_RCURLY &&
+                   !parser_is_at_end(p, 0))
+            {
+                Ast value = {0};
+                if (parse_expr(p, &value, parsing_type))
+                {
+                    array_push(&ast->compound.values, value);
+                }
+                else
+                {
+                    res = false;
+                }
+
+                if (parser_peek(p, 0)->type == TOKEN_RCURLY) break;
+
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
         }
 
         if (!parser_consume(p, TOKEN_RCURLY)) res = false;

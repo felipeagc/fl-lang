@@ -7,7 +7,6 @@ Macros (?)
 
 Offsetof
 Attributes
-Key/val struct literal
 
 General constant expression evaluator
 Static assert

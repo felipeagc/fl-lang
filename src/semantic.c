@@ -4057,6 +4057,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "compound literal has wrong number of values");
             }
 
+            if (ast->compound.is_named)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "named compound literal only works for struct types");
+            }
+
             for (Ast *value = ast->compound.values.ptr;
                  value != ast->compound.values.ptr + ast->compound.values.len;
                  ++value)
@@ -4068,22 +4076,62 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TYPE_STRUCT: {
-            if ((ast->compound.values.len) !=
-                    (ast->type_info->structure.fields.len) &&
-                (ast->compound.values.len) != 0)
+            if (ast->compound.is_named)
             {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "compound literal has wrong number of values");
-            }
+                assert(ast->type_info->scope);
+                assert(ast->compound.values.len == ast->compound.names.len);
+                for (size_t i = 0; i < ast->compound.values.len; ++i)
+                {
+                    Ast *field = get_symbol(
+                        ast->type_info->scope,
+                        ast->compound.names.ptr[i],
+                        ast->loc.file);
+                    if (!field)
+                    {
+                        compile_error(
+                            a->compiler,
+                            ast->loc,
+                            "struct field does not exist: '%.*s'",
+                            PRINT_STR(ast->compound.names.ptr[i]));
+                        break;
+                    }
 
-            for (size_t i = 0; i < ast->compound.values.len; ++i)
+                    if (field->type != AST_STRUCT_FIELD)
+                    {
+                        compile_error(
+                            a->compiler,
+                            ast->loc,
+                            "can only assign to struct fields (maybe trying to "
+                            "assign to an inner 'using' field)");
+                        continue;
+                    }
+
+                    analyze_ast(
+                        a,
+                        &ast->compound.values.ptr[i],
+                        ast->type_info->structure.fields
+                            .ptr[field->struct_field.index]);
+                }
+            }
+            else
             {
-                analyze_ast(
-                    a,
-                    &ast->compound.values.ptr[i],
-                    ast->type_info->structure.fields.ptr[i]);
+                if ((ast->compound.values.len) !=
+                        (ast->type_info->structure.fields.len) &&
+                    (ast->compound.values.len) != 0)
+                {
+                    compile_error(
+                        a->compiler,
+                        ast->loc,
+                        "compound literal has wrong number of values");
+                }
+
+                for (size_t i = 0; i < ast->compound.values.len; ++i)
+                {
+                    analyze_ast(
+                        a,
+                        &ast->compound.values.ptr[i],
+                        ast->type_info->structure.fields.ptr[i]);
+                }
             }
 
             break;
@@ -4094,6 +4142,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 analyze_ast(a, &ast->compound.values.ptr[0], ast->type_info);
                 break;
+            }
+
+            if (ast->compound.is_named)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "named compound literal only works for struct types");
             }
 
             compile_error(

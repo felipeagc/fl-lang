@@ -41,6 +41,15 @@ func main() {
     }
 
     {
+        var my_struct = Struct{
+            b = c"Hello",
+            a = 1,
+        };
+        printf(c"my_struct.a = %d\n", my_struct.a);
+        printf(c"my_struct.b = \"%s\"\n", my_struct.b);
+    }
+
+    {
         var zeroed_struct = Struct{};
         if (zeroed_struct.a != 0) abort();
         if (zeroed_struct.b != null) abort();

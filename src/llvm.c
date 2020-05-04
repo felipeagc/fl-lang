@@ -2454,28 +2454,82 @@ static void llvm_codegen_ast(
                 }
                 else
                 {
-                    assert(
-                        (ast->compound.values.len) ==
-                        (ast->type_info->structure.fields.len));
-
-                    for (Ast *value = ast->compound.values.ptr;
-                         value !=
-                         ast->compound.values.ptr + ast->compound.values.len;
-                         ++value)
+                    if (ast->compound.is_named)
                     {
-                        size_t index =
-                            (size_t)(value - ast->compound.values.ptr);
-                        AstValue val = {0};
-                        llvm_codegen_ast(l, mod, value, is_const, &val);
+                        // Zero-initialize it first
+                        LLVMBuildStore(
+                            mod->builder,
+                            LLVMConstNull(llvm_type(l, ast->type_info)),
+                            result_value.value);
 
-                        LLVMValueRef indices[2] = {
-                            LLVMConstInt(LLVMInt32Type(), 0, false),
-                            LLVMConstInt(LLVMInt32Type(), index, false),
-                        };
+                        assert(ast->type_info->scope);
+                        assert(
+                            ast->compound.values.len ==
+                            ast->compound.names.len);
+                        for (size_t i = 0; i < ast->compound.values.len; ++i)
+                        {
+                            Ast *field = get_symbol(
+                                ast->type_info->scope,
+                                ast->compound.names.ptr[i],
+                                ast->loc.file);
+                            assert(field->type == AST_STRUCT_FIELD);
 
-                        LLVMValueRef ptr = LLVMBuildGEP(
-                            mod->builder, result_value.value, indices, 2, "");
-                        LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
+                            AstValue val = {0};
+                            llvm_codegen_ast(
+                                l,
+                                mod,
+                                &ast->compound.values.ptr[i],
+                                is_const,
+                                &val);
+
+                            LLVMValueRef indices[2] = {
+                                LLVMConstInt(LLVMInt32Type(), 0, false),
+                                LLVMConstInt(
+                                    LLVMInt32Type(),
+                                    field->struct_field.index,
+                                    false),
+                            };
+
+                            LLVMValueRef ptr = LLVMBuildGEP(
+                                mod->builder,
+                                result_value.value,
+                                indices,
+                                2,
+                                "");
+                            LLVMBuildStore(
+                                mod->builder, load_val(mod, &val), ptr);
+                        }
+                    }
+                    else
+                    {
+                        assert(
+                            (ast->compound.values.len) ==
+                            (ast->type_info->structure.fields.len));
+
+                        for (Ast *value = ast->compound.values.ptr;
+                             value != ast->compound.values.ptr +
+                                          ast->compound.values.len;
+                             ++value)
+                        {
+                            size_t index =
+                                (size_t)(value - ast->compound.values.ptr);
+                            AstValue val = {0};
+                            llvm_codegen_ast(l, mod, value, is_const, &val);
+
+                            LLVMValueRef indices[2] = {
+                                LLVMConstInt(LLVMInt32Type(), 0, false),
+                                LLVMConstInt(LLVMInt32Type(), index, false),
+                            };
+
+                            LLVMValueRef ptr = LLVMBuildGEP(
+                                mod->builder,
+                                result_value.value,
+                                indices,
+                                2,
+                                "");
+                            LLVMBuildStore(
+                                mod->builder, load_val(mod, &val), ptr);
+                        }
                     }
                 }
 

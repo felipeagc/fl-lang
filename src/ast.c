@@ -247,6 +247,8 @@ struct Ast
         {
             struct Ast *type_expr;
             ArrayOfAst values;
+            ArrayOfString names;
+            bool is_named;
         } compound;
         struct
         {
