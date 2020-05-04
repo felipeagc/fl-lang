@@ -185,9 +185,9 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         if (!type->structure.is_union)
         {
             char *struct_name = "";
-            if (type->pretty_name.len > 0)
+            if (type->name.len > 0)
             {
-                struct_name = bump_c_str(&l->compiler->bump, type->pretty_name);
+                struct_name = bump_c_str(&l->compiler->bump, type->name);
             }
             type->ref =
                 LLVMStructCreateNamed(LLVMGetGlobalContext(), struct_name);
@@ -481,7 +481,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         flags_value,
         LLVMBuildGEP(mod->builder, ptr, indices, 2, ""));
 
-    if (type_info->pretty_name.len > 0)
+    if (type_info->name.len > 0)
     {
         indices[1] = LLVMConstInt(LLVMInt32Type(), TYPEINFO_NAME_INDEX, false);
         LLVMValueRef name_slice_ptr =
@@ -489,14 +489,14 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
 
         LLVMValueRef str_ptr = LLVMAddGlobal(
             mod->mod,
-            LLVMArrayType(LLVMInt8Type(), type_info->pretty_name.len),
+            LLVMArrayType(LLVMInt8Type(), type_info->name.len),
             "");
         LLVMSetLinkage(str_ptr, LLVMInternalLinkage);
         LLVMSetGlobalConstant(str_ptr, true);
         LLVMSetInitializer(
             str_ptr,
             LLVMConstString(
-                type_info->pretty_name.ptr, type_info->pretty_name.len, true));
+                type_info->name.ptr, type_info->name.len, true));
 
         indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
         indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
@@ -515,7 +515,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMBuildStore(
             mod->builder,
             LLVMConstInt(
-                llvm_type(l, &UINT_TYPE), type_info->pretty_name.len, false),
+                llvm_type(l, &UINT_TYPE), type_info->name.len, false),
             len_ptr);
     }
 

@@ -38,7 +38,7 @@ struct TypeInfo
     LLVMMetadataRef debug_ref;
     SourceFile *file;
     struct Scope *scope;
-    String pretty_name;
+    String name;
 
     union
     {
@@ -137,6 +137,8 @@ static TypeInfo BOOL_INT_TYPE = {
 
 static TypeInfo *STRING_TYPE = NULL;
 
+static TypeInfo CSTRING_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &I8_TYPE};
+
 static TypeInfo ANY_TYPE = {.kind = TYPE_ANY};
 
 static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
@@ -232,13 +234,11 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     }
 
     case TYPE_STRUCT: {
-        if ((received->pretty_name.len > 0) || (expected->pretty_name.len > 0))
+        if ((received->name.len > 0) || (expected->name.len > 0))
         {
-            if ((received->pretty_name.len > 0) &&
-                (expected->pretty_name.len > 0))
+            if ((received->name.len > 0) && (expected->name.len > 0))
             {
-                if (!string_equals(
-                        received->pretty_name, expected->pretty_name))
+                if (!string_equals(received->name, expected->name))
                 {
                     return NULL;
                 }
@@ -533,33 +533,56 @@ create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
-// scope param can be null
-static TypeInfo *
-create_named_struct_type(Compiler *compiler, Scope *scope, bool is_union)
+static TypeInfo *create_placeholder_type(Compiler *compiler)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_STRUCT;
-    ty->scope = scope;
-    ty->structure.is_union = is_union;
+    ty->kind = TYPE_UNINITIALIZED;
     return ty;
 }
 
-static void
-set_struct_type_fields(TypeInfo *struct_type, ArrayOfTypeInfoPtr *fields)
+// scope param can be null
+static void init_struct_type(
+    TypeInfo *ty, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
 {
-    struct_type->structure.fields = *fields;
+    ty->kind = TYPE_STRUCT;
+    ty->scope = scope;
+    memset(&ty->structure, 0, sizeof(ty->structure));
+    ty->structure.is_union = is_union;
+    ty->structure.fields = *fields;
+}
+
+static TypeInfo *create_proc_type(
+    Compiler *compiler,
+    ArrayOfTypeInfoPtr params,
+    TypeInfo *return_type,
+    uint32_t flags)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_PROC;
+    ty->flags = flags;
+    ty->proc.params = params;
+    ty->proc.return_type = return_type;
+    return ty;
+}
+
+static TypeInfo *
+create_enum_type(Compiler *compiler, Scope *scope, TypeInfo *underlying_type)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_ENUM;
+    ty->scope = scope;
+    ty->enumeration.underlying_type = underlying_type;
+    return ty;
 }
 
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
-    if (type->pretty_name.len > 0)
+    if (type->name.len > 0)
     {
-        sb_sprintf(
-            sb,
-            "T%zu%.*s",
-            type->pretty_name.len,
-            PRINT_STR(type->pretty_name));
+        sb_sprintf(sb, "T%zu%.*s", type->name.len, PRINT_STR(type->name));
         return;
     }
 
@@ -673,10 +696,10 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
 static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
 {
-    if (type->pretty_name.len > 0)
+    if (type->name.len > 0)
     {
         assert(!is_type_basic(type));
-        sb_append(sb, type->pretty_name);
+        sb_append(sb, type->name);
         return;
     }
 
@@ -793,9 +816,9 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
 
 static String get_type_pretty_name(Compiler *compiler, TypeInfo *type)
 {
-    if (type->pretty_name.len > 0)
+    if (type->name.len > 0)
     {
-        return type->pretty_name;
+        return type->name;
     }
 
     sb_reset(&compiler->sb);

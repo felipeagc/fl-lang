@@ -815,8 +815,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 sb_append_char(&a->compiler->sb, '.');
             }
             sb_append(&a->compiler->sb, ast->type_def.name);
-            ast->as_type->pretty_name =
-                sb_build(&a->compiler->sb, &a->compiler->bump);
+            ast->as_type->name = sb_build(&a->compiler->sb, &a->compiler->bump);
         }
         break;
     }
@@ -899,7 +898,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                         &a->compiler->sb, ast_as_type(a, scope, param, false));
                 }
                 sb_append_char(&a->compiler->sb, ')');
-                cloned_ast->as_type->pretty_name =
+                cloned_ast->as_type->name =
                     sb_build(&a->compiler->sb, &a->compiler->bump);
             }
 
@@ -919,11 +918,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     case AST_POINTER_TYPE: {
         if (ast_as_type(a, scope, ast->expr, false))
         {
-            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_POINTER;
-            ty->ptr.sub = ast->expr->as_type;
-            ast->as_type = ty;
+            ast->as_type = create_pointer_type(a->compiler, ast->expr->as_type);
         }
         break;
     }
@@ -987,9 +982,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         // We need to set the type here in advance because of recursive type
         // stuff
-        TypeInfo *ty = create_named_struct_type(
-            a->compiler, ast->scope, ast->structure.is_union);
-        ast->as_type = ty;
+        ast->as_type = create_placeholder_type(a->compiler);
 
         for (Ast *field = ast->structure.fields.ptr;
              field != ast->structure.fields.ptr + ast->structure.fields.len;
@@ -1004,7 +997,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (res)
         {
-            set_struct_type_fields(ty, &fields);
+            init_struct_type(
+                ast->as_type, ast->scope, ast->structure.is_union, &fields);
         }
         else
         {
@@ -1020,32 +1014,26 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (underlying_type)
         {
-            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_ENUM;
-            ty->scope = ast->scope;
-            ty->enumeration.underlying_type = underlying_type;
-
-            ast->as_type = ty;
+            ast->as_type =
+                create_enum_type(a->compiler, ast->scope, underlying_type);
         }
 
         break;
     }
 
     case AST_PROC_TYPE: {
-        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_PROC;
-        ty->file = ast->loc.file;
+        uint32_t proc_flags = 0;
+        ArrayOfTypeInfoPtr params = {0};
+        TypeInfo *return_type = NULL;
 
         if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
         {
-            ty->flags |= TYPE_FLAG_C_VARARGS;
+            proc_flags |= TYPE_FLAG_C_VARARGS;
         }
 
         if (ast->flags & AST_FLAG_EXTERN)
         {
-            ty->flags |= TYPE_FLAG_EXTERN;
+            proc_flags |= TYPE_FLAG_EXTERN;
         }
 
         bool valid = true;
@@ -1062,39 +1050,36 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 break;
             }
 
-            if ((ty->flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
+            if ((proc_flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
                 is_type_compound(param_as_type))
             {
                 valid = false;
                 break;
             }
 
-            array_push(&ty->proc.params, param_as_type);
+            array_push(&params, param_as_type);
         }
 
         if (ast->proc.return_type)
         {
-            ty->proc.return_type =
-                ast_as_type(a, scope, ast->proc.return_type, false);
+            return_type = ast_as_type(a, scope, ast->proc.return_type, false);
         }
         else
         {
-            ty->proc.return_type = &VOID_TYPE;
+            return_type = &VOID_TYPE;
         }
 
-        if (!ty->proc.return_type)
+        if (!return_type)
         {
             valid = false;
         }
 
         if (valid)
         {
-            TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
-            memset(ptr_ty, 0, sizeof(*ptr_ty));
-            ptr_ty->kind = TYPE_POINTER;
-            ptr_ty->ptr.sub = ty;
-
-            ast->as_type = ptr_ty;
+            TypeInfo *proc_type =
+                create_proc_type(a->compiler, params, return_type, proc_flags);
+            proc_type->file = ast->loc.file;
+            ast->as_type = create_pointer_type(a->compiler, proc_type);
         }
         break;
     }
@@ -2383,10 +2368,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_PROC;
-        ty->file = ast->loc.file;
+        uint32_t proc_flags = 0;
+        ArrayOfTypeInfoPtr params = {0};
+        TypeInfo *return_type = NULL;
 
         bool valid_type = true;
 
@@ -2426,7 +2410,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->flags |= AST_FLAG_FUNCTION_IS_VARARGS;
             }
 
-            if ((ty->flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
+            if ((proc_flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
                 is_type_compound(param->decl.type_expr->as_type))
             {
                 compile_error(
@@ -2436,7 +2420,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 valid_type = false;
             }
 
-            array_push(&ty->proc.params, param->decl.type_expr->as_type);
+            array_push(&params, param->decl.type_expr->as_type);
         }
 
         if (ast->proc.return_type)
@@ -2444,42 +2428,42 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->proc.return_type, &TYPE_OF_TYPE);
             if (ast->proc.return_type->as_type)
             {
-                ty->proc.return_type = ast->proc.return_type->as_type;
+                return_type = ast->proc.return_type->as_type;
             }
         }
         else
         {
-            ty->proc.return_type = &VOID_TYPE;
+            return_type = &VOID_TYPE;
         }
 
-        if (!ty->proc.return_type)
+        if (!return_type)
         {
             valid_type = false;
         }
 
         if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
         {
-            ty->flags |= TYPE_FLAG_C_VARARGS;
+            proc_flags |= TYPE_FLAG_C_VARARGS;
         }
 
         if (ast->flags & AST_FLAG_FUNCTION_IS_VARARGS)
         {
-            ty->flags |= TYPE_FLAG_VARARGS;
+            proc_flags |= TYPE_FLAG_VARARGS;
         }
 
         if (ast->flags & AST_FLAG_EXTERN)
         {
-            ty->flags |= TYPE_FLAG_EXTERN;
+            proc_flags |= TYPE_FLAG_EXTERN;
         }
 
         if (valid_type)
         {
-            TypeInfo *ptr_ty = bump_alloc(&a->compiler->bump, sizeof(*ptr_ty));
-            memset(ptr_ty, 0, sizeof(*ptr_ty));
-            ptr_ty->kind = TYPE_POINTER;
-            ptr_ty->ptr.sub = ty;
-            ptr_ty->file = ast->loc.file;
-            ast->type_info = ptr_ty;
+            TypeInfo *proc_type =
+                create_proc_type(a->compiler, params, return_type, proc_flags);
+            proc_type->file = ast->loc.file;
+
+            ast->type_info = create_pointer_type(a->compiler, proc_type);
+            ast->type_info->file = ast->loc.file;
         }
         else
         {
@@ -2858,11 +2842,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case TOKEN_CSTRING_LIT: {
-            static TypeInfo ty = {
-                .kind = TYPE_POINTER,
-                .ptr.sub = &I8_TYPE,
-            };
-            ast->type_info = &ty;
+            ast->type_info = &CSTRING_TYPE;
             break;
         }
 
@@ -3041,10 +3021,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
-            ast->type_info = bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-            memset(ast->type_info, 0, sizeof(TypeInfo));
-            ast->type_info->kind = TYPE_POINTER;
-            ast->type_info->ptr.sub = type->array.sub;
+            ast->type_info = create_pointer_type(a->compiler, type->array.sub);
             break;
 
         case TYPE_ANY: {
@@ -3680,10 +3657,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-        memset(ty, 0, sizeof(*ty));
-        ty->kind = TYPE_TYPE;
-        ast->type_info = ty;
+        ast->type_info = &TYPE_OF_TYPE;
 
         break;
     }
@@ -3735,11 +3709,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case UNOP_ADDRESS: {
-            TypeInfo *ty = bump_alloc(&a->compiler->bump, sizeof(*ty));
-            memset(ty, 0, sizeof(*ty));
-            ty->kind = TYPE_POINTER;
-            ty->ptr.sub = ast->unop.sub->type_info;
-            ast->type_info = ty;
+            ast->type_info =
+                create_pointer_type(a->compiler, ast->unop.sub->type_info);
             break;
         }
 
