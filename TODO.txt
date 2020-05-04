@@ -47,6 +47,5 @@ Bugs:
 - Duplicate extern declarations
 - Duplicate switch case values
 - Circular imports
-- Circular typedefs (typedef Type Type;)
-  typedef Type Type; // should not work
-  var a: i32 = a; // should not work
+- var a: i32 = a; // should not work
+- const A: i32 = A; // should not work

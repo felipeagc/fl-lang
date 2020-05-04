@@ -145,6 +145,8 @@ static TypeInfo TEMPLATE_TYPE = {.kind = TYPE_TEMPLATE};
 
 static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
 
+static TypeInfo NONE_TYPE = {.kind = TYPE_NONE};
+
 // Type functions
 
 static inline bool is_type_compound(TypeInfo *type)

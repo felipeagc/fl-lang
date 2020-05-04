@@ -798,9 +798,15 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_TYPEDEF: {
+        ast->as_type = &NONE_TYPE;
         ast->as_type = ast_as_type(a, scope, ast->type_def.type_expr, false);
-        if (ast->type_def.type_expr->as_type &&
-            !is_type_basic(ast->type_def.type_expr->as_type))
+
+        if (ast->as_type && ast->as_type->kind == TYPE_NONE)
+        {
+            ast->as_type = NULL;
+        }
+
+        if (ast->as_type && !is_type_basic(ast->as_type))
         {
             sb_reset(&a->compiler->sb);
             if (ast->loc.file->module_name.len > 0)
@@ -809,7 +815,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 sb_append_char(&a->compiler->sb, '.');
             }
             sb_append(&a->compiler->sb, ast->type_def.name);
-            ast->type_def.type_expr->as_type->pretty_name =
+            ast->as_type->pretty_name =
                 sb_build(&a->compiler->sb, &a->compiler->bump);
         }
         break;
@@ -2036,6 +2042,15 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->type_def.template_params.len == 0)
         {
             analyze_ast(a, ast->type_def.type_expr, &TYPE_OF_TYPE);
+
+            if (!ast->type_def.type_expr->as_type)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "could not resolve a type from the typedef's type "
+                    "expression");
+            }
         }
         break;
     }
