@@ -105,7 +105,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_BOOL: type->ref = llvm_type(l, &BOOL_INT_TYPE); break;
+    case TYPE_BOOL: type->ref = llvm_type(l, l->compiler->bool_int_type); break;
     case TYPE_VOID: type->ref = LLVMVoidType(); break;
 
     case TYPE_POINTER: {
@@ -139,7 +139,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
-            llvm_type(l, &UINT_TYPE),                          // len
+            llvm_type(l, l->compiler->uint_type),              // len
         };
 
         type->ref = LLVMStructType(field_types, 2, false);
@@ -149,8 +149,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_DYNAMIC_ARRAY: {
         LLVMTypeRef field_types[3] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
-            llvm_type(l, &UINT_TYPE),                          // len
-            llvm_type(l, &UINT_TYPE),                          // cap
+            llvm_type(l, l->compiler->uint_type),              // len
+            llvm_type(l, l->compiler->uint_type),              // cap
         };
 
         type->ref = LLVMStructType(field_types, 3, false);
@@ -294,7 +294,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
             l->mod.di_builder,
             name,
             strlen(name),
-            BOOL_INT_TYPE.integer.num_bits,
+            l->compiler->bool_int_type->integer.num_bits,
             DW_ATE_boolean,
             0);
         break;
@@ -316,8 +316,8 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         type->debug_ref = LLVMDIBuilderCreatePointerType(
             l->mod.di_builder,
             llvm_debug_type(l, type->ptr.sub),
-            UINT_TYPE.integer.num_bits,
-            align_of_type(type) * 8,
+            l->compiler->uint_type->integer.num_bits,
+            align_of_type(l->compiler, type) * 8,
             0,
             pretty_name.ptr,
             pretty_name.len);
@@ -328,7 +328,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         type->debug_ref = LLVMDIBuilderCreateArrayType(
             l->mod.di_builder,
             type->array.size,
-            align_of_type(type) * 8,
+            align_of_type(l->compiler, type) * 8,
             llvm_debug_type(l, type->array.sub),
             NULL,
             0);
@@ -377,8 +377,8 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
                 param_types[i] = LLVMDIBuilderCreatePointerType(
                     l->mod.di_builder,
                     param_types[i],
-                    UINT_TYPE.integer.num_bits,
-                    align_of_type(&UINT_TYPE) * 8,
+                    l->compiler->uint_type->integer.num_bits,
+                    align_of_type(l->compiler, l->compiler->uint_type) * 8,
                     0,
                     pretty_name.ptr,
                     pretty_name.len);
@@ -488,15 +488,12 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
             LLVMBuildGEP(mod->builder, ptr, indices, 2, "");
 
         LLVMValueRef str_ptr = LLVMAddGlobal(
-            mod->mod,
-            LLVMArrayType(LLVMInt8Type(), type_info->name.len),
-            "");
+            mod->mod, LLVMArrayType(LLVMInt8Type(), type_info->name.len), "");
         LLVMSetLinkage(str_ptr, LLVMInternalLinkage);
         LLVMSetGlobalConstant(str_ptr, true);
         LLVMSetInitializer(
             str_ptr,
-            LLVMConstString(
-                type_info->name.ptr, type_info->name.len, true));
+            LLVMConstString(type_info->name.ptr, type_info->name.len, true));
 
         indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
         indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
@@ -515,7 +512,9 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMBuildStore(
             mod->builder,
             LLVMConstInt(
-                llvm_type(l, &UINT_TYPE), type_info->name.len, false),
+                llvm_type(l, l->compiler->uint_type),
+                type_info->name.len,
+                false),
             len_ptr);
     }
 
@@ -636,7 +635,9 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMBuildStore(
             mod->builder,
             LLVMConstInt(
-                llvm_type(l, &UINT_TYPE), type_info->array.size, false),
+                llvm_type(l, l->compiler->uint_type),
+                type_info->array.size,
+                false),
             value_ptr);
 
         break;
@@ -699,7 +700,9 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMBuildStore(
             mod->builder,
             LLVMConstInt(
-                llvm_type(l, &UINT_TYPE), type_info->proc.params.len, false),
+                llvm_type(l, l->compiler->uint_type),
+                type_info->proc.params.len,
+                false),
             value_ptr);
 
         // Return type
@@ -776,7 +779,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         LLVMBuildStore(
             mod->builder,
             LLVMConstInt(
-                llvm_type(l, &UINT_TYPE),
+                llvm_type(l, l->compiler->uint_type),
                 type_info->structure.fields.len,
                 false),
             value_ptr);
@@ -936,7 +939,7 @@ build_alloca(LLContext *l, LLModule *mod, TypeInfo *type)
         mod->builder, entry_block, LLVMGetBasicBlockTerminator(entry_block));
 
     LLVMValueRef alloca = LLVMBuildAlloca(mod->builder, llvm_ty, "");
-    LLVMSetAlignment(alloca, align_of_type(type));
+    LLVMSetAlignment(alloca, align_of_type(l->compiler, type));
 
     LLVMPositionBuilderAtEnd(mod->builder, current_block);
 
@@ -1557,7 +1560,7 @@ static void llvm_codegen_ast(
             AstValue align_val = {0};
             align_val.value = LLVMConstInt(
                 llvm_type(l, ast->type_info),
-                (unsigned long long)align_of_type(type),
+                (unsigned long long)align_of_type(l->compiler, type),
                 false);
             if (out_value) *out_value = align_val;
 
@@ -1828,7 +1831,7 @@ static void llvm_codegen_ast(
                     di_type,
                     true,
                     LLVMDIFlagZero,
-                    align_of_type(ast->type_info) * 8);
+                    align_of_type(l->compiler, ast->type_info) * 8);
                 LLVMMetadataRef di_expr =
                     LLVMDIBuilderCreateExpression(mod->di_builder, NULL, 0);
 
@@ -2108,7 +2111,7 @@ static void llvm_codegen_ast(
             AstValue subscript_value = {0};
 
             LLVMValueRef indices[2] = {
-                LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false),
+                LLVMConstInt(llvm_type(l, l->compiler->uint_type), 0, false),
                 load_val(mod, &right_value),
             };
 
@@ -2201,10 +2204,10 @@ static void llvm_codegen_ast(
 
             if (!lower_value.value && !upper_value.value)
             {
-                lower_value.value =
-                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+                lower_value.value = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type), 0, false);
                 upper_value.value = LLVMConstInt(
-                    llvm_type(l, &UINT_TYPE),
+                    llvm_type(l, l->compiler->uint_type),
                     ast->subscript_slice.left->type_info->array.size,
                     false);
             }
@@ -2235,8 +2238,8 @@ static void llvm_codegen_ast(
                 LLVMValueRef len_ptr = LLVMBuildGEP(
                     mod->builder, left_value.value, indices, 2, "");
 
-                lower_value.value =
-                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+                lower_value.value = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type), 0, false);
                 upper_value.value = LLVMBuildLoad(mod->builder, len_ptr, "");
             }
 
@@ -2248,10 +2251,10 @@ static void llvm_codegen_ast(
 
             if (!lower_value.value && !upper_value.value)
             {
-                lower_value.value =
-                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
-                upper_value.value =
-                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+                lower_value.value = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type), 0, false);
+                upper_value.value = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type), 0, false);
             }
             break;
         }
@@ -2289,7 +2292,11 @@ static void llvm_codegen_ast(
         {
             LLVMValueRef len = LLVMBuildSub(mod->builder, upper, lower, "");
             len = LLVMBuildIntCast2(
-                mod->builder, len, llvm_type(l, &UINT_TYPE), false, "");
+                mod->builder,
+                len,
+                llvm_type(l, l->compiler->uint_type),
+                false,
+                "");
 
             LLVMValueRef indices[2] = {
                 LLVMConstInt(LLVMInt32Type(), 0, false),
@@ -2942,8 +2949,8 @@ static void llvm_codegen_ast(
         case TYPE_ARRAY: {
             AstValue result_value = {0};
             result_value.is_lvalue = false;
-            result_value.value =
-                LLVMConstInt(llvm_type(l, &UINT_TYPE), type->array.size, false);
+            result_value.value = LLVMConstInt(
+                llvm_type(l, l->compiler->uint_type), type->array.size, false);
 
             if (out_value) *out_value = result_value;
             break;
@@ -4226,7 +4233,7 @@ static void llvm_codegen_ast(
         else
         {
             current_ptr_ptr = build_alloca(
-                l, mod, create_pointer_type(l->compiler, ast->type_info));
+                l, mod, create_pointer_type(l->compiler, ast->type_info, 0));
             ast->foreach_stmt.value.is_lvalue = true;
             ast->foreach_stmt.value.value =
                 build_alloca(l, mod, ast->type_info);
@@ -4254,19 +4261,19 @@ static void llvm_codegen_ast(
             if (iterator_value.is_lvalue)
             {
                 index_count++;
-                indices[index_count - 1] =
-                    LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+                indices[index_count - 1] = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type), 0, false);
             }
 
             index_count++;
 
             indices[index_count - 1] =
-                LLVMConstInt(llvm_type(l, &UINT_TYPE), 0, false);
+                LLVMConstInt(llvm_type(l, l->compiler->uint_type), 0, false);
             first = LLVMBuildGEP(
                 mod->builder, iterator_value.value, indices, index_count, "");
 
             indices[index_count - 1] = LLVMConstInt(
-                llvm_type(l, &UINT_TYPE),
+                llvm_type(l, l->compiler->uint_type),
                 iterator->type_info->array.size,
                 false);
             last = LLVMBuildGEP(

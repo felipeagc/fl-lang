@@ -91,8 +91,44 @@ typedef struct Compiler
 
     Ast *runtime_module;
 
-    struct TypeInfo *type_info_type;
     ArrayOfTypeInfoPtr rtti_type_infos;
+
+    struct TypeInfo *type_info_type;
+
+    struct TypeInfo *u8_type;
+    struct TypeInfo *u16_type;
+    struct TypeInfo *u32_type;
+    struct TypeInfo *u64_type;
+
+    struct TypeInfo *i8_type;
+    struct TypeInfo *i16_type;
+    struct TypeInfo *i32_type;
+    struct TypeInfo *i64_type;
+
+    struct TypeInfo *int_type;
+    struct TypeInfo *uint_type;
+
+    struct TypeInfo *float_type;
+    struct TypeInfo *double_type;
+
+    struct TypeInfo *int_lit_type;
+    struct TypeInfo *float_lit_type;
+
+    struct TypeInfo *bool_type;
+    struct TypeInfo *void_type;
+
+    struct TypeInfo *null_ptr_type;
+    struct TypeInfo *void_ptr_type;
+    struct TypeInfo *bool_int_type;
+
+    struct TypeInfo *string_type;
+    struct TypeInfo *c_string_type;
+
+    struct TypeInfo *any_type;
+    struct TypeInfo *namespace_type;
+    struct TypeInfo *template_type;
+    struct TypeInfo *type_type;
+    struct TypeInfo *none_type;
 } Compiler;
 
 static Module *get_module(Compiler *compiler, String module_name)
@@ -197,25 +233,47 @@ static void compiler_init(Compiler *compiler)
 
     // Initialize runtime scopes
     {
-        init_numeric_type(compiler, &U8_TYPE);
-        init_numeric_type(compiler, &U16_TYPE);
-        init_numeric_type(compiler, &U32_TYPE);
-        init_numeric_type(compiler, &U64_TYPE);
+        compiler->u8_type = create_int_type(compiler, 8, false, 0);
+        compiler->u16_type = create_int_type(compiler, 16, false, 0);
+        compiler->u32_type = create_int_type(compiler, 32, false, 0);
+        compiler->u64_type = create_int_type(compiler, 64, false, 0);
 
-        init_numeric_type(compiler, &I8_TYPE);
-        init_numeric_type(compiler, &I16_TYPE);
-        init_numeric_type(compiler, &I32_TYPE);
-        init_numeric_type(compiler, &I64_TYPE);
+        compiler->i8_type = create_int_type(compiler, 8, true, 0);
+        compiler->i16_type = create_int_type(compiler, 16, true, 0);
+        compiler->i32_type = create_int_type(compiler, 32, true, 0);
+        compiler->i64_type = create_int_type(compiler, 64, true, 0);
 
-        init_numeric_type(compiler, &UINT_TYPE);
-        init_numeric_type(compiler, &INT_TYPE);
+        compiler->uint_type = compiler->u64_type;
+        compiler->int_type = compiler->i64_type;
 
-        init_numeric_type(compiler, &FLOAT_TYPE);
-        init_numeric_type(compiler, &DOUBLE_TYPE);
+        compiler->float_type = create_float_type(compiler, 32, 0);
+        compiler->double_type = create_float_type(compiler, 64, 0);
 
-        init_any_type(compiler, &ANY_TYPE);
+        compiler->int_lit_type =
+            create_int_type(compiler, 64, true, TYPE_FLAG_CAN_CHANGE);
+        compiler->float_lit_type =
+            create_float_type(compiler, 64, TYPE_FLAG_CAN_CHANGE);
 
-        STRING_TYPE = create_slice_type(compiler, &I8_TYPE);
+        compiler->bool_type = create_simple_type(compiler, TYPE_BOOL, 0);
+        compiler->void_type = create_simple_type(compiler, TYPE_VOID, 0);
+        compiler->bool_int_type = compiler->u8_type;
+
+        compiler->null_ptr_type = create_pointer_type(
+            compiler, compiler->void_type, TYPE_FLAG_CAN_CHANGE);
+        compiler->void_ptr_type =
+            create_pointer_type(compiler, compiler->void_type, 0);
+
+        compiler->string_type = create_slice_type(compiler, compiler->i8_type);
+        compiler->c_string_type =
+            create_pointer_type(compiler, compiler->i8_type, 0);
+
+        compiler->any_type = create_any_type(compiler);
+        compiler->namespace_type =
+            create_simple_type(compiler, TYPE_NAMESPACE, 0);
+        compiler->template_type =
+            create_simple_type(compiler, TYPE_TEMPLATE, 0);
+        compiler->type_type = create_simple_type(compiler, TYPE_TYPE, 0);
+        compiler->none_type = create_simple_type(compiler, TYPE_NONE, 0);
     }
 
 #if defined(__linux__)

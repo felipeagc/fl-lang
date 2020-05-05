@@ -77,78 +77,6 @@ struct TypeInfo
     };
 };
 
-// Unsigned int types
-static TypeInfo U8_TYPE = {.kind = TYPE_INT,
-                           .integer = {.is_signed = false, .num_bits = 8}};
-
-static TypeInfo U16_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 16}};
-
-static TypeInfo U32_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 32}};
-
-static TypeInfo U64_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = false, .num_bits = 64}};
-
-// Signed int types
-static TypeInfo I8_TYPE = {.kind = TYPE_INT,
-                           .integer = {.is_signed = true, .num_bits = 8}};
-
-static TypeInfo I16_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 16}};
-
-static TypeInfo I32_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 32}};
-
-static TypeInfo I64_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 64}};
-
-// Architecture int types
-static TypeInfo INT_TYPE = {.kind = TYPE_INT,
-                            .integer = {.is_signed = true, .num_bits = 64}};
-
-static TypeInfo UINT_TYPE = {.kind = TYPE_INT,
-                             .integer = {.is_signed = false, .num_bits = 64}};
-
-// Numeric literal types
-static TypeInfo INT_LIT_TYPE = {.kind = TYPE_INT,
-                                .flags = TYPE_FLAG_CAN_CHANGE,
-                                .integer = {.is_signed = true, .num_bits = 64}};
-
-static TypeInfo FLOAT_LIT_TYPE = {
-    .kind = TYPE_FLOAT, .flags = TYPE_FLAG_CAN_CHANGE, .floating.num_bits = 64};
-
-// Other types
-static TypeInfo BOOL_TYPE = {.kind = TYPE_BOOL};
-
-static TypeInfo FLOAT_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 32};
-
-static TypeInfo DOUBLE_TYPE = {.kind = TYPE_FLOAT, .floating.num_bits = 64};
-
-static TypeInfo VOID_TYPE = {.kind = TYPE_VOID};
-
-static TypeInfo NULL_PTR_TYPE = {
-    .kind = TYPE_POINTER, .flags = TYPE_FLAG_CAN_CHANGE, .ptr.sub = &VOID_TYPE};
-
-static TypeInfo VOID_PTR_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &VOID_TYPE};
-
-static TypeInfo BOOL_INT_TYPE = {
-    .kind = TYPE_INT, .integer = {.is_signed = false, .num_bits = 8}};
-
-static TypeInfo *STRING_TYPE = NULL;
-
-static TypeInfo CSTRING_TYPE = {.kind = TYPE_POINTER, .ptr.sub = &I8_TYPE};
-
-static TypeInfo ANY_TYPE = {.kind = TYPE_ANY};
-
-static TypeInfo NAMESPACE_TYPE = {.kind = TYPE_NAMESPACE};
-
-static TypeInfo TEMPLATE_TYPE = {.kind = TYPE_TEMPLATE};
-
-static TypeInfo TYPE_OF_TYPE = {.kind = TYPE_TYPE};
-
-static TypeInfo NONE_TYPE = {.kind = TYPE_NONE};
-
 // Type functions
 
 static inline bool is_type_compound(TypeInfo *type)
@@ -362,7 +290,17 @@ end:
     return type;
 }
 
-static void init_numeric_type(Compiler *compiler, TypeInfo *type)
+static TypeInfo *
+create_simple_type(Compiler *compiler, TypeKind kind, uint32_t flags)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = kind;
+    ty->flags = flags;
+    return ty;
+}
+
+static void init_numeric_type_scope(Compiler *compiler, TypeInfo *type)
 {
     Ast *min_ast = bump_alloc(&compiler->bump, sizeof(Ast));
     Ast *max_ast = bump_alloc(&compiler->bump, sizeof(Ast));
@@ -382,26 +320,58 @@ static void init_numeric_type(Compiler *compiler, TypeInfo *type)
     scope_set(scope, STR("max"), max_ast);
 }
 
-static void init_any_type(Compiler *compiler, TypeInfo *type)
+static TypeInfo *create_int_type(
+    Compiler *compiler, uint32_t num_bits, bool is_signed, uint32_t flags)
 {
-    type->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(type->scope, compiler, SCOPE_INSTANCED, 2, NULL);
-    type->scope->type_info = type;
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_INT;
+    ty->flags = flags;
+    ty->integer.num_bits = num_bits;
+    ty->integer.is_signed = is_signed;
+    init_numeric_type_scope(compiler, ty);
+    return ty;
+}
+
+static TypeInfo *
+create_float_type(Compiler *compiler, uint32_t num_bits, uint32_t flags)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_FLOAT;
+    ty->flags = flags;
+    ty->floating.num_bits = num_bits;
+    init_numeric_type_scope(compiler, ty);
+    return ty;
+}
+
+static TypeInfo *create_any_type(Compiler *compiler)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_ANY;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    ty->scope->type_info = ty;
 
     static Ast ptr_ast = {.type = AST_BUILTIN_PTR, .flags = AST_FLAG_PUBLIC};
-    scope_set(type->scope, STR("ptr"), &ptr_ast);
+    scope_set(ty->scope, STR("ptr"), &ptr_ast);
 
     static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO,
                                 .flags = AST_FLAG_PUBLIC};
-    scope_set(type->scope, STR("type_info"), &type_info_ast);
+    scope_set(ty->scope, STR("type_info"), &type_info_ast);
+    return ty;
 }
 
-static TypeInfo *create_pointer_type(Compiler *compiler, TypeInfo *subtype)
+static TypeInfo *
+create_pointer_type(Compiler *compiler, TypeInfo *subtype, uint32_t flags)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
     ty->kind = TYPE_POINTER;
     ty->ptr.sub = subtype;
+    ty->flags = flags;
 
     return ty;
 }
@@ -842,7 +812,7 @@ static uint32_t pad_to_alignment(uint32_t current, uint32_t align)
     return current;
 }
 
-static uint32_t align_of_type(TypeInfo *type)
+static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
 {
     if (type->align > 0) return type->align;
 
@@ -851,9 +821,11 @@ static uint32_t align_of_type(TypeInfo *type)
     {
     case TYPE_INT: align = type->integer.num_bits / 8; break;
     case TYPE_FLOAT: align = type->floating.num_bits / 8; break;
-    case TYPE_BOOL: align = BOOL_INT_TYPE.integer.num_bits / 8; break;
+    case TYPE_BOOL:
+        align = compiler->bool_int_type->integer.num_bits / 8;
+        break;
     case TYPE_ENUM:
-        align = align_of_type(type->enumeration.underlying_type);
+        align = align_of_type(compiler, type->enumeration.underlying_type);
         break;
 
     case TYPE_ANY: align = PTR_SIZE; break;
@@ -862,16 +834,16 @@ static uint32_t align_of_type(TypeInfo *type)
     case TYPE_DYNAMIC_ARRAY: align = PTR_SIZE; break;
 
     case TYPE_VECTOR:
-        align = align_of_type(type->array.sub) * type->array.size;
+        align = align_of_type(compiler, type->array.sub) * type->array.size;
         break;
-    case TYPE_ARRAY: align = align_of_type(type->array.sub); break;
+    case TYPE_ARRAY: align = align_of_type(compiler, type->array.sub); break;
 
     case TYPE_STRUCT: {
         for (TypeInfo **field = type->structure.fields.ptr;
              field != type->structure.fields.ptr + type->structure.fields.len;
              ++field)
         {
-            uint32_t field_align = align_of_type(*field);
+            uint32_t field_align = align_of_type(compiler, *field);
             if (field_align > align) align = field_align;
         }
 
@@ -902,7 +874,7 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
     {
     case TYPE_INT: size = type->integer.num_bits / 8; break;
     case TYPE_FLOAT: size = type->floating.num_bits / 8; break;
-    case TYPE_BOOL: size = BOOL_INT_TYPE.integer.num_bits / 8; break;
+    case TYPE_BOOL: size = compiler->bool_int_type->integer.num_bits / 8; break;
     case TYPE_ENUM:
         size = size_of_type(compiler, type->enumeration.underlying_type);
         break;
@@ -934,8 +906,8 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
                     next_field = type->structure.fields.ptr[0];
                 }
 
-                actual_alignments[i] = align_of_type(field);
-                uint32_t next_alignment = align_of_type(next_field);
+                actual_alignments[i] = align_of_type(compiler, field);
+                uint32_t next_alignment = align_of_type(compiler, next_field);
                 actual_alignments[i] =
                     pad_to_alignment(actual_alignments[i], next_alignment);
             }
