@@ -213,6 +213,8 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_UNTYPED_INT:
+    case TYPE_UNTYPED_FLOAT:
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_TEMPLATE:
@@ -409,6 +411,8 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_UNTYPED_INT:
+    case TYPE_UNTYPED_FLOAT:
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_TEMPLATE:
@@ -1219,6 +1223,8 @@ static void llvm_codegen_ast(
     }
 
     case AST_PRIMARY: {
+        assert(is_type_runtime(ast->type_info));
+
         switch (ast->primary.tok->type)
         {
         case TOKEN_TRUE: {

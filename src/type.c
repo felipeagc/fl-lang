@@ -17,6 +17,8 @@ typedef enum TypeKind {
     TYPE_NAMESPACE = 15,
     TYPE_TEMPLATE = 16,
     TYPE_ANY = 17,
+    TYPE_UNTYPED_INT = 18,
+    TYPE_UNTYPED_FLOAT = 19,
 } TypeKind;
 
 typedef enum TypeFlags {
@@ -79,6 +81,17 @@ struct TypeInfo
 
 // Type functions
 
+static inline bool is_type_runtime(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_BOOL || type->kind == TYPE_INT ||
+        type->kind == TYPE_FLOAT || type->kind == TYPE_ENUM ||
+        type->kind == TYPE_STRUCT || type->kind == TYPE_ARRAY ||
+        type->kind == TYPE_POINTER || type->kind == TYPE_SLICE ||
+        type->kind == TYPE_DYNAMIC_ARRAY || type->kind == TYPE_ANY ||
+        type->kind == TYPE_VECTOR);
+}
+
 static inline bool is_type_compound(TypeInfo *type)
 {
     return (
@@ -94,11 +107,57 @@ static inline bool is_type_basic(TypeInfo *type)
         type->kind == TYPE_FLOAT || type->kind == TYPE_ENUM);
 }
 
+static inline bool is_type_integer(TypeInfo *type)
+{
+    return (type->kind == TYPE_INT || type->kind == TYPE_UNTYPED_INT);
+}
+
+static inline bool is_type_float(TypeInfo *type)
+{
+    return (type->kind == TYPE_FLOAT || type->kind == TYPE_UNTYPED_FLOAT);
+}
+
 static inline bool is_type_iterable(TypeInfo *type)
 {
     return (
         type->kind == TYPE_ARRAY || type->kind == TYPE_SLICE ||
         type->kind == TYPE_DYNAMIC_ARRAY);
+}
+
+static inline bool is_type_arithmetic(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_INT || type->kind == TYPE_FLOAT ||
+        type->kind == TYPE_UNTYPED_INT || type->kind == TYPE_UNTYPED_FLOAT ||
+        type->kind == TYPE_VECTOR);
+}
+
+static inline bool is_type_logic(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_INT || type->kind == TYPE_FLOAT ||
+        type->kind == TYPE_UNTYPED_INT || type->kind == TYPE_UNTYPED_FLOAT ||
+        type->kind == TYPE_BOOL || type->kind == TYPE_POINTER);
+}
+
+static inline bool is_type_bitwise(TypeInfo *type)
+{
+    return (type->kind == TYPE_INT || type->kind == TYPE_UNTYPED_INT);
+}
+
+static inline bool is_type_subscript(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_POINTER || type->kind == TYPE_ARRAY ||
+        type->kind == TYPE_VECTOR || type->kind == TYPE_SLICE ||
+        type->kind == TYPE_DYNAMIC_ARRAY);
+}
+
+static inline bool is_type_subscript_slice(TypeInfo *type)
+{
+    return (
+        type->kind == TYPE_POINTER || type->kind == TYPE_ARRAY ||
+        type->kind == TYPE_SLICE || type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
@@ -215,6 +274,8 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
 
+    case TYPE_UNTYPED_INT:
+    case TYPE_UNTYPED_FLOAT:
     case TYPE_ANY:
     case TYPE_NAMESPACE:
     case TYPE_BOOL:
@@ -242,6 +303,8 @@ compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
 
 static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
+    if (a->kind == b->kind) return a;
+
     if (a->kind == TYPE_POINTER && b->kind == TYPE_POINTER)
     {
         if (a->flags & TYPE_FLAG_CAN_CHANGE) return b;
@@ -249,26 +312,52 @@ static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
         return NULL;
     }
 
-    TypeInfo *float_type = NULL;
-    TypeInfo *other_type = NULL;
     if (a->kind == TYPE_FLOAT)
     {
-        float_type = a;
-        other_type = b;
+        if (b->kind == TYPE_FLOAT || b->kind == TYPE_UNTYPED_FLOAT ||
+            b->kind == TYPE_UNTYPED_INT)
+        {
+            return a;
+        }
     }
     else if (b->kind == TYPE_FLOAT)
     {
-        float_type = b;
-        other_type = a;
+        if (a->kind == TYPE_FLOAT || a->kind == TYPE_UNTYPED_FLOAT ||
+            a->kind == TYPE_UNTYPED_INT)
+        {
+            return b;
+        }
     }
-
-    if (float_type && (other_type->flags & TYPE_FLAG_CAN_CHANGE))
+    else if (a->kind == TYPE_UNTYPED_FLOAT)
     {
-        return float_type;
+        if (b->kind == TYPE_UNTYPED_INT || b->kind == TYPE_UNTYPED_FLOAT)
+        {
+            return a;
+        }
     }
-
-    if (a->flags & TYPE_FLAG_CAN_CHANGE) return b;
-    if (b->flags & TYPE_FLAG_CAN_CHANGE) return a;
+    else if (b->kind == TYPE_UNTYPED_FLOAT)
+    {
+        if (a->kind == TYPE_UNTYPED_INT || a->kind == TYPE_UNTYPED_FLOAT)
+        {
+            return b;
+        }
+    }
+    else if (a->kind == TYPE_INT)
+    {
+        if (b->kind == TYPE_INT || b->kind == TYPE_UNTYPED_INT) return a;
+    }
+    else if (b->kind == TYPE_INT)
+    {
+        if (a->kind == TYPE_INT || a->kind == TYPE_UNTYPED_INT) return b;
+    }
+    else if (a->kind == TYPE_UNTYPED_INT)
+    {
+        return a;
+    }
+    else if (b->kind == TYPE_UNTYPED_INT)
+    {
+        return b;
+    }
 
     return NULL;
 }
@@ -567,6 +656,9 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
     case TYPE_NAMESPACE: sb_append(sb, STR("n")); break;
 
+    case TYPE_UNTYPED_INT: sb_append(sb, STR("I")); break;
+    case TYPE_UNTYPED_FLOAT: sb_append(sb, STR("R")); break;
+
     case TYPE_ANY: sb_append(sb, STR("Q")); break;
 
     case TYPE_INT: {
@@ -677,6 +769,9 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     {
     case TYPE_TYPE: sb_append(sb, STR("@Type")); break;
     case TYPE_TEMPLATE: sb_append(sb, STR("@Template")); break;
+
+    case TYPE_UNTYPED_INT: sb_append(sb, STR("@UntypedInt")); break;
+    case TYPE_UNTYPED_FLOAT: sb_append(sb, STR("@UntypedFloat")); break;
 
     case TYPE_VOID: sb_append(sb, STR("void")); break;
 
@@ -850,6 +945,8 @@ static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
         break;
     }
 
+    case TYPE_UNTYPED_INT:
+    case TYPE_UNTYPED_FLOAT:
     case TYPE_PROC:
     case TYPE_UNINITIALIZED:
     case TYPE_NONE:
@@ -942,6 +1039,8 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
         break;
     }
 
+    case TYPE_UNTYPED_INT:
+    case TYPE_UNTYPED_FLOAT:
     case TYPE_PROC:
     case TYPE_UNINITIALIZED:
     case TYPE_NONE:
@@ -959,10 +1058,13 @@ static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
 {
     return (
         (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_POINTER) ||
-        (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_INT) ||
-        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_POINTER) ||
-        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_INT) ||
-        (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_FLOAT) ||
-        (dest_ty->kind == TYPE_INT && src_ty->kind == TYPE_FLOAT) ||
-        (dest_ty->kind == TYPE_FLOAT && src_ty->kind == TYPE_INT));
+
+        (dest_ty->kind == TYPE_POINTER && is_type_integer(src_ty)) ||
+        (is_type_integer(dest_ty) && src_ty->kind == TYPE_POINTER) ||
+
+        (is_type_integer(dest_ty) && is_type_integer(src_ty)) ||
+        (is_type_float(dest_ty) && is_type_float(src_ty)) ||
+
+        (is_type_float(dest_ty) && is_type_integer(src_ty)) ||
+        (is_type_integer(dest_ty) && is_type_float(src_ty)));
 }

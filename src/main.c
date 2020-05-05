@@ -250,9 +250,9 @@ static void compiler_init(Compiler *compiler)
         compiler->double_type = create_float_type(compiler, 64, 0);
 
         compiler->int_lit_type =
-            create_int_type(compiler, 64, true, TYPE_FLAG_CAN_CHANGE);
+            create_simple_type(compiler, TYPE_UNTYPED_INT, 0);
         compiler->float_lit_type =
-            create_float_type(compiler, 64, TYPE_FLAG_CAN_CHANGE);
+            create_simple_type(compiler, TYPE_UNTYPED_FLOAT, 0);
 
         compiler->bool_type = create_simple_type(compiler, TYPE_BOOL, 0);
         compiler->void_type = create_simple_type(compiler, TYPE_VOID, 0);

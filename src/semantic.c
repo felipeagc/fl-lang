@@ -20,6 +20,20 @@ static void analyze_asts(Analyzer *a, Ast *asts, size_t ast_count);
 
 static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast);
 
+static TypeInfo *promote_to_runtime_type(Compiler *compiler, TypeInfo *type)
+{
+    if (!type) return NULL;
+
+    switch (type->kind)
+    {
+    case TYPE_UNTYPED_INT: return compiler->int_type;
+    case TYPE_UNTYPED_FLOAT: return compiler->double_type;
+    default: break;
+    }
+
+    return NULL;
+}
+
 #define INSTANTIATE_AST(ELEM)                                                  \
     do                                                                         \
     {                                                                          \
@@ -2103,6 +2117,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
+            TypeInfo *promoted_type = promote_to_runtime_type(
+                a->compiler, ast->decl.value_expr->type_info);
+            if (promoted_type)
+            {
+                analyze_ast(a, ast->decl.value_expr, promoted_type);
+            }
+
             ast->type_info = ast->decl.value_expr->type_info;
         }
 
@@ -2160,6 +2181,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 /*     "could not resolve type for variable declaration " */
                 /*     "initializer"); */
                 break;
+            }
+
+            TypeInfo *promoted_type = promote_to_runtime_type(
+                a->compiler, ast->decl.value_expr->type_info);
+            if (promoted_type)
+            {
+                analyze_ast(a, ast->decl.value_expr, promoted_type);
             }
 
             if (!ast->type_info)
@@ -2504,6 +2532,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_IF: {
         analyze_ast(a, ast->if_stmt.cond_expr, NULL);
+
         analyze_ast(a, ast->if_stmt.cond_stmt, NULL);
         if (ast->if_stmt.else_stmt)
         {
@@ -2516,10 +2545,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (ast->if_stmt.cond_expr->type_info->kind != TYPE_INT &&
-            ast->if_stmt.cond_expr->type_info->kind != TYPE_FLOAT &&
-            ast->if_stmt.cond_expr->type_info->kind != TYPE_BOOL &&
-            ast->if_stmt.cond_expr->type_info->kind != TYPE_POINTER)
+        TypeInfo *promoted_type = promote_to_runtime_type(
+            a->compiler, ast->if_stmt.cond_expr->type_info);
+        if (promoted_type)
+        {
+            analyze_ast(a, ast->if_stmt.cond_expr, promoted_type);
+        }
+        assert(ast->if_stmt.cond_expr->type_info);
+        assert(is_type_runtime(ast->if_stmt.cond_expr->type_info));
+
+        if (!is_type_logic(ast->if_stmt.cond_expr->type_info))
         {
             compile_error(
                 a->compiler,
@@ -2533,6 +2568,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_SWITCH: {
         analyze_ast(a, ast->switch_stmt.expr, NULL);
+
+        TypeInfo *promoted_type = promote_to_runtime_type(
+            a->compiler, ast->if_stmt.cond_expr->type_info);
+        if (promoted_type)
+        {
+            analyze_ast(a, ast->switch_stmt.expr, promoted_type);
+        }
 
         TypeInfo *val_type = ast->switch_stmt.expr->type_info;
 
@@ -2593,6 +2635,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_WHILE: {
         analyze_ast(a, ast->while_stmt.cond, NULL);
 
+        TypeInfo *promoted_type = promote_to_runtime_type(
+            a->compiler, ast->while_stmt.cond->type_info);
+        if (promoted_type)
+        {
+            analyze_ast(a, ast->while_stmt.cond, promoted_type);
+        }
+
         array_push(&a->break_stack, ast);
         array_push(&a->continue_stack, ast);
         analyze_ast(a, ast->while_stmt.stmt, NULL);
@@ -2605,10 +2654,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (ast->while_stmt.cond->type_info->kind != TYPE_INT &&
-            ast->while_stmt.cond->type_info->kind != TYPE_FLOAT &&
-            ast->while_stmt.cond->type_info->kind != TYPE_BOOL &&
-            ast->while_stmt.cond->type_info->kind != TYPE_POINTER)
+        if (!is_type_logic(ast->while_stmt.cond->type_info))
         {
             compile_error(
                 a->compiler,
@@ -2626,7 +2672,17 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         array_push(&a->operand_scope_stack, ast->scope);
 
         if (ast->for_stmt.init) analyze_ast(a, ast->for_stmt.init, NULL);
-        if (ast->for_stmt.cond) analyze_ast(a, ast->for_stmt.cond, NULL);
+        if (ast->for_stmt.cond)
+        {
+            analyze_ast(a, ast->for_stmt.cond, NULL);
+
+            TypeInfo *promoted_type = promote_to_runtime_type(
+                a->compiler, ast->for_stmt.cond->type_info);
+            if (promoted_type)
+            {
+                analyze_ast(a, ast->for_stmt.cond, promoted_type);
+            }
+        }
         if (ast->for_stmt.inc) analyze_ast(a, ast->for_stmt.inc, NULL);
 
         array_push(&a->break_stack, ast);
@@ -2646,10 +2702,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (ast->for_stmt.cond->type_info->kind != TYPE_INT &&
-                ast->for_stmt.cond->type_info->kind != TYPE_FLOAT &&
-                ast->for_stmt.cond->type_info->kind != TYPE_BOOL &&
-                ast->for_stmt.cond->type_info->kind != TYPE_POINTER)
+            if (!is_type_logic(ast->for_stmt.cond->type_info))
             {
                 compile_error(
                     a->compiler,
@@ -2806,6 +2859,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 switch (expected_type->kind)
                 {
+                case TYPE_UNTYPED_INT:
+                case TYPE_UNTYPED_FLOAT:
                 case TYPE_FLOAT:
                 case TYPE_INT: {
                     ast->type_info = expected_type;
@@ -2825,6 +2880,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 switch (expected_type->kind)
                 {
+                case TYPE_UNTYPED_FLOAT:
                 case TYPE_FLOAT: {
                     ast->type_info = expected_type;
                     break;
@@ -3388,15 +3444,29 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
         else
         {
-            for (size_t i = 0; i < ast->proc_call.params.len; ++i)
+            for (size_t i = 0; i < proc_ty->proc.params.len; ++i)
             {
-                TypeInfo *param_expected_type = NULL;
-                if (i < proc_ty->proc.params.len)
-                {
-                    param_expected_type = proc_ty->proc.params.ptr[i];
-                }
+                TypeInfo *param_expected_type = proc_ty->proc.params.ptr[i];
                 analyze_ast(
                     a, &ast->proc_call.params.ptr[i], param_expected_type);
+            }
+
+            if (proc_ty->flags & TYPE_FLAG_C_VARARGS)
+            {
+                for (size_t i = proc_ty->proc.params.len - 1;
+                     i < ast->proc_call.params.len;
+                     ++i)
+                {
+                    analyze_ast(a, &ast->proc_call.params.ptr[i], NULL);
+
+                    TypeInfo *promoted_type = promote_to_runtime_type(
+                        a->compiler, ast->proc_call.params.ptr[i].type_info);
+                    if (promoted_type)
+                    {
+                        analyze_ast(
+                            a, &ast->proc_call.params.ptr[i], promoted_type);
+                    }
+                }
             }
         }
         array_pop(&a->scope_stack);
@@ -3625,6 +3695,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_CAST: {
         analyze_ast(a, ast->cast.type_expr, a->compiler->type_type);
         analyze_ast(a, ast->cast.value_expr, NULL);
+        TypeInfo *promoted_type = promote_to_runtime_type(
+            a->compiler, ast->cast.value_expr->type_info);
+        if (promoted_type)
+        {
+            analyze_ast(a, ast->cast.value_expr, promoted_type);
+        }
 
         TypeInfo *dest_ty = ast->cast.type_expr->as_type;
         TypeInfo *src_ty = ast->cast.value_expr->type_info;
@@ -3717,9 +3793,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case UNOP_NEG: {
-            if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
-                ast->unop.sub->type_info->kind != TYPE_VECTOR)
+            if (!is_type_arithmetic(ast->unop.sub->type_info))
             {
                 compile_error(
                     a->compiler,
@@ -3734,10 +3808,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         case UNOP_NOT: {
-            if (ast->unop.sub->type_info->kind != TYPE_INT &&
-                ast->unop.sub->type_info->kind != TYPE_FLOAT &&
-                ast->unop.sub->type_info->kind != TYPE_BOOL &&
-                ast->unop.sub->type_info->kind != TYPE_POINTER)
+            if (!is_type_logic(ast->unop.sub->type_info))
             {
                 compile_error(
                     a->compiler,
@@ -3781,8 +3852,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_FLOAT &&
-                left_type->kind != TYPE_VECTOR)
+            if (!is_type_arithmetic(left_type) ||
+                !is_type_arithmetic(right_type))
             {
                 compile_error(
                     a->compiler,
@@ -3790,6 +3861,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "can only do arithmetic on numeric types");
                 break;
             }
+
+            assert(left_type);
+            assert(right_type);
 
             TypeInfo *result_type = left_type;
 
@@ -3822,8 +3896,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 {
                     TypeInfo *common_type =
                         common_numeric_type(left_type, right_type);
+
+                    assert(common_type);
+
                     analyze_ast(a, ast->binop.left, common_type);
                     analyze_ast(a, ast->binop.right, common_type);
+
                     left_type = get_inner_type(ast->binop.left->type_info);
                     right_type = get_inner_type(ast->binop.right->type_info);
                     result_type = left_type;
@@ -3839,6 +3917,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
+            assert(result_type);
             ast->type_info = result_type;
 
             break;
@@ -3871,6 +3950,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             {
                 TypeInfo *common_type =
                     common_numeric_type(left_type, right_type);
+
                 analyze_ast(a, ast->binop.left, common_type);
                 analyze_ast(a, ast->binop.right, common_type);
 
@@ -3887,7 +3967,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (left_type->kind != TYPE_INT && left_type->kind != TYPE_BOOL)
+            if (!is_type_bitwise(left_type))
             {
                 compile_error(
                     a->compiler,
@@ -3920,6 +4000,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             TypeInfo *common_type = common_numeric_type(left_type, right_type);
+
+            TypeInfo *promoted_type =
+                promote_to_runtime_type(a->compiler, common_type);
+            if (promoted_type)
+            {
+                common_type = promoted_type;
+            }
+
             analyze_ast(a, ast->binop.left, common_type);
             analyze_ast(a, ast->binop.right, common_type);
             left_type = get_inner_type(ast->binop.left->type_info);
@@ -3934,9 +4022,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (left_type->kind != TYPE_BOOL && left_type->kind != TYPE_INT &&
-                left_type->kind != TYPE_FLOAT &&
-                left_type->kind != TYPE_POINTER)
+            if (!is_type_logic(left_type))
             {
                 compile_error(
                     a->compiler,
@@ -3964,9 +4050,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (left_type->kind != TYPE_BOOL && left_type->kind != TYPE_INT &&
-                left_type->kind != TYPE_FLOAT &&
-                left_type->kind != TYPE_POINTER)
+            if (!is_type_logic(left_type))
             {
                 compile_error(
                     a->compiler,
@@ -3975,9 +4059,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 break;
             }
 
-            if (right_type->kind != TYPE_BOOL && right_type->kind != TYPE_INT &&
-                right_type->kind != TYPE_FLOAT &&
-                right_type->kind != TYPE_POINTER)
+            if (!is_type_logic(right_type))
             {
                 compile_error(
                     a->compiler,
@@ -4156,6 +4238,12 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         array_push(&a->scope_stack, *array_last(&a->operand_scope_stack));
         analyze_ast(a, ast->subscript.right, NULL);
+        TypeInfo *promoted_type = promote_to_runtime_type(
+            a->compiler, ast->subscript.right->type_info);
+        if (promoted_type)
+        {
+            analyze_ast(a, ast->subscript.right, promoted_type);
+        }
         array_pop(&a->scope_stack);
 
         if (!ast->subscript.left->type_info)
@@ -4170,11 +4258,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (ast->subscript.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript.left->type_info->kind != TYPE_ARRAY &&
-            ast->subscript.left->type_info->kind != TYPE_VECTOR &&
-            ast->subscript.left->type_info->kind != TYPE_SLICE &&
-            ast->subscript.left->type_info->kind != TYPE_DYNAMIC_ARRAY)
+        if (!is_type_subscript(ast->subscript.left->type_info))
         {
             compile_error(
                 a->compiler,
@@ -4200,12 +4284,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         default: assert(0); break;
         }
 
-        if (ast->subscript.right->type_info->kind != TYPE_INT)
+        if (!is_type_integer(ast->subscript.right->type_info))
         {
             compile_error(
                 a->compiler, ast->loc, "subscript needs an integer index");
             break;
         }
+
         break;
     }
 
@@ -4251,10 +4336,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
         }
 
-        if (ast->subscript_slice.left->type_info->kind != TYPE_POINTER &&
-            ast->subscript_slice.left->type_info->kind != TYPE_ARRAY &&
-            ast->subscript_slice.left->type_info->kind != TYPE_SLICE &&
-            ast->subscript_slice.left->type_info->kind != TYPE_DYNAMIC_ARRAY)
+        if (!is_type_subscript_slice(ast->subscript_slice.left->type_info))
         {
             compile_error(
                 a->compiler,
@@ -4312,7 +4394,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (size_type->kind != TYPE_INT)
+        if (!is_type_integer(size_type))
         {
             compile_error(
                 a->compiler, ast->loc, "array type needs an integer size");
@@ -4493,6 +4575,13 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
             Ast *wrapped = bump_alloc(&a->compiler->bump, sizeof(Ast));
             *wrapped = *ast;
+
+            TypeInfo *promoted_type =
+                promote_to_runtime_type(a->compiler, wrapped->type_info);
+            if (promoted_type)
+            {
+                analyze_ast(a, wrapped, promoted_type);
+            }
 
             add_rtti_type_info(a->compiler, wrapped->type_info);
 
