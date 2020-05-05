@@ -223,7 +223,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_TEMPLATE:
-    case TYPE_NONE:
+    case TYPE_NAMED_PLACEHOLDER:
     case TYPE_UNINITIALIZED: assert(0); break;
     }
 
@@ -426,7 +426,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
     case TYPE_NAMESPACE:
     case TYPE_TYPE:
     case TYPE_TEMPLATE:
-    case TYPE_NONE:
+    case TYPE_NAMED_PLACEHOLDER:
     case TYPE_UNINITIALIZED: assert(0); break;
     }
 
@@ -1233,38 +1233,39 @@ static void llvm_codegen_ast(
     }
 
     case AST_PRIMARY: {
-        assert(is_type_runtime(ast->type_info));
+        TypeInfo *inner_type = get_inner_primitive_type(ast->type_info);
+        assert(is_type_runtime(inner_type));
 
         switch (ast->primary.tok->type)
         {
         case TOKEN_TRUE: {
             AstValue value = {0};
-            value.value = LLVMConstInt(llvm_type(l, ast->type_info), 1, false);
+            value.value = LLVMConstInt(llvm_type(l, inner_type), 1, false);
             if (out_value) *out_value = value;
             break;
         }
 
         case TOKEN_FALSE: {
             AstValue value = {0};
-            value.value = LLVMConstInt(llvm_type(l, ast->type_info), 0, false);
+            value.value = LLVMConstInt(llvm_type(l, inner_type), 0, false);
             if (out_value) *out_value = value;
             break;
         }
 
         case TOKEN_NULL: {
             AstValue value = {0};
-            value.value = LLVMConstPointerNull(llvm_type(l, ast->type_info));
+            value.value = LLVMConstPointerNull(llvm_type(l, inner_type));
             if (out_value) *out_value = value;
             break;
         }
 
         case TOKEN_INT_LIT: {
-            switch (ast->type_info->kind)
+            switch (inner_type->kind)
             {
             case TYPE_INT: {
                 AstValue value = {0};
                 value.value = LLVMConstInt(
-                    llvm_type(l, ast->type_info),
+                    llvm_type(l, inner_type),
                     (unsigned long long)ast->primary.tok->i64,
                     true);
                 if (out_value) *out_value = value;
@@ -1274,8 +1275,7 @@ static void llvm_codegen_ast(
             case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
-                    llvm_type(l, ast->type_info),
-                    (double)ast->primary.tok->i64);
+                    llvm_type(l, inner_type), (double)ast->primary.tok->i64);
                 if (out_value) *out_value = value;
                 break;
             }
@@ -1287,13 +1287,12 @@ static void llvm_codegen_ast(
         }
 
         case TOKEN_FLOAT_LIT: {
-            switch (ast->type_info->kind)
+            switch (inner_type->kind)
             {
             case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
-                    llvm_type(l, ast->type_info),
-                    (double)ast->primary.tok->f64);
+                    llvm_type(l, inner_type), (double)ast->primary.tok->f64);
                 if (out_value) *out_value = value;
                 break;
             }
@@ -1360,7 +1359,7 @@ static void llvm_codegen_ast(
         case TOKEN_CHAR_LIT: {
             AstValue value = {0};
             value.value = LLVMConstInt(
-                llvm_type(l, ast->type_info),
+                llvm_type(l, inner_type),
                 (unsigned long long)ast->primary.tok->chr,
                 true);
             if (out_value) *out_value = value;
@@ -3197,8 +3196,8 @@ static void llvm_codegen_ast(
         llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
         llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
 
-        TypeInfo *lhs_type = get_inner_type(ast->binop.left->type_info);
-        TypeInfo *rhs_type = get_inner_type(ast->binop.right->type_info);
+        TypeInfo *lhs_type = get_inner_primitive_type(ast->binop.left->type_info);
+        TypeInfo *rhs_type = get_inner_primitive_type(ast->binop.right->type_info);
 
         AstValue result_value = {0};
 

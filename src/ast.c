@@ -81,7 +81,6 @@ typedef enum AstType {
     AST_BREAK,
     AST_CONTINUE,
     AST_COMPOUND_LIT,
-    AST_DISTINCT_TYPE,
     AST_USING,
     AST_DEFER,
     AST_VARIADIC_ARG,
@@ -332,10 +331,6 @@ struct Ast
             struct Ast *left;
             struct Ast *right;
         } access;
-        struct
-        {
-            struct Ast *sub;
-        } distinct;
         struct
         {
             size_t position;

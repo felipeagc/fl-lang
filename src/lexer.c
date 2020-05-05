@@ -556,7 +556,6 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("string", TOKEN_STRING);
             LEX_MATCH_STR("return", TOKEN_RETURN);
             LEX_MATCH_STR("extern", TOKEN_EXTERN);
-            LEX_MATCH_STR("distinct", TOKEN_DISTINCT);
             LEX_MATCH_STR("dyn", TOKEN_DYN);
             LEX_MATCH_STR("static", TOKEN_STATIC);
             LEX_MATCH_STR("version", TOKEN_VERSION);

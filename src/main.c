@@ -82,6 +82,7 @@ typedef struct Compiler
     HashMap files;
     HashMap versions;
     HashMap modules;
+    HashMap types;
     struct LLContext *backend;
     String compiler_path;
     String compiler_dir;
@@ -128,7 +129,6 @@ typedef struct Compiler
     struct TypeInfo *namespace_type;
     struct TypeInfo *template_type;
     struct TypeInfo *type_type;
-    struct TypeInfo *none_type;
 } Compiler;
 
 static Module *get_module(Compiler *compiler, String module_name)
@@ -215,6 +215,7 @@ static void compiler_init(Compiler *compiler)
     hash_init(&compiler->files, 512);
     hash_init(&compiler->versions, 16);
     hash_init(&compiler->modules, 16);
+    hash_init(&compiler->types, 64);
 
     compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));
     memset(compiler->backend, 0, sizeof(*compiler->backend));
@@ -270,7 +271,6 @@ static void compiler_init(Compiler *compiler)
         compiler->namespace_type = create_simple_type(compiler, TYPE_NAMESPACE);
         compiler->template_type = create_simple_type(compiler, TYPE_TEMPLATE);
         compiler->type_type = create_simple_type(compiler, TYPE_TYPE);
-        compiler->none_type = create_simple_type(compiler, TYPE_NONE);
     }
 
 #if defined(__linux__)
@@ -309,6 +309,7 @@ static void compiler_init(Compiler *compiler)
 
 static void compiler_destroy(Compiler *compiler)
 {
+    hash_destroy(&compiler->types);
     hash_destroy(&compiler->modules);
     hash_destroy(&compiler->versions);
     hash_destroy(&compiler->files);

@@ -1,6 +1,6 @@
 typedef enum TypeKind {
     TYPE_UNINITIALIZED = 0,
-    TYPE_NONE = 1,
+    TYPE_NAMED_PLACEHOLDER = 1,
     TYPE_TYPE = 2,
     TYPE_PROC = 3,
     TYPE_STRUCT = 4,
@@ -23,10 +23,9 @@ typedef enum TypeKind {
 } TypeKind;
 
 typedef enum TypeFlags {
-    TYPE_FLAG_DISTINCT = 1 << 0,
-    TYPE_FLAG_EXTERN = 1 << 1,
-    TYPE_FLAG_C_VARARGS = 1 << 2,
-    TYPE_FLAG_VARARGS = 1 << 3,
+    TYPE_FLAG_EXTERN = 1 << 0,
+    TYPE_FLAG_C_VARARGS = 1 << 1,
+    TYPE_FLAG_VARARGS = 1 << 2,
 } TypeFlags;
 
 struct TypeInfo
@@ -100,6 +99,11 @@ static inline bool is_type_compound(TypeInfo *type)
         type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
+static inline bool can_type_be_named(TypeInfo *type)
+{
+    return (type->kind == TYPE_STRUCT || type->kind == TYPE_ENUM);
+}
+
 static inline bool is_type_basic(TypeInfo *type)
 {
     return (
@@ -138,7 +142,7 @@ static inline bool is_type_logic(TypeInfo *type)
         type->kind == TYPE_INT || type->kind == TYPE_FLOAT ||
         type->kind == TYPE_UNTYPED_INT || type->kind == TYPE_UNTYPED_FLOAT ||
         type->kind == TYPE_BOOL || type->kind == TYPE_POINTER ||
-        type->kind == TYPE_RAW_POINTER);
+        type->kind == TYPE_RAW_POINTER || type->kind == TYPE_ENUM);
 }
 
 static inline bool is_type_bitwise(TypeInfo *type)
@@ -161,6 +165,69 @@ static inline bool is_type_subscript_slice(TypeInfo *type)
         type->kind == TYPE_SLICE || type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
+static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
+{
+    if (a->kind == b->kind) return a;
+
+    if (a->kind == TYPE_POINTER && b->kind == TYPE_RAW_POINTER)
+    {
+        return a;
+    }
+    else if (b->kind == TYPE_POINTER && a->kind == TYPE_RAW_POINTER)
+    {
+        return b;
+    }
+
+    if (a->kind == TYPE_FLOAT)
+    {
+        if (b->kind == TYPE_FLOAT || b->kind == TYPE_UNTYPED_FLOAT ||
+            b->kind == TYPE_UNTYPED_INT)
+        {
+            return a;
+        }
+    }
+    else if (b->kind == TYPE_FLOAT)
+    {
+        if (a->kind == TYPE_FLOAT || a->kind == TYPE_UNTYPED_FLOAT ||
+            a->kind == TYPE_UNTYPED_INT)
+        {
+            return b;
+        }
+    }
+    else if (a->kind == TYPE_UNTYPED_FLOAT)
+    {
+        if (b->kind == TYPE_UNTYPED_INT || b->kind == TYPE_UNTYPED_FLOAT)
+        {
+            return a;
+        }
+    }
+    else if (b->kind == TYPE_UNTYPED_FLOAT)
+    {
+        if (a->kind == TYPE_UNTYPED_INT || a->kind == TYPE_UNTYPED_FLOAT)
+        {
+            return b;
+        }
+    }
+    else if (a->kind == TYPE_INT)
+    {
+        if (b->kind == TYPE_INT || b->kind == TYPE_UNTYPED_INT) return a;
+    }
+    else if (b->kind == TYPE_INT)
+    {
+        if (a->kind == TYPE_INT || a->kind == TYPE_UNTYPED_INT) return b;
+    }
+    else if (a->kind == TYPE_UNTYPED_INT)
+    {
+        return a;
+    }
+    else if (b->kind == TYPE_UNTYPED_INT)
+    {
+        return b;
+    }
+
+    return NULL;
+}
+
 static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
 {
     if (received->kind != expected->kind)
@@ -169,12 +236,8 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         {
             return exact_types(received->enumeration.underlying_type, expected);
         }
-        return NULL;
-    }
 
-    if ((expected->flags & TYPE_FLAG_DISTINCT))
-    {
-        if (expected != received) return NULL;
+        return NULL;
     }
 
     switch (received->kind)
@@ -285,7 +348,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
     case TYPE_TYPE:
     case TYPE_TEMPLATE:
     case TYPE_UNINITIALIZED:
-    case TYPE_NONE: break;
+    case TYPE_NAMED_PLACEHOLDER: break;
     }
 
     return received;
@@ -303,70 +366,7 @@ compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
     return NULL;
 }
 
-static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
-{
-    if (a->kind == b->kind) return a;
-
-    if (a->kind == TYPE_POINTER && b->kind == TYPE_RAW_POINTER)
-    {
-        return a;
-    }
-    else if (b->kind == TYPE_POINTER && a->kind == TYPE_RAW_POINTER)
-    {
-        return b;
-    }
-
-    if (a->kind == TYPE_FLOAT)
-    {
-        if (b->kind == TYPE_FLOAT || b->kind == TYPE_UNTYPED_FLOAT ||
-            b->kind == TYPE_UNTYPED_INT)
-        {
-            return a;
-        }
-    }
-    else if (b->kind == TYPE_FLOAT)
-    {
-        if (a->kind == TYPE_FLOAT || a->kind == TYPE_UNTYPED_FLOAT ||
-            a->kind == TYPE_UNTYPED_INT)
-        {
-            return b;
-        }
-    }
-    else if (a->kind == TYPE_UNTYPED_FLOAT)
-    {
-        if (b->kind == TYPE_UNTYPED_INT || b->kind == TYPE_UNTYPED_FLOAT)
-        {
-            return a;
-        }
-    }
-    else if (b->kind == TYPE_UNTYPED_FLOAT)
-    {
-        if (a->kind == TYPE_UNTYPED_INT || a->kind == TYPE_UNTYPED_FLOAT)
-        {
-            return b;
-        }
-    }
-    else if (a->kind == TYPE_INT)
-    {
-        if (b->kind == TYPE_INT || b->kind == TYPE_UNTYPED_INT) return a;
-    }
-    else if (b->kind == TYPE_INT)
-    {
-        if (a->kind == TYPE_INT || a->kind == TYPE_UNTYPED_INT) return b;
-    }
-    else if (a->kind == TYPE_UNTYPED_INT)
-    {
-        return a;
-    }
-    else if (b->kind == TYPE_UNTYPED_INT)
-    {
-        return b;
-    }
-
-    return NULL;
-}
-
-static inline TypeInfo *get_inner_type(TypeInfo *type)
+static inline TypeInfo *get_inner_primitive_type(TypeInfo *type)
 {
     if (!type) return type;
 
@@ -375,12 +375,20 @@ static inline TypeInfo *get_inner_type(TypeInfo *type)
         switch (type->kind)
         {
         case TYPE_ENUM: type = type->enumeration.underlying_type; break;
-        default: goto end; break;
+        default: return type;
         }
     }
 
-end:
     return type;
+}
+
+static TypeInfo *create_named_placeholder_type(Compiler *compiler, String name)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_NAMED_PLACEHOLDER;
+    ty->name = name;
+    return ty;
 }
 
 static TypeInfo *create_simple_type(Compiler *compiler, TypeKind kind)
@@ -589,16 +597,7 @@ create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
     return ty;
 }
 
-static TypeInfo *create_placeholder_type(Compiler *compiler)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_UNINITIALIZED;
-    return ty;
-}
-
-// scope param can be null
-static void init_struct_type(
+static void init_named_struct_type(
     TypeInfo *ty, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
 {
     ty->kind = TYPE_STRUCT;
@@ -606,6 +605,18 @@ static void init_struct_type(
     memset(&ty->structure, 0, sizeof(ty->structure));
     ty->structure.is_union = is_union;
     ty->structure.fields = *fields;
+}
+
+static TypeInfo *create_anonymous_struct_type(
+    Compiler *compiler, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_STRUCT;
+    ty->scope = scope;
+    ty->structure.is_union = is_union;
+    ty->structure.fields = *fields;
+    return ty;
 }
 
 static TypeInfo *create_proc_type(
@@ -750,7 +761,7 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     }
 
     case TYPE_UNINITIALIZED:
-    case TYPE_NONE: assert(0); break;
+    case TYPE_NAMED_PLACEHOLDER: assert(0); break;
     }
 }
 
@@ -758,7 +769,7 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
 {
     if (type->name.len > 0)
     {
-        assert(!is_type_basic(type));
+        assert(can_type_be_named(type));
         sb_append(sb, type->name);
         return;
     }
@@ -819,8 +830,9 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     }
 
     case TYPE_ENUM:
-        sb_append(sb, STR("enum "));
+        sb_append(sb, STR("@Enum("));
         print_type_pretty_name(sb, type->enumeration.underlying_type);
+        sb_append(sb, STR(")"));
         break;
 
     case TYPE_PROC: {
@@ -874,7 +886,7 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     }
 
     case TYPE_UNINITIALIZED:
-    case TYPE_NONE: assert(0); break;
+    case TYPE_NAMED_PLACEHOLDER: assert(0); break;
     }
 }
 
@@ -951,7 +963,7 @@ static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
     case TYPE_UNTYPED_FLOAT:
     case TYPE_PROC:
     case TYPE_UNINITIALIZED:
-    case TYPE_NONE:
+    case TYPE_NAMED_PLACEHOLDER:
     case TYPE_VOID:
     case TYPE_NAMESPACE:
     case TYPE_TEMPLATE:
@@ -1048,7 +1060,7 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
     case TYPE_UNTYPED_FLOAT:
     case TYPE_PROC:
     case TYPE_UNINITIALIZED:
-    case TYPE_NONE:
+    case TYPE_NAMED_PLACEHOLDER:
     case TYPE_VOID:
     case TYPE_NAMESPACE:
     case TYPE_TEMPLATE:

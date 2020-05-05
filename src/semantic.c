@@ -7,8 +7,7 @@ typedef struct Analyzer
     ArrayOfAstPtr continue_stack;
 } Analyzer;
 
-static TypeInfo *
-ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct);
+static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name);
 
 static void create_scopes_ast(Analyzer *a, Ast *ast);
 
@@ -240,11 +239,6 @@ static void instantiate_template(
 
     case AST_DEFER: {
         if (ast->stmt) INSTANTIATE_AST(stmt);
-        break;
-    }
-
-    case AST_DISTINCT_TYPE: {
-        INSTANTIATE_AST(distinct.sub);
         break;
     }
 
@@ -694,7 +688,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
             TypeInfo *type = NULL;
 
             if (param->type_info && param->type_info->kind == TYPE_TYPE)
-                type = ast_as_type(a, scope, param, false);
+                type = ast_as_type(a, scope, param, NULL);
             else
                 type = param->type_info;
 
@@ -712,7 +706,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
             TypeInfo *type = NULL;
 
             if (param->type_info && param->type_info->kind == TYPE_TYPE)
-                type = ast_as_type(a, scope, param, false);
+                type = ast_as_type(a, scope, param, NULL);
             else
                 type = param->type_info;
 
@@ -747,8 +741,7 @@ static bool resolve_expr_int(Analyzer *a, Scope *scope, Ast *ast, int64_t *i64)
     return res;
 }
 
-static TypeInfo *
-ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
+static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
 {
     if (ast->as_type) return ast->as_type;
 
@@ -792,7 +785,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
             {
-                ast->as_type = ast_as_type(a, sym->sym_scope, sym, false);
+                ast->as_type = ast_as_type(a, sym->sym_scope, sym, NULL);
             }
             break;
         }
@@ -812,25 +805,17 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_TYPEDEF: {
-        ast->as_type = a->compiler->none_type;
-        ast->as_type = ast_as_type(a, scope, ast->type_def.type_expr, false);
-
-        if (ast->as_type && ast->as_type->kind == TYPE_NONE)
+        sb_reset(&a->compiler->sb);
+        if (ast->loc.file->module_name.len > 0)
         {
-            ast->as_type = NULL;
+            sb_append(&a->compiler->sb, ast->loc.file->module_name);
+            sb_append_char(&a->compiler->sb, '.');
         }
+        sb_append(&a->compiler->sb, ast->type_def.name);
+        String type_name = sb_build(&a->compiler->sb, &a->compiler->bump);
 
-        if (ast->as_type && !is_type_basic(ast->as_type))
-        {
-            sb_reset(&a->compiler->sb);
-            if (ast->loc.file->module_name.len > 0)
-            {
-                sb_append(&a->compiler->sb, ast->loc.file->module_name);
-                sb_append_char(&a->compiler->sb, '.');
-            }
-            sb_append(&a->compiler->sb, ast->type_def.name);
-            ast->as_type->name = sb_build(&a->compiler->sb, &a->compiler->bump);
-        }
+        ast->as_type =
+            ast_as_type(a, scope, ast->type_def.type_expr, &type_name);
         break;
     }
 
@@ -856,7 +841,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                 Ast *param = &ast->proc_call.params.ptr[i];
                 sb_append(&a->compiler->sb, STR("$"));
                 print_mangled_type(
-                    &a->compiler->sb, ast_as_type(a, scope, param, false));
+                    &a->compiler->sb, ast_as_type(a, scope, param, NULL));
             }
             String mangled_type =
                 sb_build(&a->compiler->sb, &a->compiler->bump);
@@ -909,7 +894,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
                     }
                     Ast *param = &ast->proc_call.params.ptr[i];
                     print_type_pretty_name(
-                        &a->compiler->sb, ast_as_type(a, scope, param, false));
+                        &a->compiler->sb, ast_as_type(a, scope, param, NULL));
                 }
                 sb_append_char(&a->compiler->sb, ')');
                 cloned_ast->as_type->name =
@@ -924,13 +909,8 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         break;
     }
 
-    case AST_DISTINCT_TYPE: {
-        ast->as_type = ast_as_type(a, scope, ast->distinct.sub, true);
-        break;
-    }
-
     case AST_POINTER_TYPE: {
-        if (ast_as_type(a, scope, ast->expr, false))
+        if (ast_as_type(a, scope, ast->expr, NULL))
         {
             ast->as_type = create_pointer_type(a->compiler, ast->expr->as_type);
         }
@@ -943,7 +923,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         int64_t size = 0;
         bool resolves = resolve_expr_int(a, scope, ast->array_type.size, &size);
 
-        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
+        if (!ast_as_type(a, scope, ast->array_type.sub, NULL)) break;
 
         if (!resolves)
         {
@@ -962,7 +942,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_VARIADIC_ARG: {
-        if (!ast_as_type(a, scope, ast->expr, false)) break;
+        if (!ast_as_type(a, scope, ast->expr, NULL)) break;
 
         TypeInfo *ty = create_slice_type(a->compiler, ast->expr->as_type);
 
@@ -971,7 +951,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_SLICE_TYPE: {
-        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
+        if (!ast_as_type(a, scope, ast->array_type.sub, NULL)) break;
 
         TypeInfo *ty =
             create_slice_type(a->compiler, ast->array_type.sub->as_type);
@@ -981,7 +961,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     }
 
     case AST_DYNAMIC_ARRAY_TYPE: {
-        if (!ast_as_type(a, scope, ast->array_type.sub, false)) break;
+        if (!ast_as_type(a, scope, ast->array_type.sub, NULL)) break;
 
         TypeInfo *ty = create_dynamic_array_type(
             a->compiler, ast->array_type.sub->as_type);
@@ -996,13 +976,16 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         // We need to set the type here in advance because of recursive type
         // stuff
-        ast->as_type = create_placeholder_type(a->compiler);
+        if (name)
+        {
+            ast->as_type = create_named_placeholder_type(a->compiler, *name);
+        }
 
         for (Ast *field = ast->structure.fields.ptr;
              field != ast->structure.fields.ptr + ast->structure.fields.len;
              ++field)
         {
-            if (!ast_as_type(a, scope, field->struct_field.type_expr, false))
+            if (!ast_as_type(a, scope, field->struct_field.type_expr, NULL))
             {
                 res = false;
             }
@@ -1011,8 +994,16 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (res)
         {
-            init_struct_type(
-                ast->as_type, ast->scope, ast->structure.is_union, &fields);
+            if (name)
+            {
+                init_named_struct_type(
+                    ast->as_type, ast->scope, ast->structure.is_union, &fields);
+            }
+            else
+            {
+                ast->as_type = create_anonymous_struct_type(
+                    a->compiler, ast->scope, ast->structure.is_union, &fields);
+            }
         }
         else
         {
@@ -1024,7 +1015,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
     case AST_ENUM: {
         TypeInfo *underlying_type =
-            ast_as_type(a, scope, ast->enumeration.type_expr, false);
+            ast_as_type(a, scope, ast->enumeration.type_expr, NULL);
 
         if (underlying_type)
         {
@@ -1057,7 +1048,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
              ++param)
         {
             TypeInfo *param_as_type =
-                ast_as_type(a, scope, param->decl.type_expr, false);
+                ast_as_type(a, scope, param->decl.type_expr, NULL);
             if (!param_as_type)
             {
                 valid = false;
@@ -1076,7 +1067,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
 
         if (ast->proc.return_type)
         {
-            return_type = ast_as_type(a, scope, ast->proc.return_type, false);
+            return_type = ast_as_type(a, scope, ast->proc.return_type, NULL);
         }
         else
         {
@@ -1108,7 +1099,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             Ast *elem_type = &ast->intrinsic_call.params.ptr[0];
             Ast *vec_width = &ast->intrinsic_call.params.ptr[1];
 
-            ast_as_type(a, scope, elem_type, false);
+            ast_as_type(a, scope, elem_type, NULL);
             if (!elem_type->as_type) break;
 
             int64_t width;
@@ -1133,7 +1124,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
         if (accessed_scope)
         {
             ast->as_type =
-                ast_as_type(a, accessed_scope, ast->access.right, false);
+                ast_as_type(a, accessed_scope, ast->access.right, NULL);
         }
         break;
     }
@@ -1145,15 +1136,11 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     {
         ast->as_type->file = ast->loc.file;
         assert(ast->loc.file);
-    }
 
-    if (is_distinct && ast->as_type)
-    {
-        TypeInfo *unique_type =
-            bump_alloc(&a->compiler->bump, sizeof(TypeInfo));
-        *unique_type = *ast->as_type;
-        unique_type->flags |= TYPE_FLAG_DISTINCT;
-        ast->as_type = unique_type;
+        if (name && can_type_be_named(ast->as_type))
+        {
+            ast->as_type->name = *name;
+        }
     }
 
     return ast->as_type;
@@ -1388,11 +1375,6 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
             create_scopes_ast(a, value);
         }
 
-        break;
-    }
-
-    case AST_DISTINCT_TYPE: {
-        create_scopes_ast(a, ast->distinct.sub);
         break;
     }
 
@@ -1843,11 +1825,6 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         break;
     }
 
-    case AST_DISTINCT_TYPE: {
-        register_symbol_ast(a, ast->distinct.sub);
-        break;
-    }
-
     case AST_STRUCT: {
         array_push(&a->scope_stack, ast->scope);
         for (Ast *field = ast->structure.fields.ptr;
@@ -2040,6 +2017,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
     case AST_TYPEDEF: {
         if (ast->type_def.template_params.len == 0)
         {
+            ast_as_type(a, *array_last(&a->scope_stack), ast, NULL);
             analyze_ast(a, ast->type_def.type_expr, a->compiler->type_type);
 
             if (!ast->type_def.type_expr->as_type)
@@ -2800,7 +2778,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         return;
     }
 
-    ast_as_type(a, *array_last(&a->scope_stack), ast, false);
+    ast_as_type(a, *array_last(&a->scope_stack), ast, NULL);
 
     switch (ast->type)
     {
@@ -3077,8 +3055,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TYPE_DYNAMIC_ARRAY:
         case TYPE_SLICE:
         case TYPE_ARRAY:
-            ast->type_info =
-                create_pointer_type(a->compiler, type->array.sub);
+            ast->type_info = create_pointer_type(a->compiler, type->array.sub);
             break;
 
         case TYPE_ANY: {
@@ -3100,8 +3077,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         switch (type->kind)
         {
         case TYPE_ANY: {
-            ast->type_info = create_pointer_type(
-                a->compiler, a->compiler->type_info_type);
+            ast->type_info =
+                create_pointer_type(a->compiler, a->compiler->type_info_type);
             break;
         }
 
@@ -3125,12 +3102,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         default: assert(0); break;
         }
 
-        break;
-    }
-
-    case AST_DISTINCT_TYPE: {
-        analyze_ast(a, ast->distinct.sub, a->compiler->type_type);
-        ast->type_info = ast->distinct.sub->type_info;
         break;
     }
 
@@ -3259,7 +3230,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     Ast *param = &ast->proc_call.params.ptr[i];
                     sb_append(&a->compiler->sb, STR("$"));
                     print_mangled_type(
-                        &a->compiler->sb, ast_as_type(a, scope, param, false));
+                        &a->compiler->sb, ast_as_type(a, scope, param, NULL));
                 }
                 String mangled_type =
                     sb_build(&a->compiler->sb, &a->compiler->bump);
@@ -3842,8 +3813,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, operand_expected_type);
             analyze_ast(a, ast->binop.right, operand_expected_type);
 
-            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
-            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+            TypeInfo *left_type = ast->binop.left->type_info;
+            TypeInfo *right_type = ast->binop.right->type_info;
 
             if (!left_type || !right_type)
             {
@@ -3875,7 +3846,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 TypeInfo *common_type =
                     common_numeric_type(left_type, right_type);
                 analyze_ast(a, ast->binop.right, common_type);
-                right_type = get_inner_type(ast->binop.right->type_info);
+                right_type = ast->binop.right->type_info;
             }
             else if (
                 right_type->kind == TYPE_VECTOR &&
@@ -3887,7 +3858,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 TypeInfo *common_type =
                     common_numeric_type(left_type, right_type);
                 analyze_ast(a, ast->binop.left, common_type);
-                left_type = get_inner_type(ast->binop.left->type_info);
+                left_type = ast->binop.left->type_info;
             }
             else
             {
@@ -3901,8 +3872,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     analyze_ast(a, ast->binop.left, common_type);
                     analyze_ast(a, ast->binop.right, common_type);
 
-                    left_type = get_inner_type(ast->binop.left->type_info);
-                    right_type = get_inner_type(ast->binop.right->type_info);
+                    left_type = ast->binop.left->type_info;
+                    right_type = ast->binop.right->type_info;
                     result_type = left_type;
                 }
             }
@@ -3936,8 +3907,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, operand_expected_type);
             analyze_ast(a, ast->binop.right, operand_expected_type);
 
-            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
-            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+            TypeInfo *left_type = ast->binop.left->type_info;
+            TypeInfo *right_type = ast->binop.right->type_info;
 
             if (!left_type || !right_type)
             {
@@ -3953,8 +3924,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 analyze_ast(a, ast->binop.left, common_type);
                 analyze_ast(a, ast->binop.right, common_type);
 
-                left_type = get_inner_type(ast->binop.left->type_info);
-                right_type = get_inner_type(ast->binop.right->type_info);
+                left_type = ast->binop.left->type_info;
+                right_type = ast->binop.right->type_info;
             }
 
             if (!exact_types(left_type, right_type))
@@ -3989,8 +3960,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, NULL);
             analyze_ast(a, ast->binop.right, NULL);
 
-            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
-            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+            TypeInfo *left_type = ast->binop.left->type_info;
+            TypeInfo *right_type = ast->binop.right->type_info;
 
             if (!left_type || !right_type)
             {
@@ -4000,17 +3971,20 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             TypeInfo *common_type = common_numeric_type(left_type, right_type);
 
-            TypeInfo *promoted_type =
-                promote_to_runtime_type(a->compiler, common_type);
-            if (promoted_type)
+            if (common_type)
             {
-                common_type = promoted_type;
-            }
+                TypeInfo *promoted_type =
+                    promote_to_runtime_type(a->compiler, common_type);
+                if (promoted_type)
+                {
+                    common_type = promoted_type;
+                }
 
-            analyze_ast(a, ast->binop.left, common_type);
-            analyze_ast(a, ast->binop.right, common_type);
-            left_type = get_inner_type(ast->binop.left->type_info);
-            right_type = get_inner_type(ast->binop.right->type_info);
+                analyze_ast(a, ast->binop.left, common_type);
+                analyze_ast(a, ast->binop.right, common_type);
+                left_type = ast->binop.left->type_info;
+                right_type = ast->binop.right->type_info;
+            }
 
             if (!exact_types(left_type, right_type))
             {
@@ -4040,8 +4014,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             analyze_ast(a, ast->binop.left, NULL);
             analyze_ast(a, ast->binop.right, NULL);
 
-            TypeInfo *left_type = get_inner_type(ast->binop.left->type_info);
-            TypeInfo *right_type = get_inner_type(ast->binop.right->type_info);
+            TypeInfo *left_type = ast->binop.left->type_info;
+            TypeInfo *right_type = ast->binop.right->type_info;
 
             if (!left_type || !right_type)
             {
@@ -4386,7 +4360,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         analyze_ast(a, ast->array_type.size, NULL);
 
-        TypeInfo *size_type = get_inner_type(ast->array_type.size->type_info);
+        TypeInfo *size_type =
+            get_inner_primitive_type(ast->array_type.size->type_info);
         if (!size_type)
         {
             assert(a->compiler->errors.len > 0);
@@ -4401,7 +4376,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         // Recompute as_type after getting the size's type
-        ast_as_type(a, *array_last(&a->scope_stack), ast, false);
+        ast_as_type(a, *array_last(&a->scope_stack), ast, NULL);
 
         if (!ast->as_type)
         {
@@ -4944,10 +4919,6 @@ static void check_used_asts(Analyzer *a, Ast *ast)
 
     case AST_DEFER: {
         if (ast->stmt) check_used_asts(a, ast->stmt);
-        break;
-    }
-
-    case AST_DISTINCT_TYPE: {
         break;
     }
 

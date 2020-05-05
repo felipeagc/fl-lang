@@ -2,7 +2,7 @@ module main
 
 import "core:c"
 
-typedef MyEnum distinct enum u32 {
+typedef MyEnum enum u32 {
     one = 1,
     two = 2,
     two_again = two,

@@ -1,9 +1,0 @@
-module main
-
-typedef MyInt distinct int;
-
-func main() {
-    var a: int = 123;
-    var b: MyInt = cast(MyInt)a;
-    a = cast(int)b;
-}
