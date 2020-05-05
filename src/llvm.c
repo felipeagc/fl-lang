@@ -113,6 +113,11 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_RAW_POINTER: {
+        type->ref = LLVMPointerType(LLVMVoidType(), 0);
+        break;
+    }
+
     case TYPE_ARRAY: {
         type->ref =
             LLVMArrayType(llvm_type(l, type->array.sub), type->array.size);
@@ -304,6 +309,11 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
 
     case TYPE_VOID: {
         assert(0);
+        break;
+    }
+
+    case TYPE_RAW_POINTER: {
+        type->debug_ref = LLVMDIBuilderCreateNullPtrType(l->mod.di_builder);
         break;
     }
 
@@ -4239,7 +4249,7 @@ static void llvm_codegen_ast(
         else
         {
             current_ptr_ptr = build_alloca(
-                l, mod, create_pointer_type(l->compiler, ast->type_info, 0));
+                l, mod, create_pointer_type(l->compiler, ast->type_info));
             ast->foreach_stmt.value.is_lvalue = true;
             ast->foreach_stmt.value.value =
                 build_alloca(l, mod, ast->type_info);

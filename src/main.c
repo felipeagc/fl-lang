@@ -233,47 +233,44 @@ static void compiler_init(Compiler *compiler)
 
     // Initialize runtime scopes
     {
-        compiler->u8_type = create_int_type(compiler, 8, false, 0);
-        compiler->u16_type = create_int_type(compiler, 16, false, 0);
-        compiler->u32_type = create_int_type(compiler, 32, false, 0);
-        compiler->u64_type = create_int_type(compiler, 64, false, 0);
+        compiler->u8_type = create_int_type(compiler, 8, false);
+        compiler->u16_type = create_int_type(compiler, 16, false);
+        compiler->u32_type = create_int_type(compiler, 32, false);
+        compiler->u64_type = create_int_type(compiler, 64, false);
 
-        compiler->i8_type = create_int_type(compiler, 8, true, 0);
-        compiler->i16_type = create_int_type(compiler, 16, true, 0);
-        compiler->i32_type = create_int_type(compiler, 32, true, 0);
-        compiler->i64_type = create_int_type(compiler, 64, true, 0);
+        compiler->i8_type = create_int_type(compiler, 8, true);
+        compiler->i16_type = create_int_type(compiler, 16, true);
+        compiler->i32_type = create_int_type(compiler, 32, true);
+        compiler->i64_type = create_int_type(compiler, 64, true);
 
         compiler->uint_type = compiler->u64_type;
         compiler->int_type = compiler->i64_type;
 
-        compiler->float_type = create_float_type(compiler, 32, 0);
-        compiler->double_type = create_float_type(compiler, 64, 0);
+        compiler->float_type = create_float_type(compiler, 32);
+        compiler->double_type = create_float_type(compiler, 64);
 
-        compiler->int_lit_type =
-            create_simple_type(compiler, TYPE_UNTYPED_INT, 0);
+        compiler->int_lit_type = create_simple_type(compiler, TYPE_UNTYPED_INT);
         compiler->float_lit_type =
-            create_simple_type(compiler, TYPE_UNTYPED_FLOAT, 0);
+            create_simple_type(compiler, TYPE_UNTYPED_FLOAT);
 
-        compiler->bool_type = create_simple_type(compiler, TYPE_BOOL, 0);
-        compiler->void_type = create_simple_type(compiler, TYPE_VOID, 0);
+        compiler->bool_type = create_simple_type(compiler, TYPE_BOOL);
+        compiler->void_type = create_simple_type(compiler, TYPE_VOID);
         compiler->bool_int_type = compiler->u8_type;
 
-        compiler->null_ptr_type = create_pointer_type(
-            compiler, compiler->void_type, TYPE_FLAG_CAN_CHANGE);
+        compiler->null_ptr_type =
+            create_simple_type(compiler, TYPE_RAW_POINTER);
         compiler->void_ptr_type =
-            create_pointer_type(compiler, compiler->void_type, 0);
+            create_pointer_type(compiler, compiler->void_type);
 
         compiler->string_type = create_slice_type(compiler, compiler->i8_type);
         compiler->c_string_type =
-            create_pointer_type(compiler, compiler->i8_type, 0);
+            create_pointer_type(compiler, compiler->i8_type);
 
         compiler->any_type = create_any_type(compiler);
-        compiler->namespace_type =
-            create_simple_type(compiler, TYPE_NAMESPACE, 0);
-        compiler->template_type =
-            create_simple_type(compiler, TYPE_TEMPLATE, 0);
-        compiler->type_type = create_simple_type(compiler, TYPE_TYPE, 0);
-        compiler->none_type = create_simple_type(compiler, TYPE_NONE, 0);
+        compiler->namespace_type = create_simple_type(compiler, TYPE_NAMESPACE);
+        compiler->template_type = create_simple_type(compiler, TYPE_TEMPLATE);
+        compiler->type_type = create_simple_type(compiler, TYPE_TYPE);
+        compiler->none_type = create_simple_type(compiler, TYPE_NONE);
     }
 
 #if defined(__linux__)

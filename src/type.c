@@ -19,6 +19,7 @@ typedef enum TypeKind {
     TYPE_ANY = 17,
     TYPE_UNTYPED_INT = 18,
     TYPE_UNTYPED_FLOAT = 19,
+    TYPE_RAW_POINTER = 20,
 } TypeKind;
 
 typedef enum TypeFlags {
@@ -26,7 +27,6 @@ typedef enum TypeFlags {
     TYPE_FLAG_EXTERN = 1 << 1,
     TYPE_FLAG_C_VARARGS = 1 << 2,
     TYPE_FLAG_VARARGS = 1 << 3,
-    TYPE_FLAG_CAN_CHANGE = 1 << 10,
 } TypeFlags;
 
 struct TypeInfo
@@ -87,9 +87,9 @@ static inline bool is_type_runtime(TypeInfo *type)
         type->kind == TYPE_BOOL || type->kind == TYPE_INT ||
         type->kind == TYPE_FLOAT || type->kind == TYPE_ENUM ||
         type->kind == TYPE_STRUCT || type->kind == TYPE_ARRAY ||
-        type->kind == TYPE_POINTER || type->kind == TYPE_SLICE ||
-        type->kind == TYPE_DYNAMIC_ARRAY || type->kind == TYPE_ANY ||
-        type->kind == TYPE_VECTOR);
+        type->kind == TYPE_POINTER || type->kind == TYPE_RAW_POINTER ||
+        type->kind == TYPE_SLICE || type->kind == TYPE_DYNAMIC_ARRAY ||
+        type->kind == TYPE_ANY || type->kind == TYPE_VECTOR);
 }
 
 static inline bool is_type_compound(TypeInfo *type)
@@ -137,7 +137,8 @@ static inline bool is_type_logic(TypeInfo *type)
     return (
         type->kind == TYPE_INT || type->kind == TYPE_FLOAT ||
         type->kind == TYPE_UNTYPED_INT || type->kind == TYPE_UNTYPED_FLOAT ||
-        type->kind == TYPE_BOOL || type->kind == TYPE_POINTER);
+        type->kind == TYPE_BOOL || type->kind == TYPE_POINTER ||
+        type->kind == TYPE_RAW_POINTER);
 }
 
 static inline bool is_type_bitwise(TypeInfo *type)
@@ -274,6 +275,7 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
 
+    case TYPE_RAW_POINTER:
     case TYPE_UNTYPED_INT:
     case TYPE_UNTYPED_FLOAT:
     case TYPE_ANY:
@@ -305,11 +307,13 @@ static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
     if (a->kind == b->kind) return a;
 
-    if (a->kind == TYPE_POINTER && b->kind == TYPE_POINTER)
+    if (a->kind == TYPE_POINTER && b->kind == TYPE_RAW_POINTER)
     {
-        if (a->flags & TYPE_FLAG_CAN_CHANGE) return b;
-        if (b->flags & TYPE_FLAG_CAN_CHANGE) return a;
-        return NULL;
+        return a;
+    }
+    else if (b->kind == TYPE_POINTER && a->kind == TYPE_RAW_POINTER)
+    {
+        return b;
     }
 
     if (a->kind == TYPE_FLOAT)
@@ -379,13 +383,11 @@ end:
     return type;
 }
 
-static TypeInfo *
-create_simple_type(Compiler *compiler, TypeKind kind, uint32_t flags)
+static TypeInfo *create_simple_type(Compiler *compiler, TypeKind kind)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
     ty->kind = kind;
-    ty->flags = flags;
     return ty;
 }
 
@@ -409,26 +411,23 @@ static void init_numeric_type_scope(Compiler *compiler, TypeInfo *type)
     scope_set(scope, STR("max"), max_ast);
 }
 
-static TypeInfo *create_int_type(
-    Compiler *compiler, uint32_t num_bits, bool is_signed, uint32_t flags)
+static TypeInfo *
+create_int_type(Compiler *compiler, uint32_t num_bits, bool is_signed)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
     ty->kind = TYPE_INT;
-    ty->flags = flags;
     ty->integer.num_bits = num_bits;
     ty->integer.is_signed = is_signed;
     init_numeric_type_scope(compiler, ty);
     return ty;
 }
 
-static TypeInfo *
-create_float_type(Compiler *compiler, uint32_t num_bits, uint32_t flags)
+static TypeInfo *create_float_type(Compiler *compiler, uint32_t num_bits)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
     ty->kind = TYPE_FLOAT;
-    ty->flags = flags;
     ty->floating.num_bits = num_bits;
     init_numeric_type_scope(compiler, ty);
     return ty;
@@ -453,14 +452,12 @@ static TypeInfo *create_any_type(Compiler *compiler)
     return ty;
 }
 
-static TypeInfo *
-create_pointer_type(Compiler *compiler, TypeInfo *subtype, uint32_t flags)
+static TypeInfo *create_pointer_type(Compiler *compiler, TypeInfo *subtype)
 {
     TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
     memset(ty, 0, sizeof(*ty));
     ty->kind = TYPE_POINTER;
     ty->ptr.sub = subtype;
-    ty->flags = flags;
 
     return ty;
 }
@@ -656,6 +653,7 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
     case TYPE_NAMESPACE: sb_append(sb, STR("n")); break;
 
+    case TYPE_RAW_POINTER: sb_append(sb, STR("X")); break;
     case TYPE_UNTYPED_INT: sb_append(sb, STR("I")); break;
     case TYPE_UNTYPED_FLOAT: sb_append(sb, STR("R")); break;
 
@@ -770,6 +768,7 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     case TYPE_TYPE: sb_append(sb, STR("@Type")); break;
     case TYPE_TEMPLATE: sb_append(sb, STR("@Template")); break;
 
+    case TYPE_RAW_POINTER: sb_append(sb, STR("@Pointer")); break;
     case TYPE_UNTYPED_INT: sb_append(sb, STR("@UntypedInt")); break;
     case TYPE_UNTYPED_FLOAT: sb_append(sb, STR("@UntypedFloat")); break;
 
@@ -924,7 +923,10 @@ static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
         break;
 
     case TYPE_ANY: align = PTR_SIZE; break;
+
+    case TYPE_RAW_POINTER:
     case TYPE_POINTER: align = PTR_SIZE; break;
+
     case TYPE_SLICE: align = PTR_SIZE; break;
     case TYPE_DYNAMIC_ARRAY: align = PTR_SIZE; break;
 
@@ -977,7 +979,10 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
         break;
 
     case TYPE_ANY: size = PTR_SIZE * 2; break;
+
+    case TYPE_RAW_POINTER:
     case TYPE_POINTER: size = PTR_SIZE; break;
+
     case TYPE_SLICE: size = PTR_SIZE * 2; break;
     case TYPE_DYNAMIC_ARRAY: size = PTR_SIZE * 3; break;
 

@@ -932,8 +932,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
     case AST_POINTER_TYPE: {
         if (ast_as_type(a, scope, ast->expr, false))
         {
-            ast->as_type =
-                create_pointer_type(a->compiler, ast->expr->as_type, 0);
+            ast->as_type = create_pointer_type(a->compiler, ast->expr->as_type);
         }
         break;
     }
@@ -1094,7 +1093,7 @@ ast_as_type(Analyzer *a, Scope *scope, Ast *ast, bool is_distinct)
             TypeInfo *proc_type =
                 create_proc_type(a->compiler, params, return_type, proc_flags);
             proc_type->file = ast->loc.file;
-            ast->as_type = create_pointer_type(a->compiler, proc_type, 0);
+            ast->as_type = create_pointer_type(a->compiler, proc_type);
         }
         break;
     }
@@ -2491,7 +2490,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 create_proc_type(a->compiler, params, return_type, proc_flags);
             proc_type->file = ast->loc.file;
 
-            ast->type_info = create_pointer_type(a->compiler, proc_type, 0);
+            ast->type_info = create_pointer_type(a->compiler, proc_type);
             ast->type_info->file = ast->loc.file;
         }
         else
@@ -2747,7 +2746,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->flags & AST_FLAG_FOREACH_PTR)
             {
                 ast->type_info =
-                    create_pointer_type(a->compiler, ast->type_info, 0);
+                    create_pointer_type(a->compiler, ast->type_info);
             }
             break;
         }
@@ -3079,7 +3078,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         case TYPE_SLICE:
         case TYPE_ARRAY:
             ast->type_info =
-                create_pointer_type(a->compiler, type->array.sub, 0);
+                create_pointer_type(a->compiler, type->array.sub);
             break;
 
         case TYPE_ANY: {
@@ -3102,7 +3101,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         {
         case TYPE_ANY: {
             ast->type_info = create_pointer_type(
-                a->compiler, a->compiler->type_info_type, 0);
+                a->compiler, a->compiler->type_info_type);
             break;
         }
 
@@ -3788,7 +3787,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         case UNOP_ADDRESS: {
             ast->type_info =
-                create_pointer_type(a->compiler, ast->unop.sub->type_info, 0);
+                create_pointer_type(a->compiler, ast->unop.sub->type_info);
             break;
         }
 
