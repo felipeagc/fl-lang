@@ -165,6 +165,21 @@ static inline bool is_type_subscript_slice(TypeInfo *type)
         type->kind == TYPE_SLICE || type->kind == TYPE_DYNAMIC_ARRAY);
 }
 
+static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
+{
+    return (
+        (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_POINTER) ||
+
+        (dest_ty->kind == TYPE_POINTER && is_type_integer(src_ty)) ||
+        (is_type_integer(dest_ty) && src_ty->kind == TYPE_POINTER) ||
+
+        (is_type_integer(dest_ty) && is_type_integer(src_ty)) ||
+        (is_type_float(dest_ty) && is_type_float(src_ty)) ||
+
+        (is_type_float(dest_ty) && is_type_integer(src_ty)) ||
+        (is_type_integer(dest_ty) && is_type_float(src_ty)));
+}
+
 static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
     if (a->kind == b->kind) return a;
@@ -382,269 +397,6 @@ static inline TypeInfo *get_inner_primitive_type(TypeInfo *type)
     return type;
 }
 
-static TypeInfo *create_named_placeholder_type(Compiler *compiler, String name)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_NAMED_PLACEHOLDER;
-    ty->name = name;
-    return ty;
-}
-
-static TypeInfo *create_simple_type(Compiler *compiler, TypeKind kind)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = kind;
-    return ty;
-}
-
-static void init_numeric_type_scope(Compiler *compiler, TypeInfo *type)
-{
-    Ast *min_ast = bump_alloc(&compiler->bump, sizeof(Ast));
-    Ast *max_ast = bump_alloc(&compiler->bump, sizeof(Ast));
-    memset(min_ast, 0, sizeof(*min_ast));
-    memset(max_ast, 0, sizeof(*max_ast));
-    min_ast->type = AST_BUILTIN_MIN;
-    min_ast->flags = AST_FLAG_PUBLIC;
-    max_ast->type = AST_BUILTIN_MAX;
-    max_ast->flags = AST_FLAG_PUBLIC;
-
-    Scope *scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(scope, compiler, SCOPE_DEFAULT, 2, NULL);
-
-    type->scope = scope;
-    scope->type_info = type;
-    scope_set(scope, STR("min"), min_ast);
-    scope_set(scope, STR("max"), max_ast);
-}
-
-static TypeInfo *
-create_int_type(Compiler *compiler, uint32_t num_bits, bool is_signed)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_INT;
-    ty->integer.num_bits = num_bits;
-    ty->integer.is_signed = is_signed;
-    init_numeric_type_scope(compiler, ty);
-    return ty;
-}
-
-static TypeInfo *create_float_type(Compiler *compiler, uint32_t num_bits)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_FLOAT;
-    ty->floating.num_bits = num_bits;
-    init_numeric_type_scope(compiler, ty);
-    return ty;
-}
-
-static TypeInfo *create_any_type(Compiler *compiler)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_ANY;
-
-    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
-    ty->scope->type_info = ty;
-
-    static Ast ptr_ast = {.type = AST_BUILTIN_PTR, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("ptr"), &ptr_ast);
-
-    static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO,
-                                .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("type_info"), &type_info_ast);
-    return ty;
-}
-
-static TypeInfo *create_pointer_type(Compiler *compiler, TypeInfo *subtype)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_POINTER;
-    ty->ptr.sub = subtype;
-
-    return ty;
-}
-
-static TypeInfo *
-create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_ARRAY;
-    ty->array.sub = subtype;
-    ty->array.size = size;
-
-    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
-    ty->scope->type_info = ty;
-
-    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
-    memset(ptr_ast, 0, sizeof(*ptr_ast));
-    ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->flags = AST_FLAG_PUBLIC;
-    scope_set(ty->scope, STR("ptr"), ptr_ast);
-
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("len"), &len_ast);
-
-    return ty;
-}
-
-static TypeInfo *
-create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_VECTOR;
-    ty->array.sub = subtype;
-    ty->array.size = size;
-
-    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 16, NULL);
-    ty->scope->type_info = ty;
-
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("len"), &len_ast);
-
-    if (ty->array.size >= 1)
-    {
-        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .flags = AST_FLAG_PUBLIC,
-                          .vec_access.position = 0};
-        scope_set(ty->scope, STR("x"), &ast);
-        scope_set(ty->scope, STR("r"), &ast);
-    }
-    if (ty->array.size >= 2)
-    {
-        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .flags = AST_FLAG_PUBLIC,
-                          .vec_access.position = 1};
-        scope_set(ty->scope, STR("y"), &ast);
-        scope_set(ty->scope, STR("g"), &ast);
-    }
-    if (ty->array.size >= 3)
-    {
-        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .flags = AST_FLAG_PUBLIC,
-                          .vec_access.position = 2};
-        scope_set(ty->scope, STR("z"), &ast);
-        scope_set(ty->scope, STR("b"), &ast);
-    }
-    if (ty->array.size >= 4)
-    {
-        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
-                          .flags = AST_FLAG_PUBLIC,
-                          .vec_access.position = 3};
-        scope_set(ty->scope, STR("w"), &ast);
-        scope_set(ty->scope, STR("a"), &ast);
-    }
-
-    return ty;
-}
-
-static TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_SLICE;
-    ty->array.sub = subtype;
-
-    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
-    ty->scope->type_info = ty;
-
-    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
-    memset(ptr_ast, 0, sizeof(*ptr_ast));
-    ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->flags = AST_FLAG_PUBLIC;
-    scope_set(ty->scope, STR("ptr"), ptr_ast);
-
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("len"), &len_ast);
-
-    return ty;
-}
-
-static TypeInfo *
-create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_DYNAMIC_ARRAY;
-    ty->array.sub = subtype;
-
-    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
-    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 3, NULL);
-    ty->scope->type_info = ty;
-
-    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
-    memset(ptr_ast, 0, sizeof(*ptr_ast));
-    ptr_ast->type = AST_BUILTIN_PTR;
-    ptr_ast->flags = AST_FLAG_PUBLIC;
-    scope_set(ty->scope, STR("ptr"), ptr_ast);
-
-    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("len"), &len_ast);
-
-    static Ast cap_ast = {.type = AST_BUILTIN_CAP, .flags = AST_FLAG_PUBLIC};
-    scope_set(ty->scope, STR("cap"), &cap_ast);
-
-    return ty;
-}
-
-static void init_named_struct_type(
-    TypeInfo *ty, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
-{
-    ty->kind = TYPE_STRUCT;
-    ty->scope = scope;
-    memset(&ty->structure, 0, sizeof(ty->structure));
-    ty->structure.is_union = is_union;
-    ty->structure.fields = *fields;
-}
-
-static TypeInfo *create_anonymous_struct_type(
-    Compiler *compiler, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_STRUCT;
-    ty->scope = scope;
-    ty->structure.is_union = is_union;
-    ty->structure.fields = *fields;
-    return ty;
-}
-
-static TypeInfo *create_proc_type(
-    Compiler *compiler,
-    ArrayOfTypeInfoPtr params,
-    TypeInfo *return_type,
-    uint32_t flags)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_PROC;
-    ty->flags = flags;
-    ty->proc.params = params;
-    ty->proc.return_type = return_type;
-    return ty;
-}
-
-static TypeInfo *
-create_enum_type(Compiler *compiler, Scope *scope, TypeInfo *underlying_type)
-{
-    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
-    memset(ty, 0, sizeof(*ty));
-    ty->kind = TYPE_ENUM;
-    ty->scope = scope;
-    ty->enumeration.underlying_type = underlying_type;
-    return ty;
-}
-
 static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 {
     if (type->name.len > 0)
@@ -715,10 +467,20 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
 
     case TYPE_PROC: {
         sb_append(sb, STR("F"));
-        print_mangled_type(sb, type->proc.return_type);
         for (size_t i = 0; i < type->proc.params.len; ++i)
         {
+            if (i > 0) sb_append_char(sb, ',');
             print_mangled_type(sb, type->proc.params.ptr[i]);
+        }
+        sb_append_char(sb, ':');
+        print_mangled_type(sb, type->proc.return_type);
+        if (type->flags & TYPE_FLAG_C_VARARGS)
+        {
+            sb_append(sb, STR("..."));
+        }
+        else if (type->flags & TYPE_FLAG_VARARGS)
+        {
+            sb_append(sb, STR(".."));
         }
         sb_append(sb, STR("E"));
         break;
@@ -763,6 +525,13 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
     case TYPE_UNINITIALIZED:
     case TYPE_NAMED_PLACEHOLDER: assert(0); break;
     }
+}
+
+static String get_type_mangled_name(Compiler *compiler, TypeInfo *type)
+{
+    sb_reset(&compiler->sb);
+    print_mangled_type(&compiler->sb, type);
+    return sb_build(&compiler->sb, &compiler->bump);
 }
 
 static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
@@ -1071,17 +840,310 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
     return type->size;
 }
 
-static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
+static TypeInfo *cache_type(Compiler *compiler, TypeInfo *type)
 {
-    return (
-        (dest_ty->kind == TYPE_POINTER && src_ty->kind == TYPE_POINTER) ||
+    assert(type);
 
-        (dest_ty->kind == TYPE_POINTER && is_type_integer(src_ty)) ||
-        (is_type_integer(dest_ty) && src_ty->kind == TYPE_POINTER) ||
+    String key = get_type_mangled_name(compiler, type);
+    TypeInfo *found = NULL;
+    if (hash_get(&compiler->types, key, (void **)&found))
+    {
+        assert(found);
+        return found;
+    }
 
-        (is_type_integer(dest_ty) && is_type_integer(src_ty)) ||
-        (is_type_float(dest_ty) && is_type_float(src_ty)) ||
+    hash_set(&compiler->types, key, type);
+    return NULL;
+}
 
-        (is_type_float(dest_ty) && is_type_integer(src_ty)) ||
-        (is_type_integer(dest_ty) && is_type_float(src_ty)));
+static TypeInfo *create_named_placeholder_type(Compiler *compiler, String name)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_NAMED_PLACEHOLDER;
+    ty->name = name;
+    return ty;
+}
+
+static TypeInfo *create_simple_type(Compiler *compiler, TypeKind kind)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = kind;
+    return ty;
+}
+
+static void init_numeric_type_scope(Compiler *compiler, TypeInfo *type)
+{
+    Ast *min_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    Ast *max_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(min_ast, 0, sizeof(*min_ast));
+    memset(max_ast, 0, sizeof(*max_ast));
+    min_ast->type = AST_BUILTIN_MIN;
+    min_ast->flags = AST_FLAG_PUBLIC;
+    max_ast->type = AST_BUILTIN_MAX;
+    max_ast->flags = AST_FLAG_PUBLIC;
+
+    Scope *scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(scope, compiler, SCOPE_DEFAULT, 2, NULL);
+
+    type->scope = scope;
+    scope->type_info = type;
+    scope_set(scope, STR("min"), min_ast);
+    scope_set(scope, STR("max"), max_ast);
+}
+
+static TypeInfo *
+create_int_type(Compiler *compiler, uint32_t num_bits, bool is_signed)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_INT;
+    ty->integer.num_bits = num_bits;
+    ty->integer.is_signed = is_signed;
+    init_numeric_type_scope(compiler, ty);
+    return ty;
+}
+
+static TypeInfo *create_float_type(Compiler *compiler, uint32_t num_bits)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_FLOAT;
+    ty->floating.num_bits = num_bits;
+    init_numeric_type_scope(compiler, ty);
+    return ty;
+}
+
+static TypeInfo *create_any_type(Compiler *compiler)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_ANY;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    ty->scope->type_info = ty;
+
+    static Ast ptr_ast = {.type = AST_BUILTIN_PTR, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("ptr"), &ptr_ast);
+
+    static Ast type_info_ast = {.type = AST_BUILTIN_TYPE_INFO,
+                                .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("type_info"), &type_info_ast);
+    return ty;
+}
+
+static TypeInfo *create_pointer_type(Compiler *compiler, TypeInfo *subtype)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_POINTER;
+    ty->ptr.sub = subtype;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    return ty;
+}
+
+static TypeInfo *
+create_array_type(Compiler *compiler, TypeInfo *subtype, size_t size)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_ARRAY;
+    ty->array.sub = subtype;
+    ty->array.size = size;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    ty->scope->type_info = ty;
+
+    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
+    ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
+    scope_set(ty->scope, STR("ptr"), ptr_ast);
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    return ty;
+}
+
+static TypeInfo *
+create_vector_type(Compiler *compiler, TypeInfo *subtype, size_t size)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_VECTOR;
+    ty->array.sub = subtype;
+    ty->array.size = size;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 16, NULL);
+    ty->scope->type_info = ty;
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    if (ty->array.size >= 1)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .flags = AST_FLAG_PUBLIC,
+                          .vec_access.position = 0};
+        scope_set(ty->scope, STR("x"), &ast);
+        scope_set(ty->scope, STR("r"), &ast);
+    }
+    if (ty->array.size >= 2)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .flags = AST_FLAG_PUBLIC,
+                          .vec_access.position = 1};
+        scope_set(ty->scope, STR("y"), &ast);
+        scope_set(ty->scope, STR("g"), &ast);
+    }
+    if (ty->array.size >= 3)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .flags = AST_FLAG_PUBLIC,
+                          .vec_access.position = 2};
+        scope_set(ty->scope, STR("z"), &ast);
+        scope_set(ty->scope, STR("b"), &ast);
+    }
+    if (ty->array.size >= 4)
+    {
+        static Ast ast = {.type = AST_BUILTIN_VEC_ACCESS,
+                          .flags = AST_FLAG_PUBLIC,
+                          .vec_access.position = 3};
+        scope_set(ty->scope, STR("w"), &ast);
+        scope_set(ty->scope, STR("a"), &ast);
+    }
+
+    return ty;
+}
+
+static TypeInfo *create_slice_type(Compiler *compiler, TypeInfo *subtype)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_SLICE;
+    ty->array.sub = subtype;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 2, NULL);
+    ty->scope->type_info = ty;
+
+    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
+    ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
+    scope_set(ty->scope, STR("ptr"), ptr_ast);
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    return ty;
+}
+
+static TypeInfo *
+create_dynamic_array_type(Compiler *compiler, TypeInfo *subtype)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_DYNAMIC_ARRAY;
+    ty->array.sub = subtype;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    ty->scope = bump_alloc(&compiler->bump, sizeof(Scope));
+    scope_init(ty->scope, compiler, SCOPE_INSTANCED, 3, NULL);
+    ty->scope->type_info = ty;
+
+    Ast *ptr_ast = bump_alloc(&compiler->bump, sizeof(Ast));
+    memset(ptr_ast, 0, sizeof(*ptr_ast));
+    ptr_ast->type = AST_BUILTIN_PTR;
+    ptr_ast->flags = AST_FLAG_PUBLIC;
+    scope_set(ty->scope, STR("ptr"), ptr_ast);
+
+    static Ast len_ast = {.type = AST_BUILTIN_LEN, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("len"), &len_ast);
+
+    static Ast cap_ast = {.type = AST_BUILTIN_CAP, .flags = AST_FLAG_PUBLIC};
+    scope_set(ty->scope, STR("cap"), &cap_ast);
+
+    return ty;
+}
+
+static void init_named_struct_type(
+    TypeInfo *ty, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
+{
+    ty->kind = TYPE_STRUCT;
+    ty->scope = scope;
+    memset(&ty->structure, 0, sizeof(ty->structure));
+    ty->structure.is_union = is_union;
+    ty->structure.fields = *fields;
+}
+
+static TypeInfo *create_anonymous_struct_type(
+    Compiler *compiler, Scope *scope, bool is_union, ArrayOfTypeInfoPtr *fields)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_STRUCT;
+    ty->scope = scope;
+    ty->structure.is_union = is_union;
+    ty->structure.fields = *fields;
+    return ty;
+}
+
+static TypeInfo *create_proc_type(
+    Compiler *compiler,
+    ArrayOfTypeInfoPtr params,
+    TypeInfo *return_type,
+    uint32_t flags)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_PROC;
+    ty->flags = flags;
+    ty->proc.params = params;
+    ty->proc.return_type = return_type;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
+    return ty;
+}
+
+static TypeInfo *
+create_enum_type(Compiler *compiler, Scope *scope, TypeInfo *underlying_type)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_ENUM;
+    ty->scope = scope;
+    ty->enumeration.underlying_type = underlying_type;
+
+    return ty;
+}
+
+static void
+init_named_enum_type(TypeInfo *ty, Scope *scope, TypeInfo *underlying_type)
+{
+    ty->kind = TYPE_ENUM;
+    ty->scope = scope;
+    memset(&ty->enumeration, 0, sizeof(ty->enumeration));
+    ty->enumeration.underlying_type = underlying_type;
 }

@@ -11,8 +11,6 @@ Attributes
 General constant expression evaluator
 Static assert
 
-Type caching
-
 Error handling
 "Methods" (functions associated with a type)
 

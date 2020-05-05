@@ -1019,8 +1019,17 @@ static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
 
         if (underlying_type)
         {
-            ast->as_type =
-                create_enum_type(a->compiler, ast->scope, underlying_type);
+            if (name)
+            {
+                ast->as_type =
+                    create_named_placeholder_type(a->compiler, *name);
+                init_named_enum_type(ast->as_type, ast->scope, underlying_type);
+            }
+            else
+            {
+                ast->as_type =
+                    create_enum_type(a->compiler, ast->scope, underlying_type);
+            }
         }
 
         break;
