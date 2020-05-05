@@ -1,0 +1,25 @@
+module main
+
+import build "core:build"
+
+func main() {
+    var builder: build.Builder;
+
+    build.add_target(&builder, &build.Target{
+        input = "examples/ray.lang",
+        output = "examples/ray",
+    });
+
+    build.add_target(&builder, &build.Target{
+        input = "examples/table.lang",
+        output = "examples/table",
+    });
+
+    build.add_target(&builder, &build.Target{
+        input = "examples/sdl_game.lang",
+        output = "examples/sdl_game",
+        link_with = []string{"SDL2"},
+    });
+
+    build.build(&builder);
+}

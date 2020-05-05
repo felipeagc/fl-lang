@@ -65,6 +65,7 @@ VSFindResult find_visual_studio_and_windows_sdk();
 #include "ast.c"
 #include "cli_args.c"
 
+typedef struct LLModule LLModule;
 typedef struct TypeInfo TypeInfo;
 typedef ARRAY_OF(TypeInfo *) ArrayOfTypeInfoPtr;
 
@@ -83,6 +84,7 @@ typedef struct Compiler
     HashMap versions;
     HashMap modules;
     HashMap types;
+    HashMap extern_symbols;
     struct LLContext *backend;
     String compiler_path;
     String compiler_dir;
@@ -148,8 +150,6 @@ static Module *get_module(Compiler *compiler, String module_name)
     return module;
 }
 
-static SourceFile *process_file(Compiler *compiler, String absolute_path);
-
 static void
 compile_error(Compiler *compiler, Location loc, const char *fmt, ...)
 {
@@ -192,6 +192,19 @@ static void print_errors(Compiler *compiler)
     }
 }
 
+static void compile_file(Compiler *compiler, String filepath);
+static void
+link_module(Compiler *compiler, LLModule *mod, String out_file_path);
+static SourceFile *process_file(Compiler *compiler, String absolute_path);
+static void process_imports(
+    Compiler *compiler, SourceFile *file, struct Scope *scope, Ast *ast);
+static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast);
+static void compiler_init(Compiler *compiler);
+static void compiler_destroy(Compiler *compiler);
+
+typedef struct CompilerApiArguments CompilerApiArguments;
+static void compiler_api_compile(CompilerApiArguments *args);
+
 #include "ast_builder.c"
 
 #include "lexer.c"
@@ -201,11 +214,7 @@ static void print_errors(Compiler *compiler)
 #include "parser.c"
 #include "semantic.c"
 #include "llvm.c"
-
-static void
-process_imports(Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast);
-
-static void process_ast(Compiler *compiler, SourceFile *file, Ast *ast);
+#include "compiler_api.c"
 
 static void compiler_init(Compiler *compiler)
 {
@@ -216,6 +225,7 @@ static void compiler_init(Compiler *compiler)
     hash_init(&compiler->versions, 16);
     hash_init(&compiler->modules, 16);
     hash_init(&compiler->types, 64);
+    hash_init(&compiler->extern_symbols, 16);
 
     compiler->backend = bump_alloc(&compiler->bump, sizeof(*compiler->backend));
     memset(compiler->backend, 0, sizeof(*compiler->backend));
@@ -309,6 +319,7 @@ static void compiler_init(Compiler *compiler)
 
 static void compiler_destroy(Compiler *compiler)
 {
+    hash_destroy(&compiler->extern_symbols);
     hash_destroy(&compiler->types);
     hash_destroy(&compiler->modules);
     hash_destroy(&compiler->versions);

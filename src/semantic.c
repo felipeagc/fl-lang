@@ -1719,6 +1719,44 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
             hash_set(&module->symbol_names, sym_name, ast);
         }
 
+        if (ast->flags & AST_FLAG_EXTERN)
+        {
+            String link_name = sym_name;
+            for (AstAttribute *attrib = ast->attributes.ptr;
+                 attrib != ast->attributes.ptr + ast->attributes.len;
+                 ++attrib)
+            {
+                if (string_equals(attrib->name, STR("link_name")))
+                {
+                    if (!attrib->value ||
+                        (attrib->value->type != AST_PRIMARY ||
+                         attrib->value->primary.tok->type != TOKEN_STRING_LIT))
+                    {
+                        continue;
+                    }
+                    link_name = attrib->value->primary.tok->str;
+                    break;
+                }
+            }
+
+            Ast *found = NULL;
+            if (hash_get(
+                    &a->compiler->extern_symbols, link_name, (void **)&found))
+            {
+                assert(found);
+                if (found != ast)
+                {
+                    compile_error(
+                        a->compiler,
+                        found->loc,
+                        "duplicate declaration of extern symbol: '%.*s'",
+                        PRINT_STR(link_name));
+                    return;
+                }
+            }
+            hash_set(&a->compiler->extern_symbols, link_name, ast);
+        }
+
         scope_set(scope, sym_name, ast);
     }
 }

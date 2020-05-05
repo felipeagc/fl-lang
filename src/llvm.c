@@ -3196,8 +3196,10 @@ static void llvm_codegen_ast(
         llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
         llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
 
-        TypeInfo *lhs_type = get_inner_primitive_type(ast->binop.left->type_info);
-        TypeInfo *rhs_type = get_inner_primitive_type(ast->binop.right->type_info);
+        TypeInfo *lhs_type =
+            get_inner_primitive_type(ast->binop.left->type_info);
+        TypeInfo *rhs_type =
+            get_inner_primitive_type(ast->binop.right->type_info);
 
         AstValue result_value = {0};
 
@@ -4736,6 +4738,18 @@ static void llvm_run_module(LLContext *l)
         fprintf(stderr, "error: %s\n", error);
         LLVMDisposeMessage(error);
         exit(EXIT_FAILURE);
+    }
+
+    Ast *found = NULL;
+    if (hash_get(
+            &l->compiler->extern_symbols,
+            STR("compiler_api_compile"),
+            (void **)&found))
+    {
+        if (found->value)
+        {
+            LLVMAddGlobalMapping(engine, found->value, compiler_api_compile);
+        }
     }
 
     void (*main_func)() = (void (*)())LLVMGetFunctionAddress(engine, "main");

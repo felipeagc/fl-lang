@@ -1,3 +1,10 @@
+#define SLICE_OF(TYPE)                                                         \
+    struct                                                                     \
+    {                                                                          \
+        TYPE *ptr;                                                             \
+        size_t len;                                                            \
+    }
+
 #define ARRAY_OF(TYPE)                                                         \
     struct                                                                     \
     {                                                                          \

@@ -1,8 +1,4 @@
-typedef struct
-{
-    char *ptr;
-    size_t len;
-} String;
+typedef SLICE_OF(char) String;
 
 typedef ARRAY_OF(String) ArrayOfString;
 typedef ARRAY_OF(char *) ArrayOfCharPtr;

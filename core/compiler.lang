@@ -1,0 +1,12 @@
+module compiler
+
+pub typedef Arguments struct {
+    input: string,
+    output: string,
+    link_with: [_]string,
+    library_paths: [_]string,
+    opt_level: u32,
+};
+
+#[link_name="compiler_api_compile"]
+pub extern func compile(args: *Arguments);

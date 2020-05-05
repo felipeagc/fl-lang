@@ -1,0 +1,35 @@
+module build
+
+import fmt "core:fmt"
+import arrays "core:arrays"
+import compiler "core:compiler"
+
+pub typedef Builder struct {
+    targets: [dyn]Target,
+};
+
+pub typedef Target struct {
+    input: string,
+    output: string,
+    link_with: [_]string,
+    library_paths: [_]string,
+    opt_level: u32,
+};
+
+pub func add_target(builder: *Builder, target: *Target) {
+    arrays.push(Target)(&builder.targets, target.*);
+}
+
+pub func build(builder: *Builder) {
+    for (*target in builder.targets) {
+        fmt.printf("=> Building target '%'\n", target.output);
+
+        compiler.compile(&compiler.Arguments{
+            input = target.input,
+            output = target.output,
+            link_with = target.link_with,
+            library_paths  = target.library_paths,
+            opt_level = target.opt_level,
+        });
+    }
+}
