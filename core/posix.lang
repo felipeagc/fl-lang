@@ -1,733 +1,121 @@
 module posix
 
-pub typedef __u_char u8;
-pub typedef __u_short u16;
-pub typedef __u_int u32;
-pub typedef __u_long u64;
-pub typedef __int8_t i8;
-pub typedef __uint8_t u8;
-pub typedef __int16_t i16;
-pub typedef __uint16_t u16;
-pub typedef __int32_t i32;
-pub typedef __uint32_t u32;
-pub typedef __int64_t i64;
-pub typedef __uint64_t u64;
-pub typedef __int_least8_t __int8_t;
-pub typedef __uint_least8_t __uint8_t;
-pub typedef __int_least16_t __int16_t;
-pub typedef __uint_least16_t __uint16_t;
-pub typedef __int_least32_t __int32_t;
-pub typedef __uint_least32_t __uint32_t;
-pub typedef __int_least64_t __int64_t;
-pub typedef __uint_least64_t __uint64_t;
-pub typedef __quad_t i64;
-pub typedef __u_quad_t u64;
-pub typedef __intmax_t i64;
-pub typedef __uintmax_t u64;
-pub typedef __dev_t u64;
-pub typedef __uid_t u32;
-pub typedef __gid_t u32;
-pub typedef __ino_t u64;
-pub typedef __ino64_t u64;
-pub typedef __mode_t u32;
-pub typedef __nlink_t u64;
-pub typedef __off_t i64;
-pub typedef __off64_t i64;
-pub typedef __pid_t i32;
-pub typedef __fsid_t struct {
-    __val: [2]i32,
-};
-pub typedef __clock_t i64;
-pub typedef __rlim_t u64;
-pub typedef __rlim64_t u64;
-pub typedef __id_t u32;
-pub typedef __time_t i64;
-pub typedef __useconds_t u32;
-pub typedef __suseconds_t i64;
-pub typedef __daddr_t i32;
-pub typedef __key_t i32;
-pub typedef __clockid_t i32;
-pub typedef __timer_t *void;
-pub typedef __blksize_t i64;
-pub typedef __blkcnt_t i64;
-pub typedef __blkcnt64_t i64;
-pub typedef __fsblkcnt_t u64;
-pub typedef __fsblkcnt64_t u64;
-pub typedef __fsfilcnt_t u64;
-pub typedef __fsfilcnt64_t u64;
-pub typedef __fsword_t i64;
-pub typedef __ssize_t i64;
-pub typedef __syscall_slong_t i64;
-pub typedef __syscall_ulong_t u64;
-pub typedef __loff_t __off64_t;
-pub typedef __caddr_t *i8;
-pub typedef __intptr_t i64;
-pub typedef __socklen_t u32;
-pub typedef __sig_atomic_t i32;
-pub typedef time_t __time_t;
-pub typedef timespec struct {
-    tv_sec: __time_t,
-    tv_nsec: __syscall_slong_t,
-};
-pub typedef pid_t __pid_t;
-pub typedef idtype_t i32;
-pub typedef intptr_t __intptr_t;
-pub typedef sched_param struct {
-    sched_priority: i32,
-};
-pub extern func clone(__func: func* (_: *void) -> i32, __child_stack: *void, __flags: i32, __arg: *void) -> i32;
-pub extern func unshare(__flags: i32) -> i32;
-pub extern func sched_getcpu() -> i32;
-pub extern func getcpu(: *u32, : *u32) -> i32;
-pub extern func setns(__fd: i32, __nstype: i32) -> i32;
-pub typedef __cpu_mask u64;
-pub typedef cpu_set_t struct {
-    __bits: [16]__cpu_mask,
-};
-pub typedef u_char __u_char;
-pub typedef u_short __u_short;
-pub typedef u_int __u_int;
-pub typedef u_long __u_long;
-pub typedef quad_t __quad_t;
-pub typedef u_quad_t __u_quad_t;
-pub typedef fsid_t __fsid_t;
-pub typedef loff_t __loff_t;
-pub typedef ino_t __ino_t;
-pub typedef ino64_t __ino64_t;
-pub typedef dev_t __dev_t;
-pub typedef gid_t __gid_t;
-pub typedef mode_t __mode_t;
-pub typedef nlink_t __nlink_t;
-pub typedef uid_t __uid_t;
-pub typedef off_t __off_t;
-pub typedef off64_t __off64_t;
-pub typedef id_t __id_t;
-pub typedef ssize_t __ssize_t;
-pub typedef daddr_t __daddr_t;
-pub typedef caddr_t __caddr_t;
-pub typedef key_t __key_t;
-pub typedef clock_t __clock_t;
-pub typedef clockid_t __clockid_t;
-pub typedef timer_t __timer_t;
-pub typedef useconds_t __useconds_t;
-pub typedef suseconds_t __suseconds_t;
-pub typedef ulong u64;
-pub typedef ushort u16;
-pub typedef int8_t __int8_t;
-pub typedef int16_t __int16_t;
-pub typedef int32_t __int32_t;
-pub typedef int64_t __int64_t;
-pub typedef u_int8_t __uint8_t;
-pub typedef u_int16_t __uint16_t;
-pub typedef u_int32_t __uint32_t;
-pub typedef u_int64_t __uint64_t;
-pub typedef register_t i64;
-pub extern func __bswap_16(__bsx: __uint16_t) -> __uint16_t;
-pub extern func __bswap_32(__bsx: __uint32_t) -> __uint32_t;
-pub extern func __bswap_64(__bsx: __uint64_t) -> __uint64_t;
-pub extern func __uint16_identity(__x: __uint16_t) -> __uint16_t;
-pub extern func __uint32_identity(__x: __uint32_t) -> __uint32_t;
-pub extern func __uint64_identity(__x: __uint64_t) -> __uint64_t;
-pub typedef __sigset_t struct {
-    __val: [16]u64,
-};
-pub typedef sigset_t __sigset_t;
-pub typedef timeval struct {
-    tv_sec: __time_t,
-    tv_usec: __suseconds_t,
-};
-pub typedef __fd_mask i64;
-pub typedef fd_set struct {
-    fds_bits: [16]__fd_mask,
-};
-pub typedef fd_mask __fd_mask;
-pub extern func select(__nfds: i32, __readfds: *fd_set, __writefds: *fd_set, __exceptfds: *fd_set, __timeout: *timeval) -> i32;
-pub extern func pselect(__nfds: i32, __readfds: *fd_set, __writefds: *fd_set, __exceptfds: *fd_set, __timeout: *timespec, __sigmask: *__sigset_t) -> i32;
-pub typedef blksize_t __blksize_t;
-pub typedef blkcnt_t __blkcnt_t;
-pub typedef fsblkcnt_t __fsblkcnt_t;
-pub typedef fsfilcnt_t __fsfilcnt_t;
-pub typedef blkcnt64_t __blkcnt64_t;
-pub typedef fsblkcnt64_t __fsblkcnt64_t;
-pub typedef fsfilcnt64_t __fsfilcnt64_t;
-
 //
-// spawn
-//
-
-pub typedef posix_spawnattr_t struct {
-    __flags: i16,
-    __pgrp: pid_t,
-    __sd: sigset_t,
-    __ss: sigset_t,
-    __sp: sched_param,
-    __policy: i32,
-    __pad: [16]i32,
-};
-pub typedef posix_spawn_file_actions_t struct {
-    __allocated: i32,
-    __used: i32,
-    __actions: *struct {},
-    __pad: [16]i32,
-};
-pub extern func posix_spawn(__pid: *pid_t, __path: *i8, __file_actions: *posix_spawn_file_actions_t, __attrp: *posix_spawnattr_t, __argv: **i8, __envp: **i8) -> i32;
-pub extern func posix_spawnp(__pid: *pid_t, __file: *i8, __file_actions: *posix_spawn_file_actions_t, __attrp: *posix_spawnattr_t, __argv: **i8, __envp: **i8) -> i32;
-pub extern func posix_spawnattr_init(__attr: *posix_spawnattr_t) -> i32;
-pub extern func posix_spawnattr_destroy(__attr: *posix_spawnattr_t) -> i32;
-pub extern func posix_spawnattr_getsigdefault(__attr: *posix_spawnattr_t, __sigdefault: *sigset_t) -> i32;
-pub extern func posix_spawnattr_setsigdefault(__attr: *posix_spawnattr_t, __sigdefault: *sigset_t) -> i32;
-pub extern func posix_spawnattr_getsigmask(__attr: *posix_spawnattr_t, __sigmask: *sigset_t) -> i32;
-pub extern func posix_spawnattr_setsigmask(__attr: *posix_spawnattr_t, __sigmask: *sigset_t) -> i32;
-pub extern func posix_spawnattr_getflags(__attr: *posix_spawnattr_t, __flags: *i16) -> i32;
-pub extern func posix_spawnattr_setflags(_attr: *posix_spawnattr_t, __flags: i16) -> i32;
-pub extern func posix_spawnattr_getpgroup(__attr: *posix_spawnattr_t, __pgroup: *pid_t) -> i32;
-pub extern func posix_spawnattr_setpgroup(__attr: *posix_spawnattr_t, __pgroup: pid_t) -> i32;
-pub extern func posix_spawnattr_getschedpolicy(__attr: *posix_spawnattr_t, __schedpolicy: *i32) -> i32;
-pub extern func posix_spawnattr_setschedpolicy(__attr: *posix_spawnattr_t, __schedpolicy: i32) -> i32;
-pub extern func posix_spawnattr_getschedparam(__attr: *posix_spawnattr_t, __schedparam: *sched_param) -> i32;
-pub extern func posix_spawnattr_setschedparam(__attr: *posix_spawnattr_t, __schedparam: *sched_param) -> i32;
-pub extern func posix_spawn_file_actions_init(__file_actions: *posix_spawn_file_actions_t) -> i32;
-pub extern func posix_spawn_file_actions_destroy(__file_actions: *posix_spawn_file_actions_t) -> i32;
-pub extern func posix_spawn_file_actions_addopen(__file_actions: *posix_spawn_file_actions_t, __fd: i32, __path: *i8, __oflag: i32, __mode: mode_t) -> i32;
-pub extern func posix_spawn_file_actions_addclose(__file_actions: *posix_spawn_file_actions_t, __fd: i32) -> i32;
-pub extern func posix_spawn_file_actions_adddup2(__file_actions: *posix_spawn_file_actions_t, __fd: i32, __newfd: i32) -> i32;
-pub extern func posix_spawn_file_actions_addchdir_np(__actions: *posix_spawn_file_actions_t, __path: *i8) -> i32;
-pub extern func posix_spawn_file_actions_addfchdir_np(: *posix_spawn_file_actions_t, __fd: i32) -> i32;
-
-
-//
-// pthreads
-//
-
-pub typedef __pthread_rwlock_arch_t struct {
-    __readers: u32,
-    __writers: u32,
-    __wrphase_futex: u32,
-    __writers_futex: u32,
-    __pad3: u32,
-    __pad4: u32,
-    __cur_writer: i32,
-    __shared: i32,
-    __rwelision: i8,
-    __pad1: [7]u8,
-    __pad2: u64,
-    __flags: u32,
-};
-pub typedef __pthread_internal_list struct {
-    __prev: *struct {},
-    __next: *struct {},
-};
-pub typedef __pthread_list_t __pthread_internal_list;
-pub typedef __pthread_mutex_s struct {
-    __lock: i32,
-    __count: u32,
-    __owner: i32,
-    __nusers: u32,
-    __kind: i32,
-    __spins: i16,
-    __elision: i16,
-    __list: __pthread_list_t,
-};
-pub typedef __pthread_cond_s struct {
-    __g_refs: [2]u32,
-    __g_size: [2]u32,
-    __g1_orig_size: u32,
-    __wrefs: u32,
-    __g_signals: [2]u32,
-};
-pub typedef pthread_t u64;
-pub typedef pthread_mutexattr_t union {
-    __size: [4]i8,
-    __align: i32,
-};
-pub typedef pthread_condattr_t union {
-    __size: [4]i8,
-    __align: i32,
-};
-pub typedef pthread_key_t u32;
-pub typedef pthread_once_t i32;
-pub typedef pthread_attr_t union {
-    __size: [56]i8,
-    __align: i64,
-};
-pub typedef pthread_mutex_t union {
-    __data: __pthread_mutex_s,
-    __size: [40]i8,
-    __align: i64,
-};
-pub typedef pthread_cond_t union {
-    __data: __pthread_cond_s,
-    __size: [48]i8,
-    __align: i64,
-};
-pub typedef pthread_rwlock_t union {
-    __data: __pthread_rwlock_arch_t,
-    __size: [56]i8,
-    __align: i64,
-};
-pub typedef pthread_rwlockattr_t union {
-    __size: [8]i8,
-    __align: i64,
-};
-pub typedef pthread_spinlock_t i32;
-pub typedef pthread_barrier_t union {
-    __size: [32]i8,
-    __align: i64,
-};
-pub typedef pthread_barrierattr_t union {
-    __size: [4]i8,
-    __align: i32,
-};
-pub typedef __jmp_buf [8]i64;
-pub const PTHREAD_CREATE_JOINABLE: u32 = 0;
-pub const PTHREAD_CREATE_DETACHED: u32 = 1;
-pub const PTHREAD_MUTEX_TIMED_NP: u32 = 0;
-pub const PTHREAD_MUTEX_RECURSIVE_NP: u32 = 1;
-pub const PTHREAD_MUTEX_ERRORCHECK_NP: u32 = 2;
-pub const PTHREAD_MUTEX_ADAPTIVE_NP: u32 = 3;
-pub const PTHREAD_MUTEX_NORMAL: u32 = 0;
-pub const PTHREAD_MUTEX_RECURSIVE: u32 = 1;
-pub const PTHREAD_MUTEX_ERRORCHECK: u32 = 2;
-pub const PTHREAD_MUTEX_DEFAULT: u32 = 0;
-pub const PTHREAD_MUTEX_FAST_NP: u32 = 0;
-pub const PTHREAD_MUTEX_STALLED: u32 = 0;
-pub const PTHREAD_MUTEX_STALLED_NP: u32 = 0;
-pub const PTHREAD_MUTEX_ROBUST: u32 = 1;
-pub const PTHREAD_MUTEX_ROBUST_NP: u32 = 1;
-pub const PTHREAD_PRIO_NONE: u32 = 0;
-pub const PTHREAD_PRIO_INHERIT: u32 = 1;
-pub const PTHREAD_PRIO_PROTECT: u32 = 2;
-pub const PTHREAD_RWLOCK_PREFER_READER_NP: u32 = 0;
-pub const PTHREAD_RWLOCK_PREFER_WRITER_NP: u32 = 1;
-pub const PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP: u32 = 2;
-pub const PTHREAD_RWLOCK_DEFAULT_NP: u32 = 0;
-pub const PTHREAD_INHERIT_SCHED: u32 = 0;
-pub const PTHREAD_EXPLICIT_SCHED: u32 = 1;
-pub const PTHREAD_SCOPE_SYSTEM: u32 = 0;
-pub const PTHREAD_SCOPE_PROCESS: u32 = 1;
-pub const PTHREAD_PROCESS_PRIVATE: u32 = 0;
-pub const PTHREAD_PROCESS_SHARED: u32 = 1;
-pub typedef _pthread_cleanup_buffer struct {
-    __routine: func* (_: *void),
-    __arg: *void,
-    __canceltype: i32,
-    __prev: *struct {},
-};
-pub const PTHREAD_CANCEL_ENABLE: u32 = 0;
-pub const PTHREAD_CANCEL_DISABLE: u32 = 1;
-pub const PTHREAD_CANCEL_DEFERRED: u32 = 0;
-pub const PTHREAD_CANCEL_ASYNCHRONOUS: u32 = 1;
-pub extern func pthread_create(__newthread: *pthread_t, __attr: *pthread_attr_t, __start_routine: func* (_: *void) -> *void, __arg: *void) -> i32;
-pub extern func pthread_exit(__retval: *void);
-pub extern func pthread_join(__th: pthread_t, __thread_return: **void) -> i32;
-pub extern func pthread_tryjoin_np(__th: pthread_t, __thread_return: **void) -> i32;
-pub extern func pthread_timedjoin_np(__th: pthread_t, __thread_return: **void, __abstime: *timespec) -> i32;
-pub extern func pthread_detach(__th: pthread_t) -> i32;
-pub extern func pthread_self() -> pthread_t;
-pub extern func pthread_equal(__thread1: pthread_t, __thread2: pthread_t) -> i32;
-pub extern func pthread_attr_init(__attr: *pthread_attr_t) -> i32;
-pub extern func pthread_attr_destroy(__attr: *pthread_attr_t) -> i32;
-pub extern func pthread_attr_getdetachstate(__attr: *pthread_attr_t, __detachstate: *i32) -> i32;
-pub extern func pthread_attr_setdetachstate(__attr: *pthread_attr_t, __detachstate: i32) -> i32;
-pub extern func pthread_attr_getguardsize(__attr: *pthread_attr_t, __guardsize: *uint) -> i32;
-pub extern func pthread_attr_setguardsize(__attr: *pthread_attr_t, __guardsize: uint) -> i32;
-pub extern func pthread_attr_getschedparam(__attr: *pthread_attr_t, __param: *sched_param) -> i32;
-pub extern func pthread_attr_setschedparam(__attr: *pthread_attr_t, __param: *sched_param) -> i32;
-pub extern func pthread_attr_getschedpolicy(__attr: *pthread_attr_t, __policy: *i32) -> i32;
-pub extern func pthread_attr_setschedpolicy(__attr: *pthread_attr_t, __policy: i32) -> i32;
-pub extern func pthread_attr_getinheritsched(__attr: *pthread_attr_t, __inherit: *i32) -> i32;
-pub extern func pthread_attr_setinheritsched(__attr: *pthread_attr_t, __inherit: i32) -> i32;
-pub extern func pthread_attr_getscope(__attr: *pthread_attr_t, __scope: *i32) -> i32;
-pub extern func pthread_attr_setscope(__attr: *pthread_attr_t, __scope: i32) -> i32;
-pub extern func pthread_attr_getstackaddr(__attr: *pthread_attr_t, __stackaddr: **void) -> i32;
-pub extern func pthread_attr_setstackaddr(__attr: *pthread_attr_t, __stackaddr: *void) -> i32;
-pub extern func pthread_attr_getstacksize(__attr: *pthread_attr_t, __stacksize: *uint) -> i32;
-pub extern func pthread_attr_setstacksize(__attr: *pthread_attr_t, __stacksize: uint) -> i32;
-pub extern func pthread_attr_getstack(__attr: *pthread_attr_t, __stackaddr: **void, __stacksize: *uint) -> i32;
-pub extern func pthread_attr_setstack(__attr: *pthread_attr_t, __stackaddr: *void, __stacksize: uint) -> i32;
-pub extern func pthread_attr_setaffinity_np(__attr: *pthread_attr_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
-pub extern func pthread_attr_getaffinity_np(__attr: *pthread_attr_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
-pub extern func pthread_getattr_default_np(__attr: *pthread_attr_t) -> i32;
-pub extern func pthread_setattr_default_np(__attr: *pthread_attr_t) -> i32;
-pub extern func pthread_getattr_np(__th: pthread_t, __attr: *pthread_attr_t) -> i32;
-pub extern func pthread_setschedparam(__target_thread: pthread_t, __policy: i32, __param: *sched_param) -> i32;
-pub extern func pthread_getschedparam(__target_thread: pthread_t, __policy: *i32, __param: *sched_param) -> i32;
-pub extern func pthread_setschedprio(__target_thread: pthread_t, __prio: i32) -> i32;
-pub extern func pthread_getname_np(__target_thread: pthread_t, __buf: *i8, __buflen: uint) -> i32;
-pub extern func pthread_setname_np(__target_thread: pthread_t, __name: *i8) -> i32;
-pub extern func pthread_getconcurrency() -> i32;
-pub extern func pthread_setconcurrency(__level: i32) -> i32;
-pub extern func pthread_yield() -> i32;
-pub extern func pthread_setaffinity_np(__th: pthread_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
-pub extern func pthread_getaffinity_np(__th: pthread_t, __cpusetsize: uint, __cpuset: *cpu_set_t) -> i32;
-pub extern func pthread_once(__once_control: *pthread_once_t, __init_routine: func* ()) -> i32;
-pub extern func pthread_setcancelstate(__state: i32, __oldstate: *i32) -> i32;
-pub extern func pthread_setcanceltype(__type: i32, __oldtype: *i32) -> i32;
-pub extern func pthread_cancel(__th: pthread_t) -> i32;
-pub extern func pthread_testcancel();
-pub typedef __pthread_unwind_buf_t struct {
-    __cancel_jmp_buf: [1]struct {
-        __cancel_jmp_buf: __jmp_buf,
-        __mask_was_saved: i32,
-    },
-    __pad: [4]*void,
-};
-pub typedef __pthread_cleanup_frame struct {
-    __cancel_routine: func* (_: *void),
-    __cancel_arg: *void,
-    __do_it: i32,
-    __cancel_type: i32,
-};
-pub typedef __jmp_buf_tag struct {
-};
-pub extern func __sigsetjmp(__env: *__jmp_buf_tag, __savemask: i32) -> i32;
-pub extern func pthread_mutex_init(__mutex: *pthread_mutex_t, __mutexattr: *pthread_mutexattr_t) -> i32;
-pub extern func pthread_mutex_destroy(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_trylock(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_lock(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_timedlock(__mutex: *pthread_mutex_t, __abstime: *timespec) -> i32;
-pub extern func pthread_mutex_clocklock(__mutex: *pthread_mutex_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
-pub extern func pthread_mutex_unlock(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_getprioceiling(__mutex: *pthread_mutex_t, __prioceiling: *i32) -> i32;
-pub extern func pthread_mutex_setprioceiling(__mutex: *pthread_mutex_t, __prioceiling: i32, __old_ceiling: *i32) -> i32;
-pub extern func pthread_mutex_consistent(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_consistent_np(__mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutexattr_init(__attr: *pthread_mutexattr_t) -> i32;
-pub extern func pthread_mutexattr_destroy(__attr: *pthread_mutexattr_t) -> i32;
-pub extern func pthread_mutexattr_getpshared(__attr: *pthread_mutexattr_t, __pshared: *i32) -> i32;
-pub extern func pthread_mutexattr_setpshared(__attr: *pthread_mutexattr_t, __pshared: i32) -> i32;
-pub extern func pthread_mutexattr_gettype(__attr: *pthread_mutexattr_t, __kind: *i32) -> i32;
-pub extern func pthread_mutexattr_settype(__attr: *pthread_mutexattr_t, __kind: i32) -> i32;
-pub extern func pthread_mutexattr_getprotocol(__attr: *pthread_mutexattr_t, __protocol: *i32) -> i32;
-pub extern func pthread_mutexattr_setprotocol(__attr: *pthread_mutexattr_t, __protocol: i32) -> i32;
-pub extern func pthread_mutexattr_getprioceiling(__attr: *pthread_mutexattr_t, __prioceiling: *i32) -> i32;
-pub extern func pthread_mutexattr_setprioceiling(__attr: *pthread_mutexattr_t, __prioceiling: i32) -> i32;
-pub extern func pthread_mutexattr_getrobust(__attr: *pthread_mutexattr_t, __robustness: *i32) -> i32;
-pub extern func pthread_mutexattr_getrobust_np(__attr: *pthread_mutexattr_t, __robustness: *i32) -> i32;
-pub extern func pthread_mutexattr_setrobust(__attr: *pthread_mutexattr_t, __robustness: i32) -> i32;
-pub extern func pthread_mutexattr_setrobust_np(__attr: *pthread_mutexattr_t, __robustness: i32) -> i32;
-pub extern func pthread_rwlock_init(__rwlock: *pthread_rwlock_t, __attr: *pthread_rwlockattr_t) -> i32;
-pub extern func pthread_rwlock_destroy(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlock_rdlock(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlock_tryrdlock(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlock_timedrdlock(__rwlock: *pthread_rwlock_t, __abstime: *timespec) -> i32;
-pub extern func pthread_rwlock_clockrdlock(__rwlock: *pthread_rwlock_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
-pub extern func pthread_rwlock_wrlock(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlock_trywrlock(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlock_timedwrlock(__rwlock: *pthread_rwlock_t, __abstime: *timespec) -> i32;
-pub extern func pthread_rwlock_clockwrlock(__rwlock: *pthread_rwlock_t, __clockid: clockid_t, __abstime: *timespec) -> i32;
-pub extern func pthread_rwlock_unlock(__rwlock: *pthread_rwlock_t) -> i32;
-pub extern func pthread_rwlockattr_init(__attr: *pthread_rwlockattr_t) -> i32;
-pub extern func pthread_rwlockattr_destroy(__attr: *pthread_rwlockattr_t) -> i32;
-pub extern func pthread_rwlockattr_getpshared(__attr: *pthread_rwlockattr_t, __pshared: *i32) -> i32;
-pub extern func pthread_rwlockattr_setpshared(__attr: *pthread_rwlockattr_t, __pshared: i32) -> i32;
-pub extern func pthread_rwlockattr_getkind_np(__attr: *pthread_rwlockattr_t, __pref: *i32) -> i32;
-pub extern func pthread_rwlockattr_setkind_np(__attr: *pthread_rwlockattr_t, __pref: i32) -> i32;
-pub extern func pthread_cond_init(__cond: *pthread_cond_t, __cond_attr: *pthread_condattr_t) -> i32;
-pub extern func pthread_cond_destroy(__cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_signal(__cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_broadcast(__cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_wait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_cond_timedwait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t, __abstime: *timespec) -> i32;
-pub extern func pthread_cond_clockwait(__cond: *pthread_cond_t, __mutex: *pthread_mutex_t, __clock_id: __clockid_t, __abstime: *timespec) -> i32;
-pub extern func pthread_condattr_init(__attr: *pthread_condattr_t) -> i32;
-pub extern func pthread_condattr_destroy(__attr: *pthread_condattr_t) -> i32;
-pub extern func pthread_condattr_getpshared(__attr: *pthread_condattr_t, __pshared: *i32) -> i32;
-pub extern func pthread_condattr_setpshared(__attr: *pthread_condattr_t, __pshared: i32) -> i32;
-pub extern func pthread_condattr_getclock(__attr: *pthread_condattr_t, __clock_id: *__clockid_t) -> i32;
-pub extern func pthread_condattr_setclock(__attr: *pthread_condattr_t, __clock_id: __clockid_t) -> i32;
-pub extern func pthread_spin_init(__lock: *pthread_spinlock_t, __pshared: i32) -> i32;
-pub extern func pthread_spin_destroy(__lock: *pthread_spinlock_t) -> i32;
-pub extern func pthread_spin_lock(__lock: *pthread_spinlock_t) -> i32;
-pub extern func pthread_spin_trylock(__lock: *pthread_spinlock_t) -> i32;
-pub extern func pthread_spin_unlock(__lock: *pthread_spinlock_t) -> i32;
-pub extern func pthread_barrier_init(__barrier: *pthread_barrier_t, __attr: *pthread_barrierattr_t, __count: u32) -> i32;
-pub extern func pthread_barrier_destroy(__barrier: *pthread_barrier_t) -> i32;
-pub extern func pthread_barrier_wait(__barrier: *pthread_barrier_t) -> i32;
-pub extern func pthread_barrierattr_init(__attr: *pthread_barrierattr_t) -> i32;
-pub extern func pthread_barrierattr_destroy(__attr: *pthread_barrierattr_t) -> i32;
-pub extern func pthread_barrierattr_getpshared(__attr: *pthread_barrierattr_t, __pshared: *i32) -> i32;
-pub extern func pthread_barrierattr_setpshared(__attr: *pthread_barrierattr_t, __pshared: i32) -> i32;
-pub extern func pthread_key_create(__key: *pthread_key_t, __destr_function: func* (_: *void)) -> i32;
-pub extern func pthread_key_delete(__key: pthread_key_t) -> i32;
-pub extern func pthread_getspecific(__key: pthread_key_t) -> *void;
-pub extern func pthread_setspecific(__key: pthread_key_t, __pointer: *void) -> i32;
-pub extern func pthread_getcpuclockid(__thread_id: pthread_t, __clock_id: *__clockid_t) -> i32;
-pub extern func pthread_atfork(__prepare: func* (), __parent: func* (), __child: func* ()) -> i32;
-
-//
-// unistd
-//
-
-pub extern func access(__name: *i8, __type: i32) -> i32;
-pub extern func euidaccess(__name: *i8, __type: i32) -> i32;
-pub extern func eaccess(__name: *i8, __type: i32) -> i32;
-pub extern func faccessat(__fd: i32, __file: *i8, __type: i32, __flag: i32) -> i32;
-pub extern func lseek(__fd: i32, __offset: __off_t, __whence: i32) -> __off_t;
-pub extern func lseek64(__fd: i32, __offset: __off64_t, __whence: i32) -> __off64_t;
-pub extern func close(__fd: i32) -> i32;
-pub extern func read(__fd: i32, __buf: *void, __nbytes: uint) -> ssize_t;
-pub extern func write(__fd: i32, __buf: *void, __n: uint) -> ssize_t;
-pub extern func pread(__fd: i32, __buf: *void, __nbytes: uint, __offset: __off_t) -> ssize_t;
-pub extern func pwrite(__fd: i32, __buf: *void, __n: uint, __offset: __off_t) -> ssize_t;
-pub extern func pread64(__fd: i32, __buf: *void, __nbytes: uint, __offset: __off64_t) -> ssize_t;
-pub extern func pwrite64(__fd: i32, __buf: *void, __n: uint, __offset: __off64_t) -> ssize_t;
-pub extern func pipe(__pipedes: *i32) -> i32;
-pub extern func pipe2(__pipedes: *i32, __flags: i32) -> i32;
-pub extern func alarm(__seconds: u32) -> u32;
-pub extern func sleep(__seconds: u32) -> u32;
-pub extern func ualarm(__value: __useconds_t, __interval: __useconds_t) -> __useconds_t;
-pub extern func usleep(__useconds: __useconds_t) -> i32;
-pub extern func pause() -> i32;
-pub extern func chown(__file: *i8, __owner: __uid_t, __group: __gid_t) -> i32;
-pub extern func fchown(__fd: i32, __owner: __uid_t, __group: __gid_t) -> i32;
-pub extern func lchown(__file: *i8, __owner: __uid_t, __group: __gid_t) -> i32;
-pub extern func fchownat(__fd: i32, __file: *i8, __owner: __uid_t, __group: __gid_t, __flag: i32) -> i32;
-pub extern func chdir(__path: *i8) -> i32;
-pub extern func fchdir(__fd: i32) -> i32;
-pub extern func getcwd(__buf: *i8, __size: uint) -> *i8;
-pub extern func getwd(__buf: *i8) -> *i8;
-pub extern func dup(__fd: i32) -> i32;
-pub extern func dup2(__fd: i32, __fd2: i32) -> i32;
-pub extern func dup3(__fd: i32, __fd2: i32, __flags: i32) -> i32;
-pub extern func execve(__path: *i8, __argv: **i8, __envp: **i8) -> i32;
-pub extern func fexecve(__fd: i32, __argv: **i8, __envp: **i8) -> i32;
-pub extern func execv(__path: *i8, __argv: **i8) -> i32;
-pub extern func execle(__path: *i8, __arg: *i8) -> i32;
-pub extern func execl(__path: *i8, __arg: *i8) -> i32;
-pub extern func execvp(__file: *i8, __argv: **i8) -> i32;
-pub extern func execlp(__file: *i8, __arg: *i8) -> i32;
-pub extern func execvpe(__file: *i8, __argv: **i8, __envp: **i8) -> i32;
-pub extern func nice(__inc: i32) -> i32;
-pub extern func _exit(__status: i32);
-
-pub extern func pathconf(__path: *i8, __name: i32) -> i64;
-pub extern func fpathconf(__fd: i32, __name: i32) -> i64;
-pub extern func sysconf(__name: i32) -> i64;
-pub extern func confstr(__name: i32, __buf: *i8, __len: uint) -> uint;
-pub extern func getpid() -> __pid_t;
-pub extern func getppid() -> __pid_t;
-pub extern func getpgrp() -> __pid_t;
-pub extern func __getpgid(__pid: __pid_t) -> __pid_t;
-pub extern func getpgid(__pid: __pid_t) -> __pid_t;
-pub extern func setpgid(__pid: __pid_t, __pgid: __pid_t) -> i32;
-pub extern func setpgrp() -> i32;
-pub extern func setsid() -> __pid_t;
-pub extern func getsid(__pid: __pid_t) -> __pid_t;
-pub extern func getuid() -> __uid_t;
-pub extern func geteuid() -> __uid_t;
-pub extern func getgid() -> __gid_t;
-pub extern func getegid() -> __gid_t;
-pub extern func getgroups(__size: i32, __list: *__gid_t) -> i32;
-pub extern func group_member(__gid: __gid_t) -> i32;
-pub extern func setuid(__uid: __uid_t) -> i32;
-pub extern func setreuid(__ruid: __uid_t, __euid: __uid_t) -> i32;
-pub extern func seteuid(__uid: __uid_t) -> i32;
-pub extern func setgid(__gid: __gid_t) -> i32;
-pub extern func setregid(__rgid: __gid_t, __egid: __gid_t) -> i32;
-pub extern func setegid(__gid: __gid_t) -> i32;
-pub extern func getresuid(__ruid: *__uid_t, __euid: *__uid_t, __suid: *__uid_t) -> i32;
-pub extern func getresgid(__rgid: *__gid_t, __egid: *__gid_t, __sgid: *__gid_t) -> i32;
-pub extern func setresuid(__ruid: __uid_t, __euid: __uid_t, __suid: __uid_t) -> i32;
-pub extern func setresgid(__rgid: __gid_t, __egid: __gid_t, __sgid: __gid_t) -> i32;
-pub extern func fork() -> __pid_t;
-pub extern func vfork() -> __pid_t;
-pub extern func ttyname(__fd: i32) -> *i8;
-pub extern func ttyname_r(__fd: i32, __buf: *i8, __buflen: uint) -> i32;
-pub extern func isatty(__fd: i32) -> i32;
-pub extern func ttyslot() -> i32;
-pub extern func link(__from: *i8, __to: *i8) -> i32;
-pub extern func linkat(__fromfd: i32, __from: *i8, __tofd: i32, __to: *i8, __flags: i32) -> i32;
-pub extern func symlink(__from: *i8, __to: *i8) -> i32;
-pub extern func readlink(__path: *i8, __buf: *i8, __len: uint) -> ssize_t;
-pub extern func symlinkat(__from: *i8, __tofd: i32, __to: *i8) -> i32;
-pub extern func readlinkat(__fd: i32, __path: *i8, __buf: *i8, __len: uint) -> ssize_t;
-pub extern func unlink(__name: *i8) -> i32;
-pub extern func unlinkat(__fd: i32, __name: *i8, __flag: i32) -> i32;
-pub extern func rmdir(__path: *i8) -> i32;
-pub extern func tcgetpgrp(__fd: i32) -> __pid_t;
-pub extern func tcsetpgrp(__fd: i32, __pgrp_id: __pid_t) -> i32;
-pub extern func getlogin() -> *i8;
-pub extern func getlogin_r(__name: *i8, __name_len: uint) -> i32;
-pub extern func setlogin(__name: *i8) -> i32;
-pub extern func getopt(___argc: i32, ___argv: **i8, __shortopts: *i8) -> i32;
-pub extern func gethostname(__name: *i8, __len: uint) -> i32;
-pub extern func sethostname(__name: *i8, __len: uint) -> i32;
-pub extern func sethostid(__id: i64) -> i32;
-pub extern func getdomainname(__name: *i8, __len: uint) -> i32;
-pub extern func setdomainname(__name: *i8, __len: uint) -> i32;
-pub extern func vhangup() -> i32;
-pub extern func revoke(__file: *i8) -> i32;
-pub extern func profil(__sample_buffer: *u16, __size: uint, __offset: uint, __scale: u32) -> i32;
-pub extern func acct(__name: *i8) -> i32;
-pub extern func getusershell() -> *i8;
-pub extern func endusershell();
-pub extern func setusershell();
-pub extern func daemon(__nochdir: i32, __noclose: i32) -> i32;
-pub extern func chroot(__path: *i8) -> i32;
-pub extern func getpass(__prompt: *i8) -> *i8;
-pub extern func fsync(__fd: i32) -> i32;
-pub extern func syncfs(__fd: i32) -> i32;
-pub extern func gethostid() -> i64;
-pub extern func sync();
-pub extern func getpagesize() -> i32;
-pub extern func getdtablesize() -> i32;
-pub extern func truncate(__file: *i8, __length: __off_t) -> i32;
-pub extern func truncate64(__file: *i8, __length: __off64_t) -> i32;
-pub extern func ftruncate(__fd: i32, __length: __off_t) -> i32;
-pub extern func ftruncate64(__fd: i32, __length: __off64_t) -> i32;
-pub extern func brk(__addr: *void) -> i32;
-pub extern func sbrk(__delta: intptr_t) -> *void;
-pub extern func syscall(__sysno: i64) -> i64;
-pub extern func lockf(__fd: i32, __cmd: i32, __len: __off_t) -> i32;
-pub extern func lockf64(__fd: i32, __cmd: i32, __len: __off64_t) -> i32;
-pub extern func copy_file_range(__infd: i32, __pinoff: *__off64_t, __outfd: i32, __poutoff: *__off64_t, __length: uint, __flags: u32) -> ssize_t;
-pub extern func fdatasync(__fildes: i32) -> i32;
-pub extern func crypt(__key: *i8, __salt: *i8) -> *i8;
-pub extern func swab(__from: *void, __to: *void, __n: ssize_t);
-pub extern func getentropy(__buffer: *void, __length: uint) -> i32;
-pub extern func gettid() -> __pid_t;
-
-//
-// sys/wait.h
+// types
 //
 
 version (glibc) {
-    pub func __WTERMSIG(status: i32) -> i32 {
-        return status & 0x7f;
-    }
+    version (x86_64) {
+        pub typedef ssize_t i64;
+        pub typedef off_t i64;
+        pub typedef off64_t i64;
 
-    pub func WIFEXITED(status: i32) -> bool {
-        return __WTERMSIG(status) == 0;
-    }
+        pub typedef pid_t i32;
+        pub typedef gid_t u32;
+        pub typedef uid_t u32;
 
-    pub func WIFSIGNALED(status: i32) -> bool {
-        return (cast(byte)((status & 0x7f) + 1) >> 1) > 0;
-    }
+        pub typedef mode_t u32;
 
-    pub func WEXITSTATUS(status: i32) -> i32 {
-        return (status & 0xff00) >> 8;
-    }
+        pub typedef useconds_t u32;
+        pub typedef suseconds_t i64;
+        pub typedef time_t i64;
+        pub typedef clock_t i64;
 
-    pub func WSTOPSIG(status: i32) -> i32 {
-        return WEXITSTATUS(status);
-    }
+        pub typedef stat_t struct {
+            st_dev: u64,
+            st_ino: u64,
+            st_nlink: u64,
+            st_mode: u32,
+            st_uid: u32,
+            st_gid: u32,
+            __pad0: i32,
+            st_rdev: u64,
+            st_size: i64,
+            st_blksize: i64,
+            st_blocks: i64,
+            st_atim: timespec,
+            st_mtim: timespec,
+            st_ctim: timespec,
+            __glibc_reserved: [3]i32,
+        };
 
-    pub func WTERMSIG(status: i32) -> i32 {
-        return status & 0x7f;
-    }
-}
+        pub typedef dirent struct {
+            d_ino: u64,
+            d_off: off_t,
+            d_reclen: u16,
+            d_type: u8,
+            d_name: [256]i8,
+        };
+        pub typedef dirent64 struct {
+            d_ino: u64,
+            d_off: i64,
+            d_reclen: u16,
+            d_type: u8,
+            d_name: [256]i8,
+        };
 
-version (darwin) {
-    pub func _WSTATUS(status: i32) -> i32 {
-        return status & 0x7f;
-    }
+        pub typedef sched_param struct {
+            sched_priority: i32,
+        };
 
-    pub func WIFEXITED(status: i32) -> bool {
-        return _WSTATUS(status) == 0;
-    }
+        pub typedef timespec struct {
+            tv_sec: i64,
+            tv_nsec: i64,
+        };
 
-    pub func WIFSIGNALED(status: i32) -> bool {
-        return _WSTATUS(status) != 0x7f && _WSTATUS(status) != 0;
-    }
+        pub typedef sigset_t struct {
+            val: [16]u64,
+        };
 
-    pub func WEXITSTATUS(status: i32) -> i32 {
-        return status >> 8;
-    }
+        pub typedef posix_spawnattr_t struct {
+            flags: i16,
+            pgrp: pid_t,
+            sd: sigset_t,
+            ss: sigset_t,
+            sp: sched_param,
+            policy: i32,
+            pad: [16]i32,
+        };
+        pub typedef posix_spawn_file_actions_t struct {
+            allocated: i32,
+            used: i32,
+            actions: *struct {},
+            pad: [16]i32,
+        };
 
-    pub func WSTOPSIG(status: i32) -> i32 {
-        return status >> 8;
-    }
+        pub typedef pthread_t u64;
 
-    pub func WTERMSIG(status: i32) -> i32 {
-        return _WSTATUS(status);
-    }
-}
+        pub typedef pthread_mutexattr_t union {
+            size: [4]i8,
+            align: i32,
+        };
 
-pub typedef siginfo_t struct {};
-pub extern func wait(__stat_loc: *i32) -> __pid_t;
-pub extern func waitpid(__pid: __pid_t, __stat_loc: *i32, __options: i32) -> __pid_t;
-pub extern func waitid(__idtype: idtype_t, __id: __id_t, __infop: *siginfo_t, __options: i32) -> i32;
-pub typedef rusage struct {};
-pub extern func wait3(__stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;
-pub extern func wait4(__pid: __pid_t, __stat_loc: *i32, __options: i32, __usage: *rusage) -> __pid_t;
+        pub typedef pthread_condattr_t union {
+            size: [4]i8,
+            align: i32,
+        };
 
-//
-// dirent.h
-//
+        pub typedef pthread_attr_t union {
+            size: [56]i8,
+            align: i64,
+        };
 
-pub typedef dirent struct {
-    d_ino: __ino_t,
-    d_off: __off_t,
-    d_reclen: u16,
-    d_type: u8,
-    d_name: [256]i8,
-};
-pub typedef dirent64 struct {
-    d_ino: __ino64_t,
-    d_off: __off64_t,
-    d_reclen: u16,
-    d_type: u8,
-    d_name: [256]i8,
-};
-pub const DT_UNKNOWN: u32 = 0;
-pub const DT_FIFO: u32 = 1;
-pub const DT_CHR: u32 = 2;
-pub const DT_DIR: u32 = 4;
-pub const DT_BLK: u32 = 6;
-pub const DT_REG: u32 = 8;
-pub const DT_LNK: u32 = 10;
-pub const DT_SOCK: u32 = 12;
-pub const DT_WHT: u32 = 14;
-pub typedef __dirstream struct {
-};
-pub typedef DIR __dirstream;
-pub extern func opendir(__name: *i8) -> *DIR;
-pub extern func fdopendir(__fd: i32) -> *DIR;
-pub extern func closedir(__dirp: *DIR) -> i32;
-pub extern func readdir(__dirp: *DIR) -> *dirent;
-pub extern func readdir64(__dirp: *DIR) -> *dirent64;
-pub extern func readdir_r(__dirp: *DIR, __entry: *dirent, __result: **dirent) -> i32;
-pub extern func readdir64_r(__dirp: *DIR, __entry: *dirent64, __result: **dirent64) -> i32;
-pub extern func rewinddir(__dirp: *DIR);
-pub extern func seekdir(__dirp: *DIR, __pos: i64);
-pub extern func telldir(__dirp: *DIR) -> i64;
-pub extern func dirfd(__dirp: *DIR) -> i32;
-pub extern func scandir(__dir: *i8, __namelist: ***dirent, __selector: func* (_: *dirent) -> i32, __cmp: func* (_: **dirent, _: **dirent) -> i32) -> i32;
-pub extern func scandir64(__dir: *i8, __namelist: ***dirent64, __selector: func* (_: *dirent64) -> i32, __cmp: func* (_: **dirent64, _: **dirent64) -> i32) -> i32;
-pub extern func scandirat(__dfd: i32, __dir: *i8, __namelist: ***dirent, __selector: func* (_: *dirent) -> i32, __cmp: func* (_: **dirent, _: **dirent) -> i32) -> i32;
-pub extern func scandirat64(__dfd: i32, __dir: *i8, __namelist: ***dirent64, __selector: func* (_: *dirent64) -> i32, __cmp: func* (_: **dirent64, _: **dirent64) -> i32) -> i32;
-pub extern func alphasort(__e1: **dirent, __e2: **dirent) -> i32;
-pub extern func alphasort64(__e1: **dirent64, __e2: **dirent64) -> i32;
-pub extern func getdirentries(__fd: i32, __buf: *i8, __nbytes: uint, __basep: *__off_t) -> __ssize_t;
-pub extern func getdirentries64(__fd: i32, __buf: *i8, __nbytes: uint, __basep: *__off64_t) -> __ssize_t;
-pub extern func versionsort(__e1: **dirent, __e2: **dirent) -> i32;
-pub extern func versionsort64(__e1: **dirent64, __e2: **dirent64) -> i32;
-pub extern func getdents64(__fd: i32, __buffer: *void, __length: uint) -> __ssize_t;
+        pub typedef pthread_mutex_t union {
+            size: [40]i8,
+            align: i64,
+        };
 
-//
-// fcntl.h
-//
+        pub typedef pthread_cond_t union {
+            size: [48]i8,
+            align: i64,
+        };
 
-version (glibc) {
-    pub const F_DUPFD: i32 = 0;
-    pub const F_GETFD: i32 = 1;
-    pub const F_SETFD: i32 = 2;
-    pub const F_GETFL: i32 = 3;
-    pub const F_SETFL: i32 = 4;
-    pub const F_GETOWN: i32 = 9;
-    pub const F_SETOWN: i32 = 8;
-    pub const F_GETLK: i32 = 5;
-    pub const F_SETLK: i32 = 6;
-    pub const F_SETLKW: i32 = 7;
+        pub const FD_CLOEXEC: i32 = 1;
 
-    pub const FD_CLOEXEC: i32 = 1;
+        pub const F_RDLCK: i32 = 0;
+        pub const F_UNLCK: i32 = 2;
+        pub const F_WRLCK: i32 = 1;
 
-    pub const F_RDLCK: i32 = 0;
-    pub const F_UNLCK: i32 = 2;
-    pub const F_WRLCK: i32 = 1;
-
-    version (x86_any) {
         pub const O_CREAT: i32 = 0x40;
         pub const O_EXCL: i32 = 0x80;
         pub const O_NOCTTY: i32 = 0x100;
@@ -736,26 +124,38 @@ version (glibc) {
         pub const O_NONBLOCK: i32 = 0x800;
         pub const O_APPEND: i32 = 0x400;
         pub const O_SYNC: i32 = 0x101000;
+
+        pub const O_RDONLY: i32 = 0x0;
+        pub const O_WRONLY: i32 = 0x1;
+        pub const O_RDWR: i32 = 0x2;
+        pub const O_ACCMODE: i32 = 0x3;
+
+        #[inline]
+        pub func __WTERMSIG(status: i32) -> i32 {
+            return status & 0x7f; 
+        }
+        #[inline]
+        pub func WIFEXITED(status: i32) -> bool {
+            return __WTERMSIG(status) == 0; 
+        }
+        #[inline]
+        pub func WIFSIGNALED(status: i32) -> bool {
+            return (cast(byte)((status & 0x7f) + 1) >> 1) > 0; 
+        }
+        #[inline]
+        pub func WEXITSTATUS(status: i32) -> i32 {
+            return (status & 0xff00) >> 8; 
+        }
+        #[inline]
+        pub func WSTOPSIG(status: i32) -> i32 {
+            return WEXITSTATUS(status); 
+        }
+        #[inline]
+        pub func WTERMSIG(status: i32) -> i32 {
+            return status & 0x7f; 
+        }
     }
-
-    pub const O_RDONLY: i32 = 0x0;
-    pub const O_WRONLY: i32 = 0x1;
-    pub const O_RDWR: i32 = 0x2;
-    pub const O_ACCMODE: i32 = 0x3;
-}
-
-version (darwin) {
-    pub const F_DUPFD: i32 = 0;
-    pub const F_GETFD: i32 = 1;
-    pub const F_SETFD: i32 = 2;
-    pub const F_GETFL: i32 = 3;
-    pub const F_SETFL: i32 = 4;
-    pub const F_GETOWN: i32 = 5;
-    pub const F_SETOWN: i32 = 6;
-    pub const F_GETLK: i32 = 7;
-    pub const F_SETLK: i32 = 8;
-    pub const F_SETLKW: i32 = 9;
-
+} else version(darwin) {
     pub const FD_CLOEXEC: i32 = 1;
 
     pub const F_RDLCK: i32 = 1;
@@ -767,12 +167,182 @@ version (darwin) {
     pub const O_NOCTTY: i32 = 0;
     pub const O_TRUNC: i32 = 0x0400;
 
+    pub const O_NONBLOCK: i32 = 0x0004;
+    pub const O_APPEND: i32 = 0x0008;
+    pub const O_SYNC: i32 = 0x0080;
+
     pub const O_RDONLY: i32 = 0x0000;
     pub const O_WRONLY: i32 = 0x0001;
     pub const O_RDWR: i32 = 0x0002;
     pub const O_ACCMODE: i32 = 0x0003;
 
-    pub const O_NONBLOCK: i32 = 0x0004;
-    pub const O_APPEND: i32 = 0x0008;
-    pub const O_SYNC: i32 = 0x0080;
+    #[inline]
+    pub func _WSTATUS(status: i32) -> i32 {
+        return status & 0x7f; 
+    }
+    #[inline]
+    pub func WIFEXITED(status: i32) -> bool {
+        return _WSTATUS(status) == 0; 
+    }
+    #[inline]
+    pub func WIFSIGNALED(status: i32) -> bool {
+        return _WSTATUS(status) != 0x7f && _WSTATUS(status) != 0; 
+    }
+    #[inline]
+    pub func WEXITSTATUS(status: i32) -> i32 {
+        return status >> 8; 
+    }
+    #[inline]
+    pub func WSTOPSIG(status: i32) -> i32 {
+        return status >> 8; 
+    }
+    #[inline]
+    pub func WTERMSIG(status: i32) -> i32 {
+        return _WSTATUS(status); 
+    }
 }
+
+//
+// spawn
+//
+
+pub extern func posix_spawn(
+    pid: *pid_t,
+    path: *i8,
+    file_actions: *posix_spawn_file_actions_t,
+    attrp: *posix_spawnattr_t,
+    argv: **i8,
+    envp: **i8) -> i32;
+pub extern func posix_spawnp(
+    pid: *pid_t,
+    file: *i8,
+    file_actions: *posix_spawn_file_actions_t,
+    attrp: *posix_spawnattr_t,
+    argv: **i8,
+    envp: **i8) -> i32;
+pub extern func posix_spawnattr_init(attr: *posix_spawnattr_t) -> i32;
+pub extern func posix_spawnattr_destroy(attr: *posix_spawnattr_t) -> i32;
+pub extern func posix_spawn_file_actions_init(file_actions: *posix_spawn_file_actions_t) -> i32;
+pub extern func posix_spawn_file_actions_destroy(file_actions: *posix_spawn_file_actions_t) -> i32;
+pub extern func posix_spawn_file_actions_addopen(
+    file_actions: *posix_spawn_file_actions_t,
+    fd: i32,
+    path: *i8,
+    oflag: i32,
+    mode: mode_t) -> i32;
+pub extern func posix_spawn_file_actions_addclose(
+    file_actions: *posix_spawn_file_actions_t,
+    fd: i32) -> i32;
+pub extern func posix_spawn_file_actions_adddup2(
+    file_actions: *posix_spawn_file_actions_t,
+    fd: i32,
+    newfd: i32) -> i32;
+
+//
+// pthreads
+//
+
+pub extern func pthread_create(
+    newthread: *pthread_t,
+    attr: *pthread_attr_t,
+    start_routine: func* (_: *void) -> *void,
+    arg: *void) -> i32;
+pub extern func pthread_exit(retval: *void);
+pub extern func pthread_join(th: pthread_t, thread_return: **void) -> i32;
+pub extern func pthread_detach(th: pthread_t) -> i32;
+pub extern func pthread_self() -> pthread_t;
+pub extern func pthread_equal(thread1: pthread_t, thread2: pthread_t) -> i32;
+pub extern func pthread_attr_init(attr: *pthread_attr_t) -> i32;
+pub extern func pthread_attr_destroy(attr: *pthread_attr_t) -> i32;
+pub extern func pthread_yield() -> i32;
+pub extern func pthread_cancel(th: pthread_t) -> i32;
+pub extern func pthread_mutex_init(mutex: *pthread_mutex_t, mutexattr: *pthread_mutexattr_t) -> i32;
+pub extern func pthread_mutex_destroy(mutex: *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_trylock(mutex: *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_lock(mutex: *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_unlock(mutex: *pthread_mutex_t) -> i32;
+pub extern func pthread_cond_init(cond: *pthread_cond_t, cond_attr: *pthread_condattr_t) -> i32;
+pub extern func pthread_cond_destroy(cond: *pthread_cond_t) -> i32;
+pub extern func pthread_cond_signal(cond: *pthread_cond_t) -> i32;
+pub extern func pthread_cond_broadcast(cond: *pthread_cond_t) -> i32;
+pub extern func pthread_cond_wait(cond: *pthread_cond_t, mutex: *pthread_mutex_t) -> i32;
+
+//
+// unistd
+//
+
+pub extern func access(name: *i8, type: i32) -> i32;
+pub extern func euidaccess(name: *i8, type: i32) -> i32;
+pub extern func eaccess(name: *i8, type: i32) -> i32;
+pub extern func faccessat(fd: i32, file: *i8, type: i32, flag: i32) -> i32;
+pub extern func lseek(fd: i32, offset: off_t, whence: i32) -> off_t;
+pub extern func lseek64(fd: i32, offset: off64_t, whence: i32) -> off64_t;
+pub extern func close(fd: i32) -> i32;
+pub extern func read(fd: i32, buf: *void, nbytes: uint) -> ssize_t;
+pub extern func write(fd: i32, buf: *void, n: uint) -> ssize_t;
+pub extern func pread(fd: i32, buf: *void, nbytes: uint, offset: off_t) -> ssize_t;
+pub extern func pwrite(fd: i32, buf: *void, n: uint, offset: off_t) -> ssize_t;
+pub extern func pread64(fd: i32, buf: *void, nbytes: uint, offset: off64_t) -> ssize_t;
+pub extern func pwrite64(fd: i32, buf: *void, n: uint, offset: off64_t) -> ssize_t;
+pub extern func pipe(pipedes: *i32) -> i32;
+pub extern func pipe2(pipedes: *i32, flags: i32) -> i32;
+pub extern func alarm(seconds: u32) -> u32;
+pub extern func sleep(seconds: u32) -> u32;
+pub extern func ualarm(value: useconds_t, interval: useconds_t) -> useconds_t;
+pub extern func usleep(useconds: useconds_t) -> i32;
+pub extern func pause() -> i32;
+pub extern func chown(file: *i8, owner: uid_t, group: gid_t) -> i32;
+pub extern func fchown(fd: i32, owner: uid_t, group: gid_t) -> i32;
+pub extern func lchown(file: *i8, owner: uid_t, group: gid_t) -> i32;
+pub extern func fchownat(fd: i32, file: *i8, owner: uid_t, group: gid_t, flag: i32) -> i32;
+pub extern func chdir(path: *i8) -> i32;
+pub extern func fchdir(fd: i32) -> i32;
+pub extern func getcwd(buf: *i8, size: uint) -> *i8;
+pub extern func getwd(buf: *i8) -> *i8;
+pub extern func getpid() -> pid_t;
+pub extern func getppid() -> pid_t;
+pub extern func getpgrp() -> pid_t;
+pub extern func getpgid(pid: pid_t) -> pid_t;
+pub extern func setpgid(pid: pid_t, pgid: pid_t) -> i32;
+pub extern func setpgrp() -> i32;
+pub extern func link(from: *i8, to: *i8) -> i32;
+pub extern func linkat(fromfd: i32, from: *i8, tofd: i32, to: *i8, flags: i32) -> i32;
+pub extern func symlink(from: *i8, to: *i8) -> i32;
+pub extern func readlink(path: *i8, buf: *i8, len: uint) -> ssize_t;
+pub extern func symlinkat(from: *i8, tofd: i32, to: *i8) -> i32;
+pub extern func readlinkat(fd: i32, path: *i8, buf: *i8, len: uint) -> ssize_t;
+pub extern func rmdir(path: *i8) -> i32;
+
+//
+// sys/wait.h
+//
+
+pub extern func wait(stat_loc: *i32) -> pid_t;
+pub extern func waitpid(pid: pid_t, stat_loc: *i32, options: i32) -> pid_t;
+
+//
+// dirent.h
+//
+
+pub typedef DIR struct{};
+pub extern func opendir(name: *i8) -> *DIR;
+pub extern func fdopendir(fd: i32) -> *DIR;
+pub extern func closedir(dirp: *DIR) -> i32;
+pub extern func readdir(dirp: *DIR) -> *dirent;
+pub extern func readdir64(dirp: *DIR) -> *dirent64;
+pub extern func readdir_r(dirp: *DIR, entry: *dirent, result: **dirent) -> i32;
+pub extern func readdir64_r(dirp: *DIR, entry: *dirent64, result: **dirent64) -> i32;
+pub extern func rewinddir(dirp: *DIR);
+pub extern func seekdir(dirp: *DIR, pos: i64);
+pub extern func telldir(dirp: *DIR) -> i64;
+pub extern func dirfd(dirp: *DIR) -> i32;
+pub extern func alphasort(e1: **dirent, e2: **dirent) -> i32;
+pub extern func alphasort64(e1: **dirent64, e2: **dirent64) -> i32;
+pub extern func getdirentries(fd: i32, buf: *i8, nbytes: uint, basep: *off_t) -> ssize_t;
+pub extern func getdirentries64(fd: i32, buf: *i8, nbytes: uint, basep: *off64_t) -> ssize_t;
+
+//
+// sys/stat.h
+//
+
+pub extern func stat(file: *char, buf: *stat_t) -> i32;

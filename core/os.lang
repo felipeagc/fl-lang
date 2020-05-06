@@ -10,6 +10,11 @@ version(posix) {
     pub typedef Handle i32;
     pub const NULL_HANDLE: Handle = 0;
 
+    pub typedef TimeSpec struct {
+        sec: i64,
+        nsec: i64,
+    };
+
     #[inline] pub func get_stdin() -> Handle { return 0; }
     #[inline] pub func get_stdout() -> Handle { return 1; }
     #[inline] pub func get_stderr() -> Handle { return 2; }
@@ -84,5 +89,14 @@ version(posix) {
         }
 
         return success;
+    }
+
+    pub func last_write_time(path: string) -> TimeSpec {
+        var stat: posix.stat_t;
+        c_path := strings.to_c_str_alloc(path);
+        defer c.free(c_path);
+
+        posix.stat(c_path, &stat);
+        return TimeSpec{stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec};
     }
 }
