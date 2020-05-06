@@ -1,5 +1,6 @@
 module build
 
+import os "core:os"
 import fmt "core:fmt"
 import arrays "core:arrays"
 import compiler "core:compiler"
@@ -22,14 +23,21 @@ pub func add_target(builder: *Builder, target: *Target) {
 
 pub func build(builder: *Builder) {
     for (*target in builder.targets) {
-        fmt.printf("=> Building target '%'\n", target.output);
+        input_time := os.last_write_time(target.input);
+        output_time := os.last_write_time(target.output);
 
-        compiler.compile(&compiler.Arguments{
-            input = target.input,
-            output = target.output,
-            link_with = target.link_with,
-            library_paths  = target.library_paths,
-            opt_level = target.opt_level,
-        });
+        if (input_time.sec >= output_time.sec) {
+            fmt.printf("=> Building target '%'\n", target.output);
+
+            compiler.compile(&compiler.Arguments{
+                input = target.input,
+                output = target.output,
+                link_with = target.link_with,
+                library_paths  = target.library_paths,
+                opt_level = target.opt_level,
+            });
+        } else {
+            fmt.printf("=> '%' is up to date\n", target.output);
+        }
     }
 }
