@@ -1530,6 +1530,13 @@ static void llvm_codegen_ast(
         AstValue result_value = {0};
         result_value.value =
             LLVMBuildCall(mod->builder, fun, params, param_count, "");
+        if (is_type_compound(ast->type_info))
+        {
+            result_value.is_lvalue = true;
+            LLVMValueRef alloca = build_alloca(l, mod, ast->type_info);
+            LLVMBuildStore(mod->builder, result_value.value, alloca);
+            result_value.value = alloca;
+        }
 
         if (out_value) *out_value = result_value;
 
