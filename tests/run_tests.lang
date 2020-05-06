@@ -5,7 +5,6 @@ import os "core:os"
 import fmt "core:fmt"
 import files "core:files"
 import strings "core:strings"
-import arrays "core:arrays"
 
 typedef TestRun struct
 {
@@ -22,7 +21,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
     defer files.dir_entries_free(entries);
 
     var runs: [dyn]TestRun;
-    defer arrays.free(TestRun)(&runs);
+    defer @delete(&runs);
 
     for (entry in entries) 
     {
@@ -45,7 +44,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
                 var run: TestRun;
                 run.pid = pid;
                 run.path = path;
-                arrays.push(TestRun)(&runs, run);
+                @append(&runs, run);
                 fmt.eprintf("Testing '%'\n", path);
             }
         }

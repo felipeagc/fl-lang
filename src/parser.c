@@ -181,6 +181,34 @@ static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
             }
+            else if (string_equals(expr.primary.tok->str, STR("alloc")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_ALLOC;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("realloc")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_REALLOC;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("free")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_FREE;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("new")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_NEW;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("make")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_MAKE;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("delete")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_DELETE;
+            }
+            else if (string_equals(expr.primary.tok->str, STR("append")))
+            {
+                ast->intrinsic_call.type = INTRINSIC_APPEND;
+            }
             else
             {
                 compile_error(

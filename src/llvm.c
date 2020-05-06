@@ -442,6 +442,64 @@ enum {
     TYPEINFO_INFO_INDEX = 5,
 };
 
+static LLVMValueRef llvm_get_malloc_fn(LLContext *l, LLModule *mod)
+{
+    LLVMValueRef malloc_fn = LLVMGetNamedFunction(mod->mod, "malloc");
+    if (!malloc_fn)
+    {
+        LLVMTypeRef param_types[1] = {
+            llvm_type(l, l->compiler->uint_type),
+        };
+        size_t param_count = 1;
+
+        LLVMTypeRef fn_ty = LLVMFunctionType(
+            LLVMPointerType(LLVMVoidType(), 0),
+            param_types,
+            param_count,
+            false);
+        malloc_fn = LLVMAddFunction(mod->mod, "malloc", fn_ty);
+    }
+    return malloc_fn;
+}
+
+static LLVMValueRef llvm_get_realloc_fn(LLContext *l, LLModule *mod)
+{
+    LLVMValueRef realloc_fn = LLVMGetNamedFunction(mod->mod, "realloc");
+    if (!realloc_fn)
+    {
+        LLVMTypeRef param_types[2] = {
+            LLVMPointerType(LLVMVoidType(), 0),
+            llvm_type(l, l->compiler->uint_type),
+        };
+        size_t param_count = 2;
+
+        LLVMTypeRef fn_ty = LLVMFunctionType(
+            LLVMPointerType(LLVMVoidType(), 0),
+            param_types,
+            param_count,
+            false);
+        realloc_fn = LLVMAddFunction(mod->mod, "realloc", fn_ty);
+    }
+    return realloc_fn;
+}
+
+static LLVMValueRef llvm_get_free_fn(LLContext *l, LLModule *mod)
+{
+    LLVMValueRef free_fn = LLVMGetNamedFunction(mod->mod, "free");
+    if (!free_fn)
+    {
+        LLVMTypeRef param_types[1] = {
+            llvm_type(l, l->compiler->null_ptr_type),
+        };
+        size_t param_count = 1;
+
+        LLVMTypeRef fn_ty =
+            LLVMFunctionType(LLVMVoidType(), param_types, param_count, false);
+        free_fn = LLVMAddFunction(mod->mod, "free", fn_ty);
+    }
+    return free_fn;
+}
+
 static void
 generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
 {
@@ -1674,6 +1732,388 @@ static void llvm_codegen_ast(
                 mod->builder, mod->rtti_type_infos, indices, 2, "");
 
             if (out_value) *out_value = type_info_value;
+
+            break;
+        }
+
+        case INTRINSIC_ALLOC: {
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
+
+            LLVMValueRef malloc_fn = llvm_get_malloc_fn(l, mod);
+            assert(malloc_fn);
+
+            AstValue param_val = {0};
+            llvm_codegen_ast(l, mod, param, is_const, &param_val);
+
+            AstValue result_value = {0};
+            LLVMValueRef params[1] = {load_val(mod, &param_val)};
+            result_value.value =
+                LLVMBuildCall(mod->builder, malloc_fn, params, 1, "");
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        case INTRINSIC_REALLOC: {
+            Ast *ptr = &ast->intrinsic_call.params.ptr[0];
+            Ast *size = &ast->intrinsic_call.params.ptr[1];
+
+            LLVMValueRef realloc_fn = llvm_get_realloc_fn(l, mod);
+            assert(realloc_fn);
+
+            AstValue ptr_val = {0};
+            llvm_codegen_ast(l, mod, ptr, is_const, &ptr_val);
+
+            AstValue size_val = {0};
+            llvm_codegen_ast(l, mod, size, is_const, &size_val);
+
+            AstValue result_value = {0};
+            LLVMValueRef params[2] = {
+                LLVMBuildPointerCast(
+                    mod->builder,
+                    load_val(mod, &ptr_val),
+                    LLVMPointerType(LLVMVoidType(), 0),
+                    ""),
+                load_val(mod, &size_val),
+            };
+            result_value.value =
+                LLVMBuildCall(mod->builder, realloc_fn, params, 2, "");
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        case INTRINSIC_FREE: {
+            Ast *param = &ast->intrinsic_call.params.ptr[0];
+
+            LLVMValueRef free_fn = llvm_get_free_fn(l, mod);
+            assert(free_fn);
+
+            AstValue param_val = {0};
+            llvm_codegen_ast(l, mod, param, is_const, &param_val);
+
+            LLVMValueRef params[1] = {
+                LLVMBuildPointerCast(
+                    mod->builder,
+                    load_val(mod, &param_val),
+                    LLVMPointerType(LLVMVoidType(), 0),
+                    ""),
+            };
+            LLVMBuildCall(mod->builder, free_fn, params, 1, "");
+
+            break;
+        }
+
+        case INTRINSIC_NEW: {
+            Ast *type = &ast->intrinsic_call.params.ptr[0];
+
+            LLVMValueRef malloc_fn = llvm_get_malloc_fn(l, mod);
+            assert(malloc_fn);
+
+            AstValue result_value = {0};
+            LLVMValueRef params[1] = {
+                LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type),
+                    size_of_type(l->compiler, type->as_type),
+                    0),
+            };
+
+            result_value.value = LLVMBuildPointerCast(
+                mod->builder,
+                LLVMBuildCall(mod->builder, malloc_fn, params, 1, ""),
+                llvm_type(l, ast->type_info),
+                "");
+
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        case INTRINSIC_MAKE: {
+            Ast *type = &ast->intrinsic_call.params.ptr[0];
+            Ast *length = &ast->intrinsic_call.params.ptr[1];
+            Ast *cap = length;
+            if (ast->intrinsic_call.params.len == 3)
+            {
+                cap = &ast->intrinsic_call.params.ptr[2];
+            }
+
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            if (out_value && out_value->value)
+            {
+                result_value.value = out_value->value;
+            }
+            else
+            {
+                result_value.value = build_alloca(l, mod, ast->type_info);
+            }
+
+            LLVMValueRef malloc_fn = llvm_get_malloc_fn(l, mod);
+            assert(malloc_fn);
+
+            AstValue length_val = {0};
+            llvm_codegen_ast(l, mod, length, is_const, &length_val);
+            LLVMValueRef loaded_length_val = load_val(mod, &length_val);
+
+            LLVMValueRef obj_size = LLVMConstInt(
+                llvm_type(l, l->compiler->uint_type),
+                size_of_type(l->compiler, type->as_type),
+                0);
+
+            LLVMValueRef params[1] = {
+                LLVMBuildMul(mod->builder, loaded_length_val, obj_size, ""),
+            };
+
+            LLVMValueRef ptr = LLVMBuildPointerCast(
+                mod->builder,
+                LLVMBuildCall(mod->builder, malloc_fn, params, 1, ""),
+                LLVMPointerType(llvm_type(l, ast->type_info->array.sub), 0),
+                "");
+
+            LLVMValueRef indices[2] = {0};
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, ptr, ptr_ptr);
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef len_ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, loaded_length_val, len_ptr);
+
+            if (ast->type_info->kind == TYPE_DYNAMIC_ARRAY)
+            {
+                indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+                indices[1] = LLVMConstInt(LLVMInt32Type(), 2, false);
+                LLVMValueRef cap_ptr = LLVMBuildGEP(
+                    mod->builder, result_value.value, indices, 2, "");
+
+                if (ast->intrinsic_call.params.len == 3)
+                {
+                    AstValue cap_val = {0};
+                    llvm_codegen_ast(l, mod, cap, is_const, &cap_val);
+                    LLVMValueRef loaded_cap_val = load_val(mod, &cap_val);
+                    LLVMBuildStore(mod->builder, loaded_cap_val, cap_ptr);
+                }
+                else
+                {
+                    LLVMBuildStore(mod->builder, loaded_length_val, cap_ptr);
+                }
+            }
+
+            if (out_value) *out_value = result_value;
+
+            break;
+        }
+
+        case INTRINSIC_DELETE: {
+            Ast *value = &ast->intrinsic_call.params.ptr[0];
+
+            LLVMValueRef free_fn = llvm_get_free_fn(l, mod);
+            assert(free_fn);
+
+            AstValue value_val = {0};
+            llvm_codegen_ast(l, mod, value, is_const, &value_val);
+
+            LLVMValueRef indices[2] = {0};
+
+            LLVMValueRef slice_ptr = load_val(mod, &value_val);
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, slice_ptr, indices, 2, "");
+
+            LLVMValueRef ptr = LLVMBuildPointerCast(
+                mod->builder,
+                LLVMBuildLoad(mod->builder, ptr_ptr, ""),
+                LLVMPointerType(LLVMVoidType(), 0),
+                "");
+
+            LLVMBuildCall(mod->builder, free_fn, &ptr, 1, "");
+            LLVMBuildStore(
+                mod->builder,
+                LLVMConstNull(LLVMPointerType(
+                    llvm_type(l, value->type_info->ptr.sub->array.sub), 0)),
+                ptr_ptr);
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef len_ptr =
+                LLVMBuildGEP(mod->builder, slice_ptr, indices, 2, "");
+            LLVMBuildStore(
+                mod->builder,
+                LLVMConstNull(llvm_type(l, l->compiler->uint_type)),
+                len_ptr);
+
+            if (value->type_info->ptr.sub->kind == TYPE_DYNAMIC_ARRAY)
+            {
+                indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+                indices[1] = LLVMConstInt(LLVMInt32Type(), 2, false);
+                LLVMValueRef cap_ptr =
+                    LLVMBuildGEP(mod->builder, slice_ptr, indices, 2, "");
+                LLVMBuildStore(
+                    mod->builder,
+                    LLVMConstNull(llvm_type(l, l->compiler->uint_type)),
+                    cap_ptr);
+            }
+
+            break;
+        }
+
+        case INTRINSIC_APPEND: {
+            Ast *array_ptr = &ast->intrinsic_call.params.ptr[0];
+            Ast *value = &ast->intrinsic_call.params.ptr[1];
+
+            LLVMValueRef realloc_fn = llvm_get_realloc_fn(l, mod);
+            assert(realloc_fn);
+
+            AstValue array_val = {0};
+            llvm_codegen_ast(l, mod, array_ptr, is_const, &array_val);
+
+            LLVMValueRef array_ptr_val = load_val(mod, &array_val);
+
+            LLVMValueRef indices[2] = {0};
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            LLVMValueRef ptr_ptr =
+                LLVMBuildGEP(mod->builder, array_ptr_val, indices, 2, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+            LLVMValueRef len_ptr =
+                LLVMBuildGEP(mod->builder, array_ptr_val, indices, 2, "");
+
+            indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+            indices[1] = LLVMConstInt(LLVMInt32Type(), 2, false);
+            LLVMValueRef cap_ptr =
+                LLVMBuildGEP(mod->builder, array_ptr_val, indices, 2, "");
+
+            LLVMValueRef ptr = LLVMBuildLoad(mod->builder, ptr_ptr, "");
+            LLVMValueRef len = LLVMBuildLoad(mod->builder, len_ptr, "");
+            LLVMValueRef cap = LLVMBuildLoad(mod->builder, cap_ptr, "");
+
+            LLVMValueRef out_of_space =
+                LLVMBuildICmp(mod->builder, LLVMIntUGE, len, cap, "");
+
+            LLVMValueRef fun =
+                LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
+            assert(fun);
+
+            LLVMBasicBlockRef begin_resize_bb = LLVMAppendBasicBlock(fun, "");
+            LLVMBasicBlockRef init_cap_bb = LLVMAppendBasicBlock(fun, "");
+            LLVMBasicBlockRef double_cap_bb = LLVMAppendBasicBlock(fun, "");
+            LLVMBasicBlockRef end_resize_bb = LLVMAppendBasicBlock(fun, "");
+            LLVMBasicBlockRef append_bb = LLVMAppendBasicBlock(fun, "");
+
+            LLVMBuildCondBr(
+                mod->builder, out_of_space, begin_resize_bb, append_bb);
+
+            {
+                LLVMPositionBuilderAtEnd(mod->builder, begin_resize_bb);
+
+                LLVMValueRef is_cap_zero = LLVMBuildICmp(
+                    mod->builder,
+                    LLVMIntEQ,
+                    cap,
+                    LLVMConstInt(llvm_type(l, l->compiler->uint_type), 0, 0),
+                    "");
+
+                LLVMBuildCondBr(
+                    mod->builder, is_cap_zero, init_cap_bb, double_cap_bb);
+            }
+
+            {
+                LLVMPositionBuilderAtEnd(mod->builder, init_cap_bb);
+
+                const size_t DEFAULT_DYNAMIC_ARRAY_CAP = 16;
+
+                // Initialize the cap
+                LLVMValueRef new_cap = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type),
+                    DEFAULT_DYNAMIC_ARRAY_CAP,
+                    0);
+                LLVMBuildStore(mod->builder, new_cap, cap_ptr);
+
+                LLVMBuildBr(mod->builder, end_resize_bb);
+            }
+
+            {
+                LLVMPositionBuilderAtEnd(mod->builder, double_cap_bb);
+
+                // Double the cap
+                LLVMValueRef new_cap = LLVMBuildMul(
+                    mod->builder,
+                    LLVMConstInt(llvm_type(l, l->compiler->uint_type), 2, 0),
+                    cap,
+                    "");
+
+                LLVMBuildStore(mod->builder, new_cap, cap_ptr);
+
+                LLVMBuildBr(mod->builder, end_resize_bb);
+            }
+
+            {
+                LLVMPositionBuilderAtEnd(mod->builder, end_resize_bb);
+
+                LLVMValueRef obj_size = LLVMConstInt(
+                    llvm_type(l, l->compiler->uint_type),
+                    size_of_type(
+                        l->compiler, array_ptr->type_info->ptr.sub->array.sub),
+                    0);
+
+                cap = LLVMBuildLoad(mod->builder, cap_ptr, "");
+                LLVMValueRef params[2] = {
+                    LLVMBuildPointerCast(
+                        mod->builder,
+                        ptr,
+                        LLVMPointerType(LLVMVoidType(), 0),
+                        ""),
+                    LLVMBuildMul(mod->builder, obj_size, cap, ""),
+                };
+
+                LLVMValueRef new_ptr =
+                    LLVMBuildCall(mod->builder, realloc_fn, params, 2, "");
+                new_ptr = LLVMBuildPointerCast(
+                    mod->builder,
+                    new_ptr,
+                    LLVMPointerType(
+                        llvm_type(l, array_ptr->type_info->ptr.sub->array.sub),
+                        0),
+                    "");
+
+                LLVMBuildStore(mod->builder, new_ptr, ptr_ptr);
+
+                LLVMBuildBr(mod->builder, append_bb);
+            }
+
+            {
+                LLVMPositionBuilderAtEnd(mod->builder, append_bb);
+
+                AstValue value_val = {0};
+                llvm_codegen_ast(l, mod, value, is_const, &value_val);
+
+                LLVMValueRef loaded_value = load_val(mod, &value_val);
+
+                ptr = LLVMBuildLoad(mod->builder, ptr_ptr, "");
+                LLVMValueRef elem_ptr =
+                    LLVMBuildGEP(mod->builder, ptr, &len, 1, "");
+
+                LLVMBuildStore(mod->builder, loaded_value, elem_ptr);
+
+                // Increment len by 1
+                len = LLVMBuildAdd(
+                    mod->builder,
+                    len,
+                    LLVMConstInt(llvm_type(l, l->compiler->uint_type), 1, 0),
+                    "");
+                LLVMBuildStore(mod->builder, len, len_ptr);
+            }
 
             break;
         }

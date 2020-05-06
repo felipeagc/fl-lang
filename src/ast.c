@@ -38,6 +38,13 @@ typedef enum IntrinsicType {
     INTRINSIC_COS,
     INTRINSIC_VECTOR_TYPE,
     INTRINSIC_TYPE_INFO_OF,
+    INTRINSIC_ALLOC,
+    INTRINSIC_REALLOC,
+    INTRINSIC_FREE,
+    INTRINSIC_NEW,
+    INTRINSIC_MAKE,
+    INTRINSIC_DELETE,
+    INTRINSIC_APPEND,
 } IntrinsicType;
 
 typedef enum AstType {

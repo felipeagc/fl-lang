@@ -49,10 +49,10 @@ func signed_itoa(into: *string, num: i64, base: i64) {
             n /= base;
 
             var ch: char = void;
-            if (rem <= 10) {
+            if (rem < 10) {
                 ch = cast(char)rem + '0';
             } else {
-                ch = cast(char)rem + 'A';
+                ch = cast(char)(rem-10) + 'a';
             }
 
             buf[len] = ch;
@@ -86,10 +86,10 @@ func unsigned_itoa(into: *string, num: u64, base: u64) {
             n /= base;
 
             var ch: char = void;
-            if (rem <= 10) {
+            if (rem < 10) {
                 ch = cast(char)rem + '0';
             } else {
-                ch = cast(char)rem + 'A';
+                ch = cast(char)(rem-10) + 'a';
             }
 
             buf[len] = ch;
@@ -136,6 +136,13 @@ pub func sprintf(fmt: string, into: *string, args: ..@Any) {
 
                     unsigned_itoa(into, num, 10);
                 }
+
+            case runtime.TypeKind.Pointer:
+                into.*[into.*.len] = '0';
+                into.*.len += 1;
+                into.*[into.*.len] = 'x';
+                into.*.len += 1;
+                unsigned_itoa(into, (cast(*u64)arg.ptr).*, 16);
 
             case runtime.TypeKind.Slice: 
                 var sub = arg.type_info.array.sub;

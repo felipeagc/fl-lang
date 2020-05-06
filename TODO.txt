@@ -42,7 +42,6 @@ Safety:
 - bounds checking
 
 Bugs:
-- Duplicate extern declarations
 - Duplicate switch case values
 - Circular imports
 - var a: i32 = a; // should not work

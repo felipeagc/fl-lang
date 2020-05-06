@@ -3,18 +3,18 @@ module strings
 import c "c.lang"
 
 pub func to_c_str_alloc(str: string) -> *char {
-    var cstr: *char = c.malloc(str.len + 1);
+    var cstr: *char = @alloc(str.len + 1);
     c.strncpy(cstr, str.ptr, str.len);
     cstr[str.len] = 0;
     return cstr;
 }
 
 pub func free(str: string) {
-    c.free(str.ptr);
+    @free(str.ptr);
 }
 
 pub func concat_alloc(a: string, b: string) -> string {
-    var chars: *char = c.malloc(a.len + b.len);
+    var chars: *char = @alloc(a.len + b.len);
     var str = chars[0..(a.len+b.len)];
     c.strncpy(&str[0], a.ptr, a.len);
     c.strncpy(&str[a.len], b.ptr, b.len);

@@ -2,7 +2,6 @@ module build
 
 import os "core:os"
 import fmt "core:fmt"
-import arrays "core:arrays"
 import compiler "core:compiler"
 
 pub typedef Builder struct {
@@ -18,7 +17,7 @@ pub typedef Target struct {
 };
 
 pub func add_target(builder: *Builder, target: *Target) {
-    arrays.push(Target)(&builder.targets, target.*);
+    @append(&builder.targets, target.*);
 }
 
 pub func build(builder: *Builder) {

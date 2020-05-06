@@ -403,6 +403,14 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         case INTRINSIC_SIN: res = false; break;
 
         case INTRINSIC_VECTOR_TYPE: res = true; break;
+
+        case INTRINSIC_APPEND:
+        case INTRINSIC_MAKE:
+        case INTRINSIC_DELETE:
+        case INTRINSIC_NEW:
+        case INTRINSIC_FREE:
+        case INTRINSIC_REALLOC:
+        case INTRINSIC_ALLOC: res = false; break;
         }
         break;
     }
@@ -3661,6 +3669,265 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             }
 
             ast->type_info = a->compiler->type_type;
+
+            break;
+        }
+
+        case INTRINSIC_ALLOC: {
+            if (ast->intrinsic_call.params.len != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 1 parameter");
+                break;
+            }
+
+            Ast *size = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, size, a->compiler->uint_type);
+
+            if (!size->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            ast->type_info = a->compiler->null_ptr_type;
+
+            break;
+        }
+
+        case INTRINSIC_REALLOC: {
+            if (ast->intrinsic_call.params.len != 2)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
+                break;
+            }
+
+            Ast *ptr = &ast->intrinsic_call.params.ptr[0];
+            Ast *size = &ast->intrinsic_call.params.ptr[1];
+            analyze_ast(a, ptr, NULL);
+            analyze_ast(a, size, a->compiler->uint_type);
+
+            if (!size->type_info || !ptr->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (ptr->type_info->kind != TYPE_POINTER &&
+                ptr->type_info->kind != TYPE_RAW_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "@realloc takes a pointer as the first parameter");
+                break;
+            }
+
+            ast->type_info = a->compiler->null_ptr_type;
+
+            break;
+        }
+
+        case INTRINSIC_FREE: {
+            if (ast->intrinsic_call.params.len != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 1 parameter");
+                break;
+            }
+
+            Ast *ptr = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, ptr, NULL);
+
+            if (!ptr->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (ptr->type_info->kind != TYPE_POINTER &&
+                ptr->type_info->kind != TYPE_RAW_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    ast->loc,
+                    "@free takes a pointer as a parameter");
+                break;
+            }
+
+            ast->type_info = a->compiler->void_type;
+
+            break;
+        }
+
+        case INTRINSIC_NEW: {
+            if (ast->intrinsic_call.params.len != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 1 parameter");
+                break;
+            }
+
+            Ast *type = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, type, a->compiler->type_type);
+
+            if (!type->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            assert(type->as_type);
+            ast->type_info = create_pointer_type(a->compiler, type->as_type);
+
+            break;
+        }
+
+        case INTRINSIC_MAKE: {
+            if (ast->intrinsic_call.params.len != 2 &&
+                ast->intrinsic_call.params.len != 3)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
+                break;
+            }
+
+            Ast *type = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, type, a->compiler->type_type);
+            Ast *length = &ast->intrinsic_call.params.ptr[1];
+            analyze_ast(a, length, a->compiler->uint_type);
+
+            Ast *cap = NULL;
+            if (ast->intrinsic_call.params.len == 3)
+            {
+                cap = &ast->intrinsic_call.params.ptr[2];
+                analyze_ast(a, cap, a->compiler->uint_type);
+            }
+
+            if (!type->type_info || !length->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (cap && !cap->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            assert(type->as_type);
+
+            switch (type->as_type->kind)
+            {
+            case TYPE_SLICE: {
+                if (cap)
+                {
+                    compile_error(
+                        a->compiler,
+                        cap->loc,
+                        "@make only supports capacity for dynamic arrays");
+                }
+                break;
+            }
+
+            case TYPE_DYNAMIC_ARRAY: break;
+
+            default: {
+                compile_error(
+                    a->compiler, type->loc, "@make does not support this type");
+                break;
+            }
+            }
+
+            ast->type_info = type->as_type;
+
+            break;
+        }
+
+        case INTRINSIC_DELETE: {
+            if (ast->intrinsic_call.params.len != 1)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 1 parameters");
+                break;
+            }
+
+            Ast *value = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, value, NULL);
+
+            if (!value->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (value->type_info->kind != TYPE_POINTER)
+            {
+                compile_error(
+                    a->compiler,
+                    value->loc,
+                    "@delete takes a pointer to a slice or a dynamic array");
+                break;
+            }
+
+            switch (value->type_info->ptr.sub->kind)
+            {
+            case TYPE_SLICE:
+            case TYPE_DYNAMIC_ARRAY: break;
+
+            default: {
+                compile_error(
+                    a->compiler,
+                    value->loc,
+                    "@delete does not support this type");
+                break;
+            }
+            }
+
+            ast->type_info = a->compiler->void_type;
+
+            break;
+        }
+
+        case INTRINSIC_APPEND: {
+            if (ast->intrinsic_call.params.len != 2)
+            {
+                compile_error(
+                    a->compiler, ast->loc, "intrinsic takes 1 parameters");
+                break;
+            }
+
+            Ast *array = &ast->intrinsic_call.params.ptr[0];
+            analyze_ast(a, array, NULL);
+
+            if (!array->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            if (array->type_info->kind != TYPE_POINTER &&
+                array->type_info->ptr.sub->kind != TYPE_DYNAMIC_ARRAY)
+            {
+                compile_error(
+                    a->compiler,
+                    array->loc,
+                    "@append takes a pointer to a slice or a dynamic array");
+                break;
+            }
+
+            Ast *value = &ast->intrinsic_call.params.ptr[1];
+            analyze_ast(a, value, array->type_info->ptr.sub->array.sub);
+
+            if (!value->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+                break;
+            }
+
+            ast->type_info = a->compiler->void_type;
 
             break;
         }

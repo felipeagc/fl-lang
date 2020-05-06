@@ -1,23 +1,50 @@
 module main
 
 import "core:c"
-import arrays "core:arrays"
+import fmt "core:fmt"
 
 func main() {
     {
         var arr: [dyn]i32;
-        arrays.push(i32)(&arr, 1);
-        arrays.push(i32)(&arr, 2);
+        defer @delete(&arr);
+
+        @append(&arr, 1);
+        @append(&arr, 2);
         if (arr.len != 2) abort();
-        arrays.free(i32)(&arr);
     }
 
     {
         var arr: [dyn]i32;
-        arrays.push(i32)(&arr, 1);
-        arrays.push(i32)(&arr, 2);
-        arrays.push(i32)(&arr, 3);
-        for (*a in arr) printf(c"Hello: %d\n", a.*);
-        for (a in arr) printf(c"Hello: %d\n", a);
+        defer @delete(&arr);
+
+        @append(&arr, 1);
+        @append(&arr, 2);
+        @append(&arr, 3);
+        for (*a in arr) fmt.printf("Hello: %\n", a.*);
+        for (a in arr) fmt.printf("Hello: %\n", a);
+    }
+
+    {
+        var arr = @make([_]i32, 10);
+        if (arr.len != 10) abort();
+        if (!arr.ptr) abort();
+
+        @delete(&arr);
+
+        if (arr.len != 0) abort();
+        if (arr.ptr) abort();
+    }
+
+    {
+        var arr = @make([dyn]i32, 0, 10);
+        if (arr.len != 0) abort();
+        if (arr.cap != 10) abort();
+        if (!arr.ptr) abort();
+
+        @delete(&arr);
+
+        if (arr.len != 0) abort();
+        if (arr.cap != 0) abort();
+        if (arr.ptr) abort();
     }
 }

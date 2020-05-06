@@ -378,6 +378,11 @@ compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
     if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID)
         return received;
 
+    if (received->kind == TYPE_RAW_POINTER)
+        return expected;
+    if (expected->kind == TYPE_RAW_POINTER)
+        return received;
+
     return NULL;
 }
 

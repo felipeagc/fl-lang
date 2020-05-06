@@ -28,14 +28,14 @@ version(posix) {
             return NULL_HANDLE;
         }
 
-        var actual_args: **char = c.malloc(@size_of(*char) * (args.len + 1));
-        defer c.free(actual_args);
+        var actual_args: **char = @alloc(@size_of(*char) * (args.len + 1));
+        defer @free(actual_args);
 
         for (var i: uint = 0; i < args.len; i += 1) {
             actual_args[i] = strings.to_c_str_alloc(args[i]);
         }
         defer for (var i: uint = 0; i < args.len; i += 1) {
-            c.free(actual_args[i]);
+            @free(actual_args[i]);
         }
 
         actual_args[args.len] = null; // null terminate the list
@@ -94,7 +94,7 @@ version(posix) {
     pub func last_write_time(path: string) -> TimeSpec {
         var stat: posix.stat_t;
         c_path := strings.to_c_str_alloc(path);
-        defer c.free(c_path);
+        defer @free(c_path);
 
         posix.stat(c_path, &stat);
         return TimeSpec{stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec};
