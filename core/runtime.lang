@@ -20,6 +20,7 @@ pub typedef TypeKind enum u32 {
     UntypedInt = 18,
     UntypedFloat = 19,
     RawPointer = 20,
+    Tuple = 21,
 };
 
 pub typedef TypeFlags enum u32 {
@@ -59,6 +60,9 @@ pub typedef TypeInfo struct {
         },
         enumeration: struct {
             underlying_type: *TypeInfo,
+        },
+        tuple: struct {
+            fields: [_]*TypeInfo,
         },
     },
 };

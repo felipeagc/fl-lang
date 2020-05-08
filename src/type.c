@@ -20,6 +20,7 @@ typedef enum TypeKind {
     TYPE_UNTYPED_INT = 18,
     TYPE_UNTYPED_FLOAT = 19,
     TYPE_RAW_POINTER = 20,
+    TYPE_TUPLE = 21,
 } TypeKind;
 
 typedef enum TypeFlags {
@@ -75,6 +76,10 @@ struct TypeInfo
         {
             struct TypeInfo *underlying_type;
         } enumeration;
+        struct
+        {
+            ArrayOfTypeInfoPtr fields;
+        } tuple;
     };
 };
 
@@ -88,7 +93,8 @@ static inline bool is_type_runtime(TypeInfo *type)
         type->kind == TYPE_STRUCT || type->kind == TYPE_ARRAY ||
         type->kind == TYPE_POINTER || type->kind == TYPE_RAW_POINTER ||
         type->kind == TYPE_SLICE || type->kind == TYPE_DYNAMIC_ARRAY ||
-        type->kind == TYPE_ANY || type->kind == TYPE_VECTOR);
+        type->kind == TYPE_ANY || type->kind == TYPE_VECTOR ||
+        type->kind == TYPE_TUPLE);
 }
 
 static inline bool is_type_compound(TypeInfo *type)
@@ -96,7 +102,7 @@ static inline bool is_type_compound(TypeInfo *type)
     return (
         type->kind == TYPE_STRUCT || type->kind == TYPE_SLICE ||
         type->kind == TYPE_ARRAY || type->kind == TYPE_VECTOR ||
-        type->kind == TYPE_DYNAMIC_ARRAY);
+        type->kind == TYPE_DYNAMIC_ARRAY || type->kind == TYPE_TUPLE);
 }
 
 static inline bool can_type_be_named(TypeInfo *type)
@@ -335,6 +341,24 @@ static TypeInfo *exact_types(TypeInfo *received, TypeInfo *expected)
         break;
     }
 
+    case TYPE_TUPLE: {
+        if ((received->tuple.fields.len) != (expected->tuple.fields.len))
+            return NULL;
+
+        size_t field_count = expected->tuple.fields.len;
+        for (size_t i = 0; i < field_count; ++i)
+        {
+            if (!exact_types(
+                    received->tuple.fields.ptr[i],
+                    expected->tuple.fields.ptr[i]))
+            {
+                return NULL;
+            }
+        }
+
+        break;
+    }
+
     case TYPE_PROC: {
         if (!exact_types(
                 received->proc.return_type, expected->proc.return_type))
@@ -378,10 +402,8 @@ compatible_pointer_types(TypeInfo *received, TypeInfo *expected)
     if (expected->kind == TYPE_POINTER && expected->ptr.sub->kind == TYPE_VOID)
         return received;
 
-    if (received->kind == TYPE_RAW_POINTER)
-        return expected;
-    if (expected->kind == TYPE_RAW_POINTER)
-        return received;
+    if (received->kind == TYPE_RAW_POINTER) return expected;
+    if (expected->kind == TYPE_RAW_POINTER) return received;
 
     return NULL;
 }
@@ -527,6 +549,16 @@ static void print_mangled_type(StringBuilder *sb, TypeInfo *type)
         break;
     }
 
+    case TYPE_TUPLE: {
+        sb_append(sb, STR("L"));
+        for (size_t i = 0; i < type->tuple.fields.len; ++i)
+        {
+            print_mangled_type(sb, type->tuple.fields.ptr[i]);
+        }
+        sb_append(sb, STR("E"));
+        break;
+    }
+
     case TYPE_UNINITIALIZED:
     case TYPE_NAMED_PLACEHOLDER: assert(0); break;
     }
@@ -659,6 +691,17 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
         break;
     }
 
+    case TYPE_TUPLE: {
+        sb_append(sb, STR("@Tuple{"));
+        for (size_t i = 0; i < type->tuple.fields.len; ++i)
+        {
+            if (i > 0) sb_append(sb, STR(", "));
+            print_type_pretty_name(sb, type->tuple.fields.ptr[i]);
+        }
+        sb_append(sb, STR("}"));
+        break;
+    }
+
     case TYPE_UNINITIALIZED:
     case TYPE_NAMED_PLACEHOLDER: assert(0); break;
     }
@@ -724,6 +767,18 @@ static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
     case TYPE_STRUCT: {
         for (TypeInfo **field = type->structure.fields.ptr;
              field != type->structure.fields.ptr + type->structure.fields.len;
+             ++field)
+        {
+            uint32_t field_align = align_of_type(compiler, *field);
+            if (field_align > align) align = field_align;
+        }
+
+        break;
+    }
+
+    case TYPE_TUPLE: {
+        for (TypeInfo **field = type->tuple.fields.ptr;
+             field != type->tuple.fields.ptr + type->tuple.fields.len;
              ++field)
         {
             uint32_t field_align = align_of_type(compiler, *field);
@@ -827,6 +882,44 @@ static uint32_t size_of_type(Compiler *compiler, TypeInfo *type)
             }
         }
 
+        break;
+    }
+
+    case TYPE_TUPLE: {
+        uint32_t *actual_alignments = bump_alloc(
+            &compiler->bump, sizeof(uint32_t) * type->tuple.fields.len);
+
+        for (size_t i = 0; i < type->tuple.fields.len; ++i)
+        {
+            TypeInfo *field = type->tuple.fields.ptr[i];
+            TypeInfo *next_field = type->tuple.fields.ptr[i + 1];
+            if (i == (type->tuple.fields.len - 1))
+            {
+                next_field = type->tuple.fields.ptr[0];
+            }
+
+            actual_alignments[i] = align_of_type(compiler, field);
+            uint32_t next_alignment = align_of_type(compiler, next_field);
+            actual_alignments[i] =
+                pad_to_alignment(actual_alignments[i], next_alignment);
+        }
+
+        for (size_t i = 0; i < type->tuple.fields.len; ++i)
+        {
+            TypeInfo *field = type->tuple.fields.ptr[i];
+            uint32_t next_index = i + 1;
+            if (i == (type->tuple.fields.len - 1))
+            {
+                next_index = 0;
+            }
+
+            uint32_t field_size = size_of_type(compiler, field);
+
+            // Add padding
+            uint32_t next_alignment = actual_alignments[next_index];
+            size += field_size;
+            size = pad_to_alignment(size, next_alignment);
+        }
         break;
     }
 
@@ -1110,6 +1203,20 @@ static TypeInfo *create_anonymous_struct_type(
     ty->scope = scope;
     ty->structure.is_union = is_union;
     ty->structure.fields = *fields;
+    return ty;
+}
+
+static TypeInfo *
+create_tuple_type(Compiler *compiler, ArrayOfTypeInfoPtr *fields)
+{
+    TypeInfo *ty = bump_alloc(&compiler->bump, sizeof(TypeInfo));
+    memset(ty, 0, sizeof(*ty));
+    ty->kind = TYPE_TUPLE;
+    ty->tuple.fields = *fields;
+
+    TypeInfo *cached = cache_type(compiler, ty);
+    if (cached) return cached;
+
     return ty;
 }
 

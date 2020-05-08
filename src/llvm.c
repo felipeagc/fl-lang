@@ -213,6 +213,19 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
+    case TYPE_TUPLE: {
+        size_t field_count = type->tuple.fields.len;
+        LLVMTypeRef *field_types =
+            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
+        for (size_t i = 0; i < field_count; i++)
+        {
+            field_types[i] = llvm_type(l, type->tuple.fields.ptr[i]);
+        }
+
+        type->ref = LLVMStructType(field_types, field_count, false);
+        break;
+    }
+
     case TYPE_ENUM: {
         type->ref = llvm_type(l, type->enumeration.underlying_type);
         break;
@@ -411,6 +424,13 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
 
     case TYPE_STRUCT: {
         const char *type_name = "@Struct";
+        type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
+            l->mod.di_builder, type_name, strlen(type_name));
+        break;
+    }
+
+    case TYPE_TUPLE: {
+        const char *type_name = "@Tuple";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
