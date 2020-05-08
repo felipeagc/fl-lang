@@ -891,8 +891,63 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
         {
             parser_next(p, 1);
 
-            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->proc.return_type, true)) res = false;
+            if (parser_peek(p, 0)->type == TOKEN_LPAREN)
+            {
+                // Init return type
+                ast->proc.return_type =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                memset(ast->proc.return_type, 0, sizeof(Ast));
+                ast->proc.return_type->type = AST_TUPLE_TYPE;
+                ast->proc.return_type->loc = parser_peek(p, 0)->loc;
+
+                parser_next(p, 1);
+
+                ArrayOfAst return_types = {0};
+
+                while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                       !parser_is_at_end(p, 0))
+                {
+                    if (return_types.len > 0)
+                    {
+                        if (!parser_consume(p, TOKEN_COMMA))
+                        {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    Ast return_type = {0};
+                    if (!parse_expr(p, &return_type, true))
+                    {
+                        res = false;
+                        break;
+                    }
+                    array_push(&return_types, return_type);
+                }
+
+                if (!parser_consume(p, TOKEN_RPAREN))
+                {
+                    res = false;
+                    break;
+                }
+
+                ast->proc.return_type->tuple_type.fields = return_types;
+
+                Location last_loc = parser_peek(p, -1)->loc;
+                ast->proc.return_type->loc.length =
+                    last_loc.buf + last_loc.length -
+                    ast->proc.return_type->loc.buf;
+            }
+            else
+            {
+                ast->proc.return_type =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->proc.return_type, true))
+                {
+                    res = false;
+                    break;
+                }
+            }
         }
 
         break;
@@ -1356,8 +1411,46 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
 
         if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
         {
-            ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->expr, false)) res = false;
+            Location first_loc = parser_peek(p, 0)->loc;
+
+            Ast value = {0};
+            if (!parse_expr(p, &value, false)) res = false;
+
+            if (parser_peek(p, 0)->type != TOKEN_SEMICOLON)
+            {
+                ArrayOfAst values = {0};
+                array_push(&values, value);
+
+                while (parser_peek(p, 0)->type != TOKEN_SEMICOLON &&
+                       !parser_is_at_end(p, 0))
+                {
+                    if (!parser_consume(p, TOKEN_COMMA))
+                    {
+                        res = false;
+                        break;
+                    }
+
+                    if (!parse_expr(p, &value, false)) res = false;
+                    array_push(&values, value);
+                }
+
+                ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+                memset(ast->expr, 0, sizeof(Ast));
+
+                ast->expr->type = AST_TUPLE_LIT;
+                ast->expr->tuple_lit.values = values;
+
+                // Set location
+                ast->expr->loc = first_loc;
+                Location last_loc = parser_peek(p, -1)->loc;
+                ast->expr->loc.length =
+                    last_loc.buf + last_loc.length - ast->expr->loc.buf;
+            }
+            else
+            {
+                ast->expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
+                *ast->expr = value;
+            }
         }
 
         break;
@@ -2088,10 +2181,66 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
         ast->proc.return_type = NULL;
         if (parser_peek(p, 0)->type == TOKEN_ARROW)
         {
+            // Init return type
+            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
+            memset(ast->proc.return_type, 0, sizeof(Ast));
+            ast->proc.return_type->type = AST_TUPLE_TYPE;
+            ast->proc.return_type->loc = parser_peek(p, 0)->loc;
+
             parser_next(p, 1);
 
-            ast->proc.return_type = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->proc.return_type, true)) res = false;
+            if (parser_peek(p, 0)->type == TOKEN_LPAREN)
+            {
+                parser_next(p, 1);
+
+                ArrayOfAst return_types = {0};
+
+                while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+                       !parser_is_at_end(p, 0))
+                {
+                    if (return_types.len > 0)
+                    {
+                        if (!parser_consume(p, TOKEN_COMMA))
+                        {
+                            res = false;
+                            break;
+                        }
+                    }
+
+                    Ast return_type = {0};
+                    if (!parse_expr(p, &return_type, true))
+                    {
+                        res = false;
+                        break;
+                    }
+                    array_push(&return_types, return_type);
+                }
+
+                if (!parser_consume(p, TOKEN_RPAREN))
+                {
+                    res = false;
+                    break;
+                }
+
+                // Init return type
+                ast->proc.return_type->tuple_type.fields = return_types;
+
+                // Set location
+                Location last_loc = parser_peek(p, -1)->loc;
+                ast->proc.return_type->loc.length =
+                    last_loc.buf + last_loc.length -
+                    ast->proc.return_type->loc.buf;
+            }
+            else
+            {
+                ast->proc.return_type =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->proc.return_type, true))
+                {
+                    res = false;
+                    break;
+                }
+            }
         }
 
         memset(&ast->proc.stmts, 0, sizeof(ast->proc.stmts));

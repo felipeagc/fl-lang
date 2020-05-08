@@ -297,6 +297,16 @@ static void instantiate_template(
         break;
     }
 
+    case AST_TUPLE_TYPE: {
+        INSTANTIATE_ARRAY(tuple_type.fields);
+        break;
+    }
+
+    case AST_TUPLE_LIT: {
+        INSTANTIATE_ARRAY(tuple_lit.values);
+        break;
+    }
+
     case AST_IF: {
         INSTANTIATE_AST(if_stmt.cond_expr);
         INSTANTIATE_AST(if_stmt.cond_stmt);
@@ -1021,6 +1031,33 @@ static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
         break;
     }
 
+    case AST_TUPLE_TYPE: {
+        ArrayOfTypeInfoPtr fields = {0};
+        bool res = true;
+
+        for (Ast *field = ast->tuple_type.fields.ptr;
+             field != ast->tuple_type.fields.ptr + ast->tuple_type.fields.len;
+             ++field)
+        {
+            if (!ast_as_type(a, scope, field, NULL))
+            {
+                res = false;
+            }
+            array_push(&fields, field->as_type);
+        }
+
+        if (res)
+        {
+            ast->as_type = create_tuple_type(a->compiler, &fields);
+        }
+        else
+        {
+            ast->as_type = NULL;
+        }
+
+        break;
+    }
+
     case AST_ENUM: {
         TypeInfo *underlying_type =
             ast_as_type(a, scope, ast->enumeration.type_expr, NULL);
@@ -1592,6 +1629,8 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TUPLE_LIT:
+    case AST_TUPLE_TYPE:
     case AST_NOTHING:
     case AST_VARIADIC_ARG:
     case AST_TO_ANY:
@@ -2019,8 +2058,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                         a->compiler,
                         ast->loc,
                         "procedure does not return void, 'return' must "
-                        "contain "
-                        "a value");
+                        "contain a value");
                     break;
                 }
             }
@@ -2029,6 +2067,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         if (ast->expr)
         {
             analyze_ast(a, ast->expr, return_type);
+            if (!ast->expr->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+            }
         }
 
         break;
@@ -4724,6 +4766,82 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_TUPLE_TYPE: {
+        for (Ast *field = ast->tuple_type.fields.ptr;
+             field != ast->tuple_type.fields.ptr + ast->tuple_type.fields.len;
+             ++field)
+        {
+            analyze_ast(a, field, a->compiler->type_type);
+
+            if (!field->type_info)
+            {
+                assert(a->compiler->errors.len > 0);
+            }
+        }
+
+        ast->type_info = a->compiler->type_type;
+
+        break;
+    }
+
+    case AST_TUPLE_LIT: {
+        bool res = true;
+        ArrayOfTypeInfoPtr field_types = {0};
+        ArrayOfTypeInfoPtr expected_types = {0};
+
+        if (expected_type && expected_type->kind == TYPE_TUPLE)
+        {
+            expected_types = expected_type->tuple.fields;
+        }
+
+        if (ast->tuple_lit.values.len != expected_types.len)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "expected a tuple with %zu values, instead got %zu",
+                expected_types.len,
+                ast->tuple_lit.values.len);
+            break;
+        }
+
+        for (size_t i = 0; i < ast->tuple_lit.values.len; ++i)
+        {
+            Ast *value = &ast->tuple_lit.values.ptr[i];
+            if (expected_types.ptr)
+            {
+                analyze_ast(a, value, expected_types.ptr[i]);
+            }
+            else
+            {
+                analyze_ast(a, value, NULL);
+            }
+
+            if (!value->type_info)
+            {
+                res = false;
+                break;
+            }
+
+            array_push(&field_types, value->type_info);
+        }
+
+        if (res)
+        {
+            ast->type_info = create_tuple_type(a->compiler, &field_types);
+        }
+        else
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "could not resolve type for tuple literal");
+            break;
+        }
+
+        break;
+    }
+
     case AST_STRUCT: {
         ast->type_info = a->compiler->type_type;
 
@@ -4823,6 +4941,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         break;
     }
+
     default: break;
     }
 
@@ -5330,6 +5449,26 @@ static void check_used_asts(Analyzer *a, Ast *ast)
             check_used_asts(a, stmt);
         }
 
+        break;
+    }
+
+    case AST_TUPLE_TYPE: {
+        for (Ast *field = ast->tuple_type.fields.ptr;
+             field != ast->tuple_type.fields.ptr + ast->tuple_type.fields.len;
+             ++field)
+        {
+            check_used_asts(a, field);
+        }
+        break;
+    }
+
+    case AST_TUPLE_LIT: {
+        for (Ast *value = ast->tuple_lit.values.ptr;
+             value != ast->tuple_lit.values.ptr + ast->tuple_lit.values.len;
+             ++value)
+        {
+            check_used_asts(a, value);
+        }
         break;
     }
 

@@ -91,6 +91,8 @@ typedef enum AstType {
     AST_USING,
     AST_DEFER,
     AST_VARIADIC_ARG,
+    AST_TUPLE_TYPE,
+    AST_TUPLE_LIT,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -231,6 +233,14 @@ struct Ast
             ArrayOfAst fields;
             bool is_union;
         } structure;
+        struct
+        {
+            ArrayOfAst fields;
+        } tuple_type;
+        struct
+        {
+            ArrayOfAst values;
+        } tuple_lit;
         struct
         {
             struct Ast *type_expr;

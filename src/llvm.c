@@ -2858,6 +2858,46 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_TUPLE_LIT: {
+        AstValue result_value = {0};
+        result_value.is_lvalue = true;
+        if (out_value && out_value->value)
+        {
+            result_value.value = out_value->value;
+        }
+        else
+        {
+            result_value.value = build_alloca(l, mod, ast->type_info);
+        }
+
+        assert(
+            (ast->tuple_lit.values.len) == (ast->type_info->tuple.fields.len));
+
+        for (Ast *value = ast->tuple_lit.values.ptr;
+             value != ast->tuple_lit.values.ptr + ast->tuple_lit.values.len;
+             ++value)
+        {
+            size_t index = (size_t)(value - ast->tuple_lit.values.ptr);
+            AstValue val = {0};
+            llvm_codegen_ast(l, mod, value, is_const, &val);
+
+            LLVMValueRef indices[2] = {
+                LLVMConstInt(LLVMInt32Type(), 0, false),
+                LLVMConstInt(LLVMInt32Type(), index, false),
+            };
+
+            LLVMValueRef ptr =
+                LLVMBuildGEP(mod->builder, result_value.value, indices, 2, "");
+            LLVMBuildStore(mod->builder, load_val(mod, &val), ptr);
+        }
+
+        if (out_value)
+        {
+            *out_value = result_value;
+        }
+        break;
+    }
+
     case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
