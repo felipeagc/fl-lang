@@ -7,7 +7,7 @@ version (posix) {
 
     pub func get_cwd_alloc() -> string {
         var buf = posix.getcwd(null, 0);
-        return buf[0..c.strlen(buf)];
+        return buf[0:c.strlen(buf)];
     }
 
     pub func chdir(path: string) -> bool {
@@ -29,14 +29,14 @@ version (posix) {
             ep = posix.readdir(dp);
             while (ep) {
                 var c_entry = c.strdup(ep.d_name.ptr);
-                @append(&entries, c_entry[0..c.strlen(c_entry)]);
+                @append(&entries, c_entry[0:c.strlen(c_entry)]);
                 ep = posix.readdir(dp);
             }
 
             posix.closedir(dp);
         }
 
-        return entries[..];
+        return entries[:];
     }
 
     pub func dir_entries_free(entries: []string) {

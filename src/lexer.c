@@ -284,17 +284,11 @@ void lex_token(Lexer *l)
         tok.loc.length = 1;
         lex_next(l, 1);
         tok.type = TOKEN_DOT;
-        if (lex_peek(l, 0) == '.')
+        if (lex_peek(l, 0) == '.' && lex_peek(l, 1) == '.')
         {
-            lex_next(l, 1);
-            tok.type = TOKEN_DOTDOT;
-            tok.loc.length = 2;
-            if (lex_peek(l, 0) == '.')
-            {
-                lex_next(l, 1);
-                tok.type = TOKEN_ELLIPSIS;
-                tok.loc.length = 3;
-            }
+            lex_next(l, 2);
+            tok.type = TOKEN_ELLIPSIS;
+            tok.loc.length = 3;
         }
         break;
     }

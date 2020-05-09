@@ -15,7 +15,7 @@ pub func free(str: string) {
 
 pub func concat_alloc(a: string, b: string) -> string {
     var chars: *char = @alloc(a.len + b.len);
-    var str = chars[0..(a.len+b.len)];
+    var str = chars[0:(a.len+b.len)];
     c.strncpy(&str[0], a.ptr, a.len);
     c.strncpy(&str[a.len], b.ptr, b.len);
     return str;

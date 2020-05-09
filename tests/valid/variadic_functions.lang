@@ -2,16 +2,16 @@ module main
 
 import fmt "core:fmt"
 
-func variadic3(numbers: ..i32) {
+func variadic3(numbers: ...i32) {
     var my_slice: []i32 = numbers;
-    variadic1(..my_slice);
+    variadic1(...my_slice);
 }
 
-func variadic2(numbers: ..i32) {
-    variadic1(..numbers);
+func variadic2(numbers: ...i32) {
+    variadic1(...numbers);
 }
 
-func variadic1(numbers: ..i32) {
+func variadic1(numbers: ...i32) {
     for (n in numbers) {
         fmt.printf("%\n", n);
     }
@@ -26,5 +26,5 @@ func main() {
     fmt.printf("===\n");
     variadic3();
     fmt.printf("===\n");
-    variadic3(..[]i32{5, 6, 7});
+    variadic3(...[]i32{5, 6, 7});
 }

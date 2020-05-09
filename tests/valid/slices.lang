@@ -13,14 +13,14 @@ func main() {
         var lower: uint = 1;
         var upper: uint = 3;
 
-        var my_slice: []i32 = my_array[lower..upper];
+        var my_slice: []i32 = my_array[lower:upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
         if (my_slice[1] != 4) c.abort();
         if (&my_slice[0] != &my_array[1]) c.abort();
         if (&my_slice[0] != my_slice.ptr) c.abort();
-        if (my_array[..].len != my_array.len) c.abort();
+        if (my_array[:].len != my_array.len) c.abort();
 
         c.printf(c"%d\n", my_slice[0]);
         c.printf(c"my_slice.len = %u\n", my_slice.len);
@@ -36,7 +36,7 @@ func main() {
         var lower: u64 = 1;
         var upper: u64 = 3;
 
-        var my_slice: []i32 = my_array[lower..upper];
+        var my_slice: []i32 = my_array[lower:upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
@@ -47,8 +47,8 @@ func main() {
         c.printf(c"%d\n", my_slice[0]);
         c.printf(c"my_slice.len = %u\n", my_slice.len);
 
-        if (my_array[..].len != 0) c.abort();
-        if (my_array[..].ptr != my_array) c.abort();
+        if (my_array[:].len != 0) c.abort();
+        if (my_array[:].ptr != my_array) c.abort();
 
         c.free(my_array);
     }
@@ -60,12 +60,12 @@ func main() {
         my_array[2] = 3;
         my_array[3] = 4;
 
-        var old_slice: []i32 = my_array[1..4];
+        var old_slice: []i32 = my_array[1:4];
 
         var lower: u64 = 1;
         var upper: u64 = 3;
 
-        var my_slice: []i32 = my_array[1..4][lower..upper];
+        var my_slice: []i32 = my_array[1:4][lower:upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
@@ -74,7 +74,7 @@ func main() {
         if (&my_slice[0] != &my_array[2]) c.abort();
         if (&my_slice[0] != my_slice.ptr) c.abort();
 
-        if (my_slice[..].len != my_slice.len) c.abort();
+        if (my_slice[:].len != my_slice.len) c.abort();
 
         c.printf(c"%d\n", my_slice[0]);
         c.printf(c"my_slice.len = %u\n", my_slice.len);

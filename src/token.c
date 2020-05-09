@@ -24,7 +24,6 @@ typedef enum TokenKind {
     TOKEN_RSHIFT,
 
     TOKEN_DOT,
-    TOKEN_DOTDOT,
     TOKEN_ELLIPSIS,
     TOKEN_COMMA,
 
@@ -146,7 +145,6 @@ static const char *token_strings[] = {
     [TOKEN_RSHIFT] = ">>",
 
     [TOKEN_DOT] = ".",
-    [TOKEN_DOTDOT] = "..",
     [TOKEN_ELLIPSIS] = "...",
     [TOKEN_COMMA] = ",",
 

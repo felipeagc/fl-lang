@@ -21,14 +21,14 @@ func main() {
     }
 
     {
-        var my_slice = const_array[..];
+        var my_slice = const_array[:];
         for (var i: uint = 0; i < my_slice.len; i += 1) {
             printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
 
     {
-        var my_slice = my_array[..];
+        var my_slice = my_array[:];
         for (var i: uint = 0; i < my_slice.len; i += 1) {
             printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }

@@ -107,7 +107,7 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
         break;
     }
 
-    case TOKEN_DOTDOT: {
+    case TOKEN_ELLIPSIS: {
         parser_next(p, 1);
 
         ast->type = AST_VARIADIC_ARG;
@@ -383,7 +383,7 @@ static bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
 
         parser_next(p, 1);
 
-        if (parser_peek(p, 0)->type == TOKEN_DOTDOT)
+        if (parser_peek(p, 0)->type == TOKEN_COLON)
         {
             parser_next(p, 1);
 
@@ -407,7 +407,7 @@ static bool parse_subscript(Parser *p, Ast *ast, bool parsing_type)
         Ast lower = {0};
         if (!parse_expr(p, &lower, parsing_type)) res = false;
 
-        if (parser_peek(p, 0)->type == TOKEN_DOTDOT)
+        if (parser_peek(p, 0)->type == TOKEN_COLON)
         {
             parser_next(p, 1);
 
