@@ -254,6 +254,7 @@ struct Ast
             String name;
             size_t index;
             struct Ast *decl;
+            struct Ast *alias;
         } tuple_binding;
         struct
         {

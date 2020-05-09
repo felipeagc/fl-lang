@@ -958,6 +958,7 @@ static inline LLVMValueRef bool_value(
     {
         switch (type->kind)
         {
+        case TYPE_ENUM:
         case TYPE_INT:
         case TYPE_BOOL:
             i1_val = LLVMBuildICmp(
@@ -2165,6 +2166,12 @@ static void llvm_codegen_ast(
     }
 
     case AST_CONST_DECL: {
+        if (ast->decl.value.value)
+        {
+            if (out_value) *out_value = ast->decl.value;
+            break;
+        }
+
         TypeInfo *const_type = ast->type_info;
 
         switch (const_type->kind)
@@ -2204,6 +2211,12 @@ static void llvm_codegen_ast(
     }
 
     case AST_VAR_DECL: {
+        if (ast->decl.value.value)
+        {
+            if (out_value) *out_value = ast->decl.value;
+            break;
+        }
+
         Ast *proc = get_scope_procedure(*array_last(&l->scope_stack));
         LLVMTypeRef llvm_ty = llvm_type(l, ast->type_info);
 
@@ -2369,6 +2382,27 @@ static void llvm_codegen_ast(
         if (to_store)
         {
             LLVMBuildStore(mod->builder, to_store, ast->tuple_decl.value.value);
+        }
+
+        for (size_t i = 0; i < ast->tuple_decl.bindings.len; ++i)
+        {
+            Ast *binding = &ast->tuple_decl.bindings.ptr[i];
+            Ast *tuple_alias = binding->tuple_binding.alias;
+            if (tuple_alias)
+            {
+                AstValue binding_val = {0};
+                llvm_codegen_ast(l, mod, binding, is_const, &binding_val);
+                assert(binding_val.value);
+                assert(binding_val.is_lvalue);
+
+                AstValue some_var = {0};
+                llvm_codegen_ast(l, mod, tuple_alias, is_const, &some_var);
+
+                assert(some_var.is_lvalue);
+                assert(some_var.value);
+                LLVMValueRef loaded = load_val(mod, &binding_val);
+                LLVMBuildStore(mod->builder, loaded, some_var.value);
+            }
         }
 
         if (out_value) *out_value = ast->tuple_decl.value;

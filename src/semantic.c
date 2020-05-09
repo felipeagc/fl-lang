@@ -1749,11 +1749,14 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
     {
         if (scope_get_local(*array_last(&a->scope_stack), sym_name))
         {
-            compile_error(
-                a->compiler,
-                came_from->loc,
-                "duplicate declaration: '%.*s'",
-                PRINT_STR(sym_name));
+            if (ast->type != AST_TUPLE_BINDING)
+            {
+                compile_error(
+                    a->compiler,
+                    came_from->loc,
+                    "duplicate declaration: '%.*s'",
+                    PRINT_STR(sym_name));
+            }
             return;
         }
 
@@ -2341,9 +2344,29 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
              ast->tuple_decl.bindings.ptr + ast->tuple_decl.bindings.len;
              ++binding)
         {
+            Ast *found = scope_get_local(
+                *array_last(&a->scope_stack), binding->tuple_binding.name);
+
             binding->type_info =
                 tuple_type->tuple.fields.ptr[binding->tuple_binding.index];
             binding->tuple_binding.decl = ast;
+
+            if (found != binding)
+            {
+                if (!found->type_info)
+                {
+                    assert(a->compiler->errors.len > 0);
+                    break;
+                }
+
+                binding->tuple_binding.alias = found;
+                if (!exact_types(binding->type_info, found->type_info))
+                {
+                    // TODO: better error information
+                    compile_error(
+                        a->compiler, ast->loc, "wrong type for tuple binding");
+                }
+            }
         }
 
         ast->type_info = tuple_type;

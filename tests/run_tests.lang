@@ -29,12 +29,12 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
         {
             var path = strings.concat_alloc(tests_path, entry);
 
-            var pid = os.spawn_process(
+            var pid, err = os.spawn_process(
                 []string{"./compiler", "-r", path},
                 os.NULL_HANDLE,
                 os.NULL_HANDLE);
 
-            if (!pid)
+            if (err)
             {
                 fmt.eprint("Failed to spawn compiler process\n");
                 c.exit(1);
@@ -57,11 +57,13 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
 
     for (*run in runs)
     {
-        if (!os.wait_process(run.pid, &run.status))
+        var status, err = os.wait_process(run.pid);
+        if (err)
         {
             fmt.eprint("Failed to wait for process\n");
             c.exit(1);
         }
+        run.status = status;
     }
 
     var local_failures: uint = 0;

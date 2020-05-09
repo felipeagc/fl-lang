@@ -15,17 +15,31 @@ version(posix) {
         nsec: i64,
     };
 
+    pub typedef Error enum u32 {
+        Success = 0,
+        WriteError = 1,
+        SpawnError = 2,
+        InvalidSpawnArgs = 3,
+        WaitError = 4,
+        StatError = 5,
+    };
+
     #[inline] pub func get_stdin() -> Handle { return 0; }
     #[inline] pub func get_stdout() -> Handle { return 1; }
     #[inline] pub func get_stderr() -> Handle { return 2; }
 
-    pub func write_to_stream(stream: Handle, buf: [_]byte) -> int {
-        return cast(int)posix.write(stream, buf.ptr, buf.len);
+    pub func write_to_stream(stream: Handle, buf: [_]byte) -> (int, Error) {
+        var bytes_written: int = cast(int)posix.write(stream, buf.ptr, buf.len);
+        if (bytes_written == -1) {
+            return 0, Error.WriteError;
+        }
+
+        return bytes_written, Error.Success;
     }
 
-    pub func spawn_process(args: [_]string, stdout: Handle, stderr: Handle) -> Handle {
+    pub func spawn_process(args: [_]string, stdout: Handle, stderr: Handle) -> (Handle, Error) {
         if (args.len < 1) {
-            return NULL_HANDLE;
+            return NULL_HANDLE, Error.InvalidSpawnArgs;
         }
 
         var actual_args: **char = @alloc(@size_of(*char) * (args.len + 1));
@@ -68,35 +82,39 @@ version(posix) {
             environ);
 
         if (result != 0) {
-            return NULL_HANDLE;
+            return NULL_HANDLE, Error.SpawnError;
         }
 
-        return pid;
+        return pid, Error.Success;
     }
 
-    pub func wait_process(process: Handle, status: *i32) -> bool {
-        var tmp_status: i32;
-        var success = posix.waitpid(process, &tmp_status, 0) != -1;
+    pub func wait_process(process: Handle) -> (i32, Error) {
+        var status: i32;
+        var success = posix.waitpid(process, &status, 0) != -1;
 
         if (success) {
-            if (posix.WIFEXITED(tmp_status)) {
-                status.* = posix.WEXITSTATUS(tmp_status);
-            } else if (posix.WIFSIGNALED(tmp_status)) {
-                status.* = -posix.WTERMSIG(tmp_status);
+            if (posix.WIFEXITED(status)) {
+                status = posix.WEXITSTATUS(status);
+            } else if (posix.WIFSIGNALED(status)) {
+                status = -posix.WTERMSIG(status);
             } else {
-                return false;
+                return 1, Error.WaitError;
             }
         }
 
-        return success;
+        return status, Error.Success;
     }
 
-    pub func last_write_time(path: string) -> TimeSpec {
+    pub func last_write_time(path: string) -> (TimeSpec, Error) {
         var stat: posix.stat_t;
         c_path := strings.to_c_str_alloc(path);
         defer @free(c_path);
 
-        posix.stat(c_path, &stat);
-        return TimeSpec{stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec};
+        var result = posix.stat(c_path, &stat);
+        if (result == -1) {
+            return TimeSpec{}, Error.StatError;
+        }
+
+        return TimeSpec{stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec}, Error.Success;
     }
 }
