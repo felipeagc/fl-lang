@@ -28,7 +28,7 @@ version(posix) {
     #[inline] pub func get_stdout() -> Handle { return 1; }
     #[inline] pub func get_stderr() -> Handle { return 2; }
 
-    pub func write_to_stream(stream: Handle, buf: [_]byte) -> (int, Error) {
+    pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
         var bytes_written: int = cast(int)posix.write(stream, buf.ptr, buf.len);
         if (bytes_written == -1) {
             return 0, Error.WriteError;
@@ -37,7 +37,7 @@ version(posix) {
         return bytes_written, Error.Success;
     }
 
-    pub func spawn_process(args: [_]string, stdout: Handle, stderr: Handle) -> (Handle, Error) {
+    pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Handle, Error) {
         if (args.len < 1) {
             return NULL_HANDLE, Error.InvalidSpawnArgs;
         }

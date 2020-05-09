@@ -289,20 +289,14 @@ static bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
     case TOKEN_LBRACK: {
         parser_next(p, 1);
 
-        if (parser_peek(p, 0)->type == TOKEN_UNDERSCORE)
+        if (parser_peek(p, 0)->type == TOKEN_RBRACK)
         {
-            parser_next(p, 1);
             ast->type = AST_SLICE_TYPE;
         }
         else if (parser_peek(p, 0)->type == TOKEN_DYN)
         {
             parser_next(p, 1);
             ast->type = AST_DYNAMIC_ARRAY_TYPE;
-        }
-        else if (parser_peek(p, 0)->type == TOKEN_RBRACK)
-        {
-            ast->type = AST_ARRAY_TYPE;
-            ast->array_type.size = NULL;
         }
         else
         {

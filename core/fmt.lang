@@ -5,14 +5,14 @@ import os "core:os"
 import runtime "core:runtime"
 
 pub func print(str: string) {
-    var buf: [_]byte = void;
+    var buf: []byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stdout(), buf);
 }
 
 pub func eprint(str: string) {
-    var buf: [_]byte = void;
+    var buf: []byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stderr(), buf);

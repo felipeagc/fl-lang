@@ -11,8 +11,8 @@ pub typedef Builder struct {
 pub typedef Target struct {
     input: string,
     output: string,
-    link_with: [_]string,
-    library_paths: [_]string,
+    link_with: []string,
+    library_paths: []string,
     opt_level: u32,
 };
 

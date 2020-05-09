@@ -51,18 +51,18 @@ pub typedef TypeInfo struct {
             size: uint,
         },
         function: struct {
-            parameters: [_]*TypeInfo,
+            parameters: []*TypeInfo,
             return_type: *TypeInfo,
         },
         structure: struct {
-            fields: [_]*TypeInfo,
+            fields: []*TypeInfo,
             is_union: bool,
         },
         enumeration: struct {
             underlying_type: *TypeInfo,
         },
         tuple: struct {
-            fields: [_]*TypeInfo,
+            fields: []*TypeInfo,
         },
     },
 };

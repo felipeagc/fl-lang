@@ -13,7 +13,7 @@ func main() {
         var lower: uint = 1;
         var upper: uint = 3;
 
-        var my_slice: [_]i32 = my_array[lower..upper];
+        var my_slice: []i32 = my_array[lower..upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
@@ -36,7 +36,7 @@ func main() {
         var lower: u64 = 1;
         var upper: u64 = 3;
 
-        var my_slice: [_]i32 = my_array[lower..upper];
+        var my_slice: []i32 = my_array[lower..upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
@@ -60,12 +60,12 @@ func main() {
         my_array[2] = 3;
         my_array[3] = 4;
 
-        var old_slice: [_]i32 = my_array[1..4];
+        var old_slice: []i32 = my_array[1..4];
 
         var lower: u64 = 1;
         var upper: u64 = 3;
 
-        var my_slice: [_]i32 = my_array[1..4][lower..upper];
+        var my_slice: []i32 = my_array[1..4][lower..upper];
 
         if (my_slice.len != upper - lower) c.abort();
         if (my_slice[0] != 3) c.abort();
@@ -87,7 +87,7 @@ func main() {
 
         const const_array = [5]i32{1, 2, 3, 4, 5};
 
-        var my_slice: [_]i32 = const_array;
+        var my_slice: []i32 = const_array;
         for (var i: uint = 0; i < const_array.len; i += 1)
         {
             c.printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);

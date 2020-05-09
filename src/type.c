@@ -671,7 +671,7 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     }
 
     case TYPE_SLICE:
-        sb_append(sb, STR("[_]"));
+        sb_append(sb, STR("[]"));
         print_type_pretty_name(sb, type->array.sub);
         break;
 
@@ -692,13 +692,13 @@ static void print_type_pretty_name(StringBuilder *sb, TypeInfo *type)
     }
 
     case TYPE_TUPLE: {
-        sb_append(sb, STR("@Tuple{"));
+        sb_append(sb, STR("("));
         for (size_t i = 0; i < type->tuple.fields.len; ++i)
         {
             if (i > 0) sb_append(sb, STR(", "));
             print_type_pretty_name(sb, type->tuple.fields.ptr[i]);
         }
-        sb_append(sb, STR("}"));
+        sb_append(sb, STR(")"));
         break;
     }
 

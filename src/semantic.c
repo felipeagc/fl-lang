@@ -4516,9 +4516,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        if (ast->compound.type_expr->type == AST_ARRAY_TYPE &&
-            !ast->compound.type_expr->array_type.size)
+        if (ast->compound.type_expr->type == AST_SLICE_TYPE)
         {
+            ast->compound.type_expr->type = AST_ARRAY_TYPE;
+
             // Array compound with no size
             Token *tok = bump_alloc(&a->compiler->bump, sizeof(Token));
             memset(tok, 0, sizeof(Token));
@@ -4547,8 +4548,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         switch (ast->type_info->kind)
         {
-        case TYPE_VECTOR:
-        case TYPE_ARRAY: {
+        case TYPE_ARRAY:
+        case TYPE_VECTOR: {
             if ((ast->compound.values.len) != ast->type_info->array.size &&
                 (ast->compound.values.len) != 1 &&
                 (ast->compound.values.len) != 0)
@@ -4559,6 +4560,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     "compound literal has wrong number of values");
             }
 
+            // NOTE: fallthrough here
+
+        case TYPE_SLICE:
             if (ast->compound.is_named)
             {
                 compile_error(

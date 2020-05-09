@@ -25,7 +25,7 @@ func main() {
     }
 
     {
-        var arr = @make([_]i32, 10);
+        var arr = @make([]i32, 10);
         if (arr.len != 10) abort();
         if (!arr.ptr) abort();
 

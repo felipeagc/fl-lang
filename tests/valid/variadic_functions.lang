@@ -3,7 +3,7 @@ module main
 import fmt "core:fmt"
 
 func variadic3(numbers: ..i32) {
-    var my_slice: [_]i32 = numbers;
+    var my_slice: []i32 = numbers;
     variadic1(..my_slice);
 }
 
