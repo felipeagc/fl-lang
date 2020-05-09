@@ -2351,7 +2351,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 tuple_type->tuple.fields.ptr[binding->tuple_binding.index];
             binding->tuple_binding.decl = ast;
 
-            if (found != binding)
+            if (found && found != binding)
             {
                 if (!found->type_info)
                 {

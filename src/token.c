@@ -9,7 +9,6 @@ typedef enum TokenKind {
     TOKEN_HASH,
     TOKEN_SEMICOLON,
     TOKEN_COLON,
-    TOKEN_UNDERSCORE,
 
     TOKEN_ASTERISK,
     TOKEN_AMPERSAND,
@@ -132,7 +131,6 @@ static const char *token_strings[] = {
 
     [TOKEN_SEMICOLON] = ";",
     [TOKEN_COLON] = ":",
-    [TOKEN_UNDERSCORE] = "_",
 
     [TOKEN_ASTERISK] = "*",
     [TOKEN_AMPERSAND] = "&",

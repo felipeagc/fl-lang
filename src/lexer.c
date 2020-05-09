@@ -486,7 +486,9 @@ void lex_token(Lexer *l)
             {
                 tok.loc.length = 1;
                 lex_next(l, 1);
-                tok.type = TOKEN_UNDERSCORE;
+                tok.type = TOKEN_IDENT;
+                tok.str.ptr = NULL;
+                tok.str.len = 0;
                 break;
             }
 
