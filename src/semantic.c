@@ -307,6 +307,16 @@ static void instantiate_template(
         break;
     }
 
+    case AST_TUPLE_DECL: {
+        INSTANTIATE_ARRAY(tuple_decl.bindings);
+        INSTANTIATE_AST(tuple_decl.value_expr);
+        break;
+    }
+
+    case AST_TUPLE_BINDING: {
+        break;
+    }
+
     case AST_IF: {
         INSTANTIATE_AST(if_stmt.cond_expr);
         INSTANTIATE_AST(if_stmt.cond_stmt);
@@ -1629,6 +1639,8 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_TUPLE_DECL:
+    case AST_TUPLE_BINDING:
     case AST_TUPLE_LIT:
     case AST_TUPLE_TYPE:
     case AST_NOTHING:
@@ -1722,6 +1734,11 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
         }
 
         sym_name = ast->proc.name;
+        break;
+    }
+
+    case AST_TUPLE_BINDING: {
+        sym_name = ast->tuple_binding.name;
         break;
     }
 
@@ -1873,9 +1890,26 @@ static void register_symbol_ast(Analyzer *a, Ast *ast)
         {
             register_symbol_ast(a, ast->decl.type_expr);
         }
+
         if (ast->decl.value_expr)
         {
             register_symbol_ast(a, ast->decl.value_expr);
+        }
+        break;
+    }
+
+    case AST_TUPLE_DECL: {
+        for (Ast *binding = ast->tuple_decl.bindings.ptr;
+             binding !=
+             ast->tuple_decl.bindings.ptr + ast->tuple_decl.bindings.len;
+             ++binding)
+        {
+            register_symbol_ast_leaf(a, binding, ast);
+        }
+
+        if (ast->tuple_decl.value_expr)
+        {
+            register_symbol_ast(a, ast->tuple_decl.value_expr);
         }
         break;
     }
@@ -2269,6 +2303,51 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->type_info = ast->decl.value_expr->type_info;
             }
         }
+        break;
+    }
+
+    case AST_TUPLE_DECL: {
+        analyze_ast(a, ast->tuple_decl.value_expr, NULL);
+
+        if (!ast->tuple_decl.value_expr->type_info)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        TypeInfo *tuple_type = ast->tuple_decl.value_expr->type_info;
+        if (tuple_type->kind != TYPE_TUPLE)
+        {
+            compile_error(
+                a->compiler,
+                ast->tuple_decl.value_expr->loc,
+                "value is not a tuple");
+            break;
+        }
+
+        if (tuple_type->tuple.fields.len != ast->tuple_decl.bindings.len)
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "wrong number of tuple bindings, expected %zu, got %zu",
+                tuple_type->tuple.fields.len,
+                ast->tuple_decl.bindings.len);
+            break;
+        }
+
+        for (Ast *binding = ast->tuple_decl.bindings.ptr;
+             binding !=
+             ast->tuple_decl.bindings.ptr + ast->tuple_decl.bindings.len;
+             ++binding)
+        {
+            binding->type_info =
+                tuple_type->tuple.fields.ptr[binding->tuple_binding.index];
+            binding->tuple_binding.decl = ast;
+        }
+
+        ast->type_info = tuple_type;
+
         break;
     }
 
@@ -3015,6 +3094,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             switch (sym->type)
             {
+            case AST_TUPLE_BINDING:
             case AST_PROC_DECL:
             case AST_ENUM_FIELD:
             case AST_STRUCT_FIELD:
@@ -5471,6 +5551,13 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         }
         break;
     }
+
+    case AST_TUPLE_DECL: {
+        check_used_asts(a, ast->tuple_decl.value_expr);
+        break;
+    }
+
+    case AST_TUPLE_BINDING: break;
 
     case AST_WHILE: {
         check_used_asts(a, ast->while_stmt.cond);

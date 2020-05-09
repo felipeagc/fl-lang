@@ -93,6 +93,8 @@ typedef enum AstType {
     AST_VARIADIC_ARG,
     AST_TUPLE_TYPE,
     AST_TUPLE_LIT,
+    AST_TUPLE_DECL,
+    AST_TUPLE_BINDING,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -241,6 +243,18 @@ struct Ast
         {
             ArrayOfAst values;
         } tuple_lit;
+        struct
+        {
+            ArrayOfAst bindings;
+            struct Ast *value_expr;
+            AstValue value;
+        } tuple_decl;
+        struct
+        {
+            String name;
+            size_t index;
+            struct Ast *decl;
+        } tuple_binding;
         struct
         {
             struct Ast *type_expr;

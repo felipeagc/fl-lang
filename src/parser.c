@@ -1365,39 +1365,85 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
     case TOKEN_CONST: {
         Token *kind = parser_next(p, 1);
 
-        if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
-        if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
-
-        Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-        if (!ident_tok)
-            res = false;
-        else
-            ast->decl.name = ident_tok->str;
-
-        ast->decl.type_expr = NULL;
-        if (parser_peek(p, 0)->type == TOKEN_COLON)
+        if (kind->type == TOKEN_VAR && parser_peek(p, 0)->type == TOKEN_IDENT &&
+            parser_peek(p, 1)->type == TOKEN_COMMA)
         {
-            parser_next(p, 1);
+            ast->type = AST_TUPLE_DECL;
+            memset(&ast->tuple_decl, 0, sizeof(ast->tuple_decl));
 
-            ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
-        }
+            while (parser_peek(p, 0)->type != TOKEN_ASSIGN &&
+                   !parser_is_at_end(p, 0))
+            {
+                if (ast->tuple_decl.bindings.len > 0)
+                {
+                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
+                }
 
-        ast->decl.value_expr = NULL;
-        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
-        {
+                Ast binding = {0};
+
+                Token *binding_name = parser_consume(p, TOKEN_IDENT);
+                if (!binding_name)
+                {
+                    res = false;
+                    break;
+                }
+                else
+                {
+                    binding.tuple_binding.name = binding_name->str;
+                }
+
+                binding.type = AST_TUPLE_BINDING;
+                binding.tuple_binding.index = ast->tuple_decl.bindings.len;
+
+                array_push(&ast->tuple_decl.bindings, binding);
+            }
+
+            if (!res) break;
+
             if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
 
-            ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
-            if (!parse_expr(p, ast->decl.value_expr, false)) res = false;
+            ast->tuple_decl.value_expr =
+                bump_alloc(&p->compiler->bump, sizeof(Ast));
+            if (!parse_expr(p, ast->tuple_decl.value_expr, false)) res = false;
         }
-        else if (kind->type == TOKEN_CONST)
+        else
         {
-            // Constants must have initializers
-            compile_error(
-                p->compiler,
-                ident_tok->loc,
-                "constant declaration must have initializer");
+            if (kind->type == TOKEN_VAR) ast->type = AST_VAR_DECL;
+            if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
+
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (!ident_tok)
+                res = false;
+            else
+                ast->decl.name = ident_tok->str;
+
+            ast->decl.type_expr = NULL;
+            if (parser_peek(p, 0)->type == TOKEN_COLON)
+            {
+                parser_next(p, 1);
+
+                ast->decl.type_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
+            }
+
+            ast->decl.value_expr = NULL;
+            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            {
+                if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+
+                ast->decl.value_expr =
+                    bump_alloc(&p->compiler->bump, sizeof(Ast));
+                if (!parse_expr(p, ast->decl.value_expr, false)) res = false;
+            }
+            else if (kind->type == TOKEN_CONST)
+            {
+                // Constants must have initializers
+                compile_error(
+                    p->compiler,
+                    ident_tok->loc,
+                    "constant declaration must have initializer");
+            }
         }
 
         break;

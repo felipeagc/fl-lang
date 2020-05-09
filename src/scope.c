@@ -120,7 +120,7 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
             sym->type == AST_BUILTIN_VEC_ACCESS ||
             sym->type == AST_BUILTIN_CAP || sym->type == AST_BUILTIN_LEN ||
             sym->type == AST_BUILTIN_PTR || sym->type == AST_BUILTIN_MIN ||
-            sym->type == AST_BUILTIN_MAX)
+            sym->type == AST_BUILTIN_MAX || sym->type == AST_TUPLE_BINDING)
         {
             // These are always public
             return sym;

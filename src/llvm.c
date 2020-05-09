@@ -1494,6 +1494,11 @@ static void llvm_codegen_ast(
                 break;
             }
 
+            case AST_TUPLE_BINDING: {
+                llvm_codegen_ast(l, mod, sym, is_const, out_value);
+                break;
+            }
+
             case AST_ENUM_FIELD: {
                 llvm_codegen_ast(l, mod, sym, true, out_value);
                 break;
@@ -1611,9 +1616,19 @@ static void llvm_codegen_ast(
         if (is_type_compound(ast->type_info))
         {
             result_value.is_lvalue = true;
-            LLVMValueRef alloca = build_alloca(l, mod, ast->type_info);
-            LLVMBuildStore(mod->builder, result_value.value, alloca);
-            result_value.value = alloca;
+
+            if (out_value && out_value->value)
+            {
+                LLVMValueRef alloca = out_value->value;
+                LLVMBuildStore(mod->builder, result_value.value, alloca);
+                result_value.value = alloca;
+            }
+            else
+            {
+                LLVMValueRef alloca = build_alloca(l, mod, ast->type_info);
+                LLVMBuildStore(mod->builder, result_value.value, alloca);
+                result_value.value = alloca;
+            }
         }
 
         if (out_value) *out_value = result_value;
@@ -2332,6 +2347,31 @@ static void llvm_codegen_ast(
         }
 
         if (out_value) *out_value = ast->decl.value;
+
+        break;
+    }
+
+    case AST_TUPLE_DECL: {
+        ast->tuple_decl.value.is_lvalue = true;
+        ast->tuple_decl.value.value = build_alloca(l, mod, ast->type_info);
+
+        AstValue init_value = {0};
+        init_value.value = ast->tuple_decl.value.value;
+        llvm_codegen_ast(
+            l, mod, ast->tuple_decl.value_expr, false, &init_value);
+
+        LLVMValueRef to_store = NULL;
+        if (init_value.value != ast->tuple_decl.value.value)
+        {
+            to_store = load_val(mod, &init_value);
+        }
+
+        if (to_store)
+        {
+            LLVMBuildStore(mod->builder, to_store, ast->tuple_decl.value.value);
+        }
+
+        if (out_value) *out_value = ast->tuple_decl.value;
 
         break;
     }
@@ -4944,6 +4984,26 @@ static void llvm_codegen_ast(
     case AST_DEFER: {
         Scope *last_scope = *array_last(&l->scope_stack);
         array_push(&last_scope->deferred_stmts, ast->stmt);
+        break;
+    }
+
+    case AST_TUPLE_BINDING: {
+        Ast *tuple_decl = ast->tuple_binding.decl;
+        assert(tuple_decl);
+        assert(tuple_decl->type_info);
+        assert(tuple_decl->type_info->kind == TYPE_TUPLE);
+
+        AstValue tuple_val = tuple_decl->tuple_decl.value;
+        assert(tuple_val.value);
+        assert(tuple_val.is_lvalue);
+
+        AstValue field_value = {0};
+        field_value.is_lvalue = true;
+        field_value.value = LLVMBuildStructGEP(
+            mod->builder, tuple_val.value, ast->tuple_binding.index, "");
+
+        if (out_value) *out_value = field_value;
+
         break;
     }
 
