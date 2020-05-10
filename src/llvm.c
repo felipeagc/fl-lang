@@ -5320,6 +5320,19 @@ static void llvm_verify_module(LLContext *l)
     }
 }
 
+static void llvm_map_function(
+    LLContext *l, LLVMExecutionEngineRef engine, String name, void *func)
+{
+    Ast *found = NULL;
+    if (hash_get(&l->compiler->extern_symbols, name, (void **)&found))
+    {
+        if (found->value)
+        {
+            LLVMAddGlobalMapping(engine, found->value, func);
+        }
+    }
+}
+
 static void llvm_run_module(LLContext *l)
 {
     LLVMExecutionEngineRef engine;
@@ -5341,17 +5354,23 @@ static void llvm_run_module(LLContext *l)
         exit(EXIT_FAILURE);
     }
 
-    Ast *found = NULL;
-    if (hash_get(
-            &l->compiler->extern_symbols,
-            STR("compiler_api_compile"),
-            (void **)&found))
-    {
-        if (found->value)
-        {
-            LLVMAddGlobalMapping(engine, found->value, compiler_api_compile);
-        }
-    }
+    llvm_map_function(
+        l,
+        engine,
+        STR("compiler_api_create_compiler"),
+        (void *)compiler_api_create_compiler);
+    llvm_map_function(
+        l,
+        engine,
+        STR("compiler_api_destroy_compiler"),
+        (void *)compiler_api_destroy_compiler);
+    llvm_map_function(
+        l, engine, STR("compiler_api_compile"), (void *)compiler_api_compile);
+    llvm_map_function(
+        l,
+        engine,
+        STR("compiler_api_get_file_deps"),
+        (void *)compiler_api_get_file_deps);
 
     void (*main_func)() = (void (*)())LLVMGetFunctionAddress(engine, "main");
     if (main_func)

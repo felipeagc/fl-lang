@@ -15,7 +15,7 @@ typedef ARRAY_OF(char *) ArrayOfCharPtr;
         .len = strlen(lit),                                                    \
     })
 
-#define PRINT_STR(str) (int)str.len, str.ptr
+#define PRINT_STR(str) (int)(str).len, (str).ptr
 
 static inline bool string_equals(String a, String b)
 {

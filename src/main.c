@@ -118,6 +118,7 @@ int main(int argc, char **argv)
 
     char *absolute_path = get_absolute_path(in_path);
     String filepath = CSTR(absolute_path);
+
     compile_file_to_object(compiler, filepath);
 
     if (!compiler->args.should_run)

@@ -1,5 +1,7 @@
 module compiler
 
+pub typedef Compiler struct {};
+
 pub typedef Arguments struct {
     input: string,
     output: string,
@@ -8,5 +10,22 @@ pub typedef Arguments struct {
     opt_level: u32,
 };
 
+#[link_name="compiler_api_create_compiler"]
+pub extern func create(args: *Arguments) -> *Compiler;
+
+#[link_name="compiler_api_destroy_compiler"]
+pub extern func destroy(compiler: *Compiler);
+
 #[link_name="compiler_api_compile"]
-pub extern func compile(args: *Arguments);
+pub extern func compile(compiler: *Compiler);
+
+#[link_name="compiler_api_get_file_deps"]
+extern func get_deps(compiler: *Compiler, count: *uint, buf: *string);
+
+pub func get_deps_alloc(compiler: *Compiler) -> []string {
+    var result: []string;
+    get_deps(compiler, &result.len, null);
+    result.ptr = @alloc(@size_of(string) * result.len);
+    get_deps(compiler, &result.len, result.ptr);
+    return result;
+}

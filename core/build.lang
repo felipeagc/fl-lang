@@ -22,19 +22,35 @@ pub func add_target(builder: *Builder, target: *Target) {
 
 pub func build(builder: *Builder) {
     for (*target in builder.targets) {
-        var input_time, _ = os.last_write_time(target.input);
+        var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
+            input = target.input,
+            output = target.output,
+            link_with = target.link_with,
+            library_paths  = target.library_paths,
+            opt_level = target.opt_level,
+        });
+        defer compiler.destroy(comp);
+
         var output_time, _ = os.last_write_time(target.output);
 
-        if (input_time.sec >= output_time.sec) {
+        var deps = compiler.get_deps_alloc(comp);
+        defer @delete(&deps);
+
+        var should_recompile = false;
+
+        for (dep_path in deps) {
+            var input_time, _ = os.last_write_time(dep_path);
+            if (input_time.sec >= output_time.sec) {
+                should_recompile = true;
+                break;
+            }
+        }
+
+
+        if (should_recompile) {
             fmt.printf("=> Building target '%'\n", target.output);
 
-            compiler.compile(&compiler.Arguments{
-                input = target.input,
-                output = target.output,
-                link_with = target.link_with,
-                library_paths  = target.library_paths,
-                opt_level = target.opt_level,
-            });
+            compiler.compile(comp);
         } else {
             fmt.printf("=> '%' is up to date\n", target.output);
         }

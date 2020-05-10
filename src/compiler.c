@@ -205,11 +205,7 @@ static SourceFile *
 compiler_syntax_stage(Compiler *compiler, String absolute_path)
 {
     SourceFile *file = NULL;
-    if (hash_get(&compiler->files, absolute_path, (void **)&file))
-    {
-        assert(file);
-    }
-    else
+    if (!hash_get(&compiler->files, absolute_path, (void **)&file))
     {
         file = bump_alloc(&compiler->bump, sizeof(*file));
         source_file_init(file, compiler, absolute_path);
@@ -226,6 +222,7 @@ compiler_syntax_stage(Compiler *compiler, String absolute_path)
         file->root = parser->ast;
     }
 
+    assert(file);
     compiler_queue_imports(compiler, file, file->root);
 
     return file;

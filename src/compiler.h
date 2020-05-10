@@ -20,22 +20,24 @@ typedef struct SourceFile
 
 typedef ARRAY_OF(SourceFile *) ArrayOfSourceFilePtr;
 
-typedef struct SyntaxQueue {
+typedef struct SyntaxQueue
+{
     ArrayOfString buf;
     size_t consumed;
 } SyntaxQueue;
 
-static inline bool syntax_queue_is_empty(SyntaxQueue* syntax_queue)
+static inline bool syntax_queue_is_empty(SyntaxQueue *syntax_queue)
 {
     return syntax_queue->buf.len == syntax_queue->consumed;
 }
 
-static inline void syntax_queue_append(SyntaxQueue* syntax_queue, String abs_path)
+static inline void
+syntax_queue_append(SyntaxQueue *syntax_queue, String abs_path)
 {
     array_push(&syntax_queue->buf, abs_path);
 }
 
-static inline String syntax_queue_next(SyntaxQueue* syntax_queue)
+static inline String syntax_queue_next(SyntaxQueue *syntax_queue)
 {
     return syntax_queue->buf.ptr[syntax_queue->consumed++];
 }
@@ -156,4 +158,10 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path);
 
 typedef struct CompilerApiArguments CompilerApiArguments;
 
-static void compiler_api_compile(CompilerApiArguments *args);
+Compiler *compiler_api_create_compiler(CompilerApiArguments *args);
+
+void compiler_api_destroy_compiler(Compiler *compiler);
+
+void compiler_api_compile(Compiler *compiler);
+
+void compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf);

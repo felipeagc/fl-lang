@@ -38,12 +38,22 @@ compiler_api__convert_args(Compiler *compiler, CompilerApiArguments *args)
     }
 }
 
-static void compiler_api_compile(CompilerApiArguments *args)
+Compiler *compiler_api_create_compiler(CompilerApiArguments *args)
 {
     Compiler *compiler = malloc(sizeof(*compiler));
     compiler_init(compiler);
     compiler_api__convert_args(compiler, args);
+    return compiler;
+}
 
+void compiler_api_destroy_compiler(Compiler *compiler)
+{
+    compiler_destroy(compiler);
+    free(compiler);
+}
+
+void compiler_api_compile(Compiler *compiler)
+{
     assert(compiler->args.in_paths.len == 1);
     char *in_path = compiler->args.in_paths.ptr[0];
 
@@ -53,8 +63,46 @@ static void compiler_api_compile(CompilerApiArguments *args)
 
     compiler_link_module(
         compiler, &compiler->backend->mod, CSTR(compiler->args.out_path));
+}
 
-    compiler_destroy(compiler);
-    free(compiler);
+void
+compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
+{
+    assert(count);
+    *count = 0;
+
+    String first_path = CSTR(compiler->args.in_paths.ptr[0]);
+
+    SourceFile *main_file = compiler_syntax_stage(compiler, first_path);
+    if (buf)
+    {
+        buf[*count] = main_file->path;
+    }
+    (*count)++;
+
+    HashMap set = {0};
+    hash_init(&set, 32);
+
+    // Process all files
+    while (!syntax_queue_is_empty(&compiler->syntax_queue))
+    {
+        String abs_path = syntax_queue_next(&compiler->syntax_queue);
+
+        SourceFile *file = compiler_syntax_stage(compiler, abs_path);
+
+        if (hash_get(&set, file->path, NULL))
+        {
+            continue;
+        }
+
+        hash_set(&set, file->path, NULL);
+        if (buf)
+        {
+            buf[*count] = file->path;
+        }
+        (*count)++;
+    }
+
+    hash_destroy(&set);
 }
 
