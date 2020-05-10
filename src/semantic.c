@@ -1764,7 +1764,7 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
             (ast->type != AST_IMPORT))
         {
             String module_name = ast->loc.file->module_name;
-            Module *module = get_module(a->compiler, module_name);
+            Module *module = compiler_get_module(a->compiler, module_name);
 
             Ast *found = NULL;
             if (hash_get(&module->symbol_names, sym_name, (void **)&found))

@@ -1,29 +1,22 @@
-typedef struct SourceFile
+static void source_file_init(SourceFile *file, Compiler *compiler, String path)
 {
-    String path;
-    String module_name;
-    String content;
-    struct Ast *root;
-    struct Ast* main_function_ast;
-    bool did_codegen;
+    memset(file, 0, sizeof(*file));
 
-    LLVMMetadataRef di_file;
-    LLVMMetadataRef di_cu;
-} SourceFile;
+    file->path = bump_strdup(&compiler->bump, path);
 
-typedef struct Location
-{
-    SourceFile *file;
-    char *buf;
-    uint32_t length;
-    uint32_t line;
-    uint32_t col;
-} Location;
+    FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
+    if (!f)
+    {
+        fprintf(stderr, "Failed to open file: %.*s", PRINT_STR(file->path));
+        abort();
+    }
 
-typedef struct Error
-{
-    Location loc;
-    String message;
-} Error;
+    fseek(f, 0, SEEK_END);
+    file->content.len = (uint32_t)ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-typedef ARRAY_OF(Error) ArrayOfError;
+    file->content.ptr = malloc(file->content.len);
+    fread(file->content.ptr, 1, file->content.len, f);
+    fclose(f);
+}
+

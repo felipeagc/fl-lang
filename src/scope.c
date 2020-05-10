@@ -3,8 +3,6 @@ typedef enum ScopeType {
     SCOPE_INSTANCED,
 } ScopeType;
 
-typedef struct Scope Scope;
-
 typedef ARRAY_OF(Scope *) ArrayOfScopePtr;
 
 struct Scope

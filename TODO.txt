@@ -40,6 +40,11 @@ Safety:
 - null pointer dereference checking
 - bounds checking
 
+Build system:
+- work with relative directories
+- list all imported files
+- dedicated command in compiler
+
 Bugs:
 - Duplicate switch case values
 - Circular imports

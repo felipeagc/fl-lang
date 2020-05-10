@@ -22,8 +22,8 @@ pub func add_target(builder: *Builder, target: *Target) {
 
 pub func build(builder: *Builder) {
     for (*target in builder.targets) {
-        var input_time, err = os.last_write_time(target.input);
-        var output_time, err = os.last_write_time(target.output);
+        var input_time, _ = os.last_write_time(target.input);
+        var output_time, _ = os.last_write_time(target.output);
 
         if (input_time.sec >= output_time.sec) {
             fmt.printf("=> Building target '%'\n", target.output);

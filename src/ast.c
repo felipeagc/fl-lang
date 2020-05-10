@@ -139,8 +139,6 @@ typedef struct AstAttribute
     struct Ast *value;
 } AstAttribute;
 
-typedef struct Ast Ast;
-
 typedef ARRAY_OF(AstAttribute) ArrayOfAstAttribute;
 typedef ARRAY_OF(Ast) ArrayOfAst;
 typedef ARRAY_OF(Ast *) ArrayOfAstPtr;

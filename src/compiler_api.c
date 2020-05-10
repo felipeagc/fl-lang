@@ -8,7 +8,7 @@ struct CompilerApiArguments
 };
 
 static void
-compiler_api_convert_args(Compiler *compiler, CompilerApiArguments *args)
+compiler_api__convert_args(Compiler *compiler, CompilerApiArguments *args)
 {
     compiler->args.opt_level = args->opt_level;
 
@@ -42,16 +42,16 @@ static void compiler_api_compile(CompilerApiArguments *args)
 {
     Compiler *compiler = malloc(sizeof(*compiler));
     compiler_init(compiler);
-    compiler_api_convert_args(compiler, args);
+    compiler_api__convert_args(compiler, args);
 
     assert(compiler->args.in_paths.len == 1);
     char *in_path = compiler->args.in_paths.ptr[0];
 
     char *absolute_path = get_absolute_path(in_path);
     String filepath = CSTR(absolute_path);
-    compile_file(compiler, filepath);
+    compile_file_to_object(compiler, filepath);
 
-    link_module(
+    compiler_link_module(
         compiler, &compiler->backend->mod, CSTR(compiler->args.out_path));
 
     compiler_destroy(compiler);
