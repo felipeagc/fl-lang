@@ -91,6 +91,7 @@ static void compiler_init(Compiler *compiler)
         STR("runtime" LANG_FILE_EXTENSION));
     SourceFile *runtime_file =
         compiler_syntax_stage(compiler, runtime_abs_path);
+    compiler_semantic_stage(compiler, runtime_file);
     compiler->runtime_module = runtime_file->root;
 
     Ast *type_info_structure = get_symbol(
@@ -170,28 +171,34 @@ static void compiler_print_errors(Compiler *compiler)
     }
 }
 
-static void
-compiler_semantic_stage(Compiler *compiler, SourceFile *file, Ast *ast)
+static void compiler_semantic_stage(Compiler *compiler, SourceFile *file)
 {
+    if (file->did_semantic_analysis)
+    {
+        return;
+    }
+
     Analyzer *analyzer = bump_alloc(&compiler->bump, sizeof(*analyzer));
     memset(analyzer, 0, sizeof(*analyzer));
     analyzer->compiler = compiler;
 
-    create_scopes_ast(analyzer, ast);
+    create_scopes_ast(analyzer, file->root);
     compiler_print_errors(compiler);
 
-    compiler_process_imports(compiler, file, NULL, ast);
+    use_imported_scope(analyzer, file->root);
 
-    register_symbol_asts(analyzer, ast, 1);
+    register_symbol_asts(analyzer, file->root, 1);
     compiler_print_errors(compiler);
 
-    analyze_asts(analyzer, ast, 1);
+    analyze_asts(analyzer, file->root, 1);
     compiler_print_errors(compiler);
 
     if (file->main_function_ast)
     {
         check_used_asts(analyzer, file->main_function_ast);
     }
+
+    file->did_semantic_analysis = true;
 }
 
 static SourceFile *
@@ -201,30 +208,31 @@ compiler_syntax_stage(Compiler *compiler, String absolute_path)
     if (hash_get(&compiler->files, absolute_path, (void **)&file))
     {
         assert(file);
-        return file;
+    }
+    else
+    {
+        file = bump_alloc(&compiler->bump, sizeof(*file));
+        source_file_init(file, compiler, absolute_path);
+
+        hash_set(&compiler->files, absolute_path, file);
+
+        Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
+        lex_file(lexer, compiler, file);
+        compiler_print_errors(compiler);
+
+        Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
+        parse_file(parser, compiler, lexer);
+        compiler_print_errors(compiler);
+        file->root = parser->ast;
     }
 
-    file = bump_alloc(&compiler->bump, sizeof(*file));
-    source_file_init(file, compiler, absolute_path);
-
-    hash_set(&compiler->files, absolute_path, file);
-
-    Lexer *lexer = bump_alloc(&compiler->bump, sizeof(*lexer));
-    lex_file(lexer, compiler, file);
-    compiler_print_errors(compiler);
-
-    Parser *parser = bump_alloc(&compiler->bump, sizeof(*parser));
-    parse_file(parser, compiler, lexer);
-    compiler_print_errors(compiler);
-    file->root = parser->ast;
-
-    compiler_semantic_stage(compiler, file, parser->ast);
+    compiler_queue_imports(compiler, file, file->root);
 
     return file;
 }
 
-static void compiler_process_imports(
-    Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast)
+static void
+compiler_queue_imports(Compiler *compiler, SourceFile *file, Ast *ast)
 {
     switch (ast->type)
     {
@@ -287,29 +295,17 @@ static void compiler_process_imports(
             break;
         }
 
-        SourceFile *imported_file =
-            compiler_syntax_stage(compiler, ast->import.abs_path);
-
-        if (ast->import.name.ptr == NULL)
-        {
-            array_push(&scope->siblings, imported_file->root->scope);
-        }
+        syntax_queue_append(&compiler->syntax_queue, ast->import.abs_path);
 
         break;
     }
-    default: break;
-    }
 
-    // Analyze children ASTs
-    switch (ast->type)
-    {
-    case AST_BLOCK:
     case AST_ROOT: {
         for (Ast *stmt = ast->block.stmts.ptr;
              stmt != ast->block.stmts.ptr + ast->block.stmts.len;
              ++stmt)
         {
-            compiler_process_imports(compiler, file, ast->scope, stmt);
+            compiler_queue_imports(compiler, file, stmt);
         }
         break;
     }
@@ -322,33 +318,50 @@ static void compiler_process_imports(
                  ast->version_block.stmts.ptr + ast->version_block.stmts.len;
                  ++stmt)
             {
-                compiler_process_imports(compiler, file, scope, stmt);
+                compiler_queue_imports(compiler, file, stmt);
+            }
+        }
+        else
+        {
+            for (Ast *stmt = ast->version_block.else_stmts.ptr;
+                 stmt != ast->version_block.else_stmts.ptr +
+                             ast->version_block.else_stmts.len;
+                 ++stmt)
+            {
+                compiler_queue_imports(compiler, file, stmt);
             }
         }
 
         break;
     }
 
-    case AST_PROC_DECL: {
-        for (Ast *stmt = ast->proc.stmts.ptr;
-             stmt != ast->proc.stmts.ptr + ast->proc.stmts.len;
-             ++stmt)
-        {
-            compiler_process_imports(compiler, file, ast->scope, stmt);
-        }
-        break;
-    }
     default: break;
     }
 }
 
 static void compile_file_to_object(Compiler *compiler, String filepath)
 {
-    SourceFile *file = compiler_syntax_stage(compiler, filepath);
+    SourceFile *main_file = compiler_syntax_stage(compiler, filepath);
+    array_push(&compiler->semantic_queue, main_file);
+
+    // Process all files
+    while (!syntax_queue_is_empty(&compiler->syntax_queue))
+    {
+        String abs_path = syntax_queue_next(&compiler->syntax_queue);
+
+        SourceFile *file = compiler_syntax_stage(compiler, abs_path);
+        array_push(&compiler->semantic_queue, file);
+    }
+
+    while (compiler->semantic_queue.len > 0)
+    {
+        SourceFile *file = *array_pop(&compiler->semantic_queue);
+        compiler_semantic_stage(compiler, file);
+    }
 
     llvm_generate_runtime_variables(compiler->backend, &compiler->backend->mod);
 
-    llvm_codegen_file(compiler->backend, file);
+    llvm_codegen_file(compiler->backend, main_file);
 
     llvm_generate_runtime_functions(compiler->backend, &compiler->backend->mod);
 

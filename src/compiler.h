@@ -10,14 +10,35 @@ typedef struct SourceFile
     String module_name;
     String content;
     Ast *root;
-    Ast* main_function_ast;
+    Ast *main_function_ast;
     bool did_codegen;
+    bool did_semantic_analysis;
 
     LLVMMetadataRef di_file;
     LLVMMetadataRef di_cu;
 } SourceFile;
 
-typedef ARRAY_OF(SourceFile*) ArrayOfSourceFilePtr;
+typedef ARRAY_OF(SourceFile *) ArrayOfSourceFilePtr;
+
+typedef struct SyntaxQueue {
+    ArrayOfString buf;
+    size_t consumed;
+} SyntaxQueue;
+
+static inline bool syntax_queue_is_empty(SyntaxQueue* syntax_queue)
+{
+    return syntax_queue->buf.len == syntax_queue->consumed;
+}
+
+static inline void syntax_queue_append(SyntaxQueue* syntax_queue, String abs_path)
+{
+    array_push(&syntax_queue->buf, abs_path);
+}
+
+static inline String syntax_queue_next(SyntaxQueue* syntax_queue)
+{
+    return syntax_queue->buf.ptr[syntax_queue->consumed++];
+}
 
 typedef struct Location
 {
@@ -45,6 +66,9 @@ typedef struct Compiler
 {
     BumpAlloc bump;
     StringBuilder sb;
+
+    SyntaxQueue syntax_queue;
+    ArrayOfSourceFilePtr semantic_queue;
 
     ArrayOfError errors;
     HashMap files;
@@ -115,16 +139,16 @@ static void compile_file_to_object(Compiler *compiler, String filepath);
 
 static Module *compiler_get_module(Compiler *compiler, String module_name);
 
-static SourceFile *compiler_syntax_stage(Compiler *compiler, String absolute_path);
+static SourceFile *
+compiler_syntax_stage(Compiler *compiler, String absolute_path);
 
-static void compiler_semantic_stage(Compiler *compiler, SourceFile *file, Ast *ast);
+static void compiler_semantic_stage(Compiler *compiler, SourceFile *file);
 
-static void compiler_process_imports(
-    Compiler *compiler, SourceFile *file, Scope *scope, Ast *ast);
+static void
+compiler_queue_imports(Compiler *compiler, SourceFile *file, Ast *ast);
 
 static void
 compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path);
-
 
 /*
  * Compiler API

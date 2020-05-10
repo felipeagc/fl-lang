@@ -1271,6 +1271,7 @@ static Scope *get_expr_scope(Compiler *compiler, Scope *scope, Ast *ast)
                     &compiler->files, aliased->import.abs_path, (void **)&file))
             {
                 assert(file);
+                assert(file->root->scope);
                 accessed_scope = file->root->scope;
             }
             break;
@@ -5647,5 +5648,68 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         assert(0);
         break;
     }
+    }
+}
+
+static void use_imported_scope(Analyzer *a, Ast *ast)
+{
+    switch (ast->type)
+    {
+    case AST_IMPORT: {
+        assert(ast->import.abs_path.ptr);
+
+        SourceFile *imported_file = NULL;
+        bool found = hash_get(
+            &a->compiler->files, ast->import.abs_path, (void **)&imported_file);
+        assert(found);
+
+        if (ast->import.name.ptr == NULL)
+        {
+            Scope *scope = *array_last(&a->scope_stack);
+            assert(scope);
+            array_push(&scope->siblings, imported_file->root->scope);
+        }
+
+        break;
+    }
+
+    case AST_ROOT: {
+        array_push(&a->scope_stack, ast->scope);
+        for (Ast *stmt = ast->block.stmts.ptr;
+             stmt != ast->block.stmts.ptr + ast->block.stmts.len;
+             ++stmt)
+        {
+            use_imported_scope(a, stmt);
+        }
+        array_pop(&a->scope_stack);
+        break;
+    }
+
+    case AST_VERSION_BLOCK: {
+        if (compiler_has_version(a->compiler, ast->version_block.version))
+        {
+            for (Ast *stmt = ast->version_block.stmts.ptr;
+                 stmt !=
+                 ast->version_block.stmts.ptr + ast->version_block.stmts.len;
+                 ++stmt)
+            {
+                use_imported_scope(a, stmt);
+            }
+        }
+        else
+        {
+            for (Ast *stmt = ast->version_block.else_stmts.ptr;
+                 stmt !=
+                 ast->version_block.else_stmts.ptr + ast->version_block.else_stmts.len;
+                 ++stmt)
+            {
+                use_imported_scope(a, stmt);
+            }
+        }
+
+        break;
+    }
+
+    default: break;
     }
 }
