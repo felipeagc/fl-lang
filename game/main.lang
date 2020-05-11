@@ -24,6 +24,13 @@ func main() {
 
     var should_close = false;
 
+    const a = embed("test.txt");
+    fmt.printf("%\n", a.len);
+
+    for (b in a) {
+        fmt.printf("%\n", b);
+    }
+
     while (!should_close) {
         var e: sdl.Event;
         while (sdl.PollEvent(&e)) {

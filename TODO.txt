@@ -23,7 +23,6 @@ TODO:
 - @memset, @memcmp
 
 Small things:
-- import files as byte arrays
 - multiline string literal
 
 Essential things for writing applications:

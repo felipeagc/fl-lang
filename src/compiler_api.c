@@ -70,18 +70,28 @@ void compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
     assert(count);
     *count = 0;
 
+    HashMap set = {0};
+    hash_init(&set, 32);
+
     char *c_first_path = get_absolute_path(compiler->args.in_paths.ptr[0]);
     String first_path = CSTR(c_first_path);
 
     SourceFile *main_file = compiler_syntax_stage(compiler, first_path);
-    if (buf)
-    {
-        buf[*count] = main_file->path;
-    }
+    hash_set(&set, main_file->path, NULL);
+    if (buf) buf[*count] = main_file->path;
     (*count)++;
 
-    HashMap set = {0};
-    hash_init(&set, 32);
+    for (String *embed_dep = main_file->embed_dependencies.ptr;
+         embed_dep !=
+         main_file->embed_dependencies.ptr + main_file->embed_dependencies.len;
+         ++embed_dep)
+    {
+        if (hash_get(&set, *embed_dep, NULL)) continue;
+
+        hash_set(&set, *embed_dep, NULL);
+        if (buf) buf[*count] = *embed_dep;
+        (*count)++;
+    }
 
     // Process all files
     while (!syntax_queue_is_empty(&compiler->syntax_queue))
@@ -90,16 +100,22 @@ void compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
 
         SourceFile *file = compiler_syntax_stage(compiler, abs_path);
 
-        if (hash_get(&set, file->path, NULL))
+        for (String *embed_dep = file->embed_dependencies.ptr;
+             embed_dep !=
+             file->embed_dependencies.ptr + file->embed_dependencies.len;
+             ++embed_dep)
         {
-            continue;
+            if (hash_get(&set, *embed_dep, NULL)) continue;
+
+            hash_set(&set, *embed_dep, NULL);
+            if (buf) buf[*count] = *embed_dep;
+            (*count)++;
         }
 
+        if (hash_get(&set, file->path, NULL)) continue;
+
         hash_set(&set, file->path, NULL);
-        if (buf)
-        {
-            buf[*count] = file->path;
-        }
+        if (buf) buf[*count] = file->path;
         (*count)++;
     }
 

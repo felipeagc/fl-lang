@@ -92,6 +92,7 @@ typedef enum AstType {
     AST_TUPLE_LIT,
     AST_TUPLE_DECL,
     AST_TUPLE_BINDING,
+    AST_EMBED,
 
     AST_BUILTIN_LEN,
     AST_BUILTIN_PTR,
@@ -361,5 +362,10 @@ struct Ast
         {
             size_t position;
         } vec_access;
+        struct
+        {
+            String path;
+            String abs_path;
+        } embed;
     };
 };

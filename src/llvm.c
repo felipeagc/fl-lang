@@ -2089,6 +2089,80 @@ static void llvm_codegen_ast(
         break;
     }
 
+    case AST_EMBED: {
+        char *c_path = bump_c_str(&l->compiler->bump, ast->embed.abs_path);
+        FILE *f = fopen(c_path, "rb");
+        assert(f);
+
+        fseek(f, 0, SEEK_END);
+        size_t size = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        char *buf = malloc(size);
+        fread(buf, 1, size, f);
+
+        fclose(f);
+
+        LLVMValueRef indices[2];
+
+        LLVMValueRef glob =
+            LLVMAddGlobal(mod->mod, LLVMArrayType(LLVMInt8Type(), size), "");
+        LLVMSetLinkage(glob, LLVMInternalLinkage);
+        LLVMSetGlobalConstant(glob, true);
+        LLVMSetInitializer(glob, LLVMConstString(buf, size, true));
+
+        indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+        indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+
+        LLVMValueRef ptr = LLVMConstGEP(glob, indices, 2);
+        LLVMValueRef len =
+            LLVMConstInt(llvm_type(l, l->compiler->uint_type), size, false);
+
+        if (!is_const)
+        {
+            AstValue result_value = {0};
+            result_value.is_lvalue = true;
+            if (out_value && out_value->value)
+            {
+                result_value.value = out_value->value;
+            }
+            else
+            {
+                result_value.value = build_alloca(l, mod, ast->type_info);
+            }
+
+            {
+                indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+                indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
+
+                LLVMValueRef ptr_ptr = LLVMBuildGEP(
+                    mod->builder, result_value.value, indices, 2, "");
+                LLVMBuildStore(mod->builder, ptr, ptr_ptr);
+            }
+
+            {
+                indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
+                indices[1] = LLVMConstInt(LLVMInt32Type(), 1, false);
+
+                LLVMValueRef len_ptr = LLVMBuildGEP(
+                    mod->builder, result_value.value, indices, 2, "");
+                LLVMBuildStore(mod->builder, len, len_ptr);
+            }
+
+            if (out_value) *out_value = result_value;
+        }
+        else
+        {
+            AstValue result_value = {0};
+            LLVMValueRef values[2] = {ptr, len};
+            result_value.value = LLVMConstStruct(values, 2, false);
+
+            if (out_value) *out_value = result_value;
+        }
+
+        break;
+    }
+
     case AST_EXPR_STMT: {
         llvm_codegen_ast(l, mod, ast->expr, false, NULL);
         break;

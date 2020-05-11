@@ -14,6 +14,8 @@ typedef struct SourceFile
     bool did_codegen;
     bool did_semantic_analysis;
 
+    ArrayOfString embed_dependencies;
+
     LLVMMetadataRef di_file;
     LLVMMetadataRef di_cu;
 } SourceFile;

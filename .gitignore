@@ -2,7 +2,7 @@
 /bindgen
 /examples/ray
 /examples/table
-/examples/sdl_game
+/game/game
 *.dSYM
 tags
 *.dll

@@ -452,6 +452,67 @@ static bool parse_intrinsic_call(Parser *p, Ast *ast, bool parsing_type)
         {
             ast->intrinsic_call.type = INTRINSIC_APPEND;
         }
+        else if (string_equals(intrin_name, STR("embed")))
+        {
+            if (parser_peek(p, 1)->type == TOKEN_LPAREN &&
+                parser_peek(p, 2)->type == TOKEN_STRING_LIT &&
+                parser_peek(p, 3)->type == TOKEN_RPAREN)
+            {
+                ast->type = AST_EMBED;
+                if (!parser_consume(p, TOKEN_IDENT))
+                {
+                    res = false;
+                    return res;
+                }
+                if (!parser_consume(p, TOKEN_LPAREN))
+                {
+                    res = false;
+                    return res;
+                }
+
+                Token *path_token = parser_consume(p, TOKEN_STRING_LIT);
+                if (path_token)
+                {
+                    assert(ast->loc.file);
+
+                    char *dir = get_path_dir(
+                        bump_c_str(&p->compiler->bump, ast->loc.file->path));
+                    char *buf =
+                        malloc(strlen(dir) + 1 + path_token->str.len + 1);
+                    sprintf(buf, "%s%.*s", dir, PRINT_STR(path_token->str));
+
+                    ast->embed.path = path_token->str;
+                    ast->embed.abs_path = CSTR(buf);
+
+                    // Add dependency
+                    array_push(
+                        &ast->loc.file->embed_dependencies,
+                        ast->embed.abs_path);
+
+                    assert(res);
+
+                    assert(ast->type == AST_EMBED);
+                    if (!parser_consume(p, TOKEN_RPAREN))
+                    {
+                        res = false;
+                        return res;
+                    }
+                    return res;
+                }
+                else
+                {
+                    res = false;
+                    return res;
+                }
+            }
+            else
+            {
+                compile_error(
+                    p->compiler, parser_peek(p, 0)->loc, "invalid embed call");
+            }
+
+            return res;
+        }
         else
         {
             return parse_access(p, ast, parsing_type);

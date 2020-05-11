@@ -358,6 +358,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_EMBED:
     case AST_NOTHING:
     case AST_TYPE:
     case AST_BUILTIN_LEN:
@@ -429,6 +430,8 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         }
         break;
     }
+
+    case AST_EMBED: res = true; break;
 
     case AST_UNARY_EXPR: {
         switch (ast->unop.type)
@@ -1623,6 +1626,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_EMBED:
     case AST_TUPLE_DECL:
     case AST_TUPLE_BINDING:
     case AST_TUPLE_LIT:
@@ -3644,7 +3648,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
-                    a->compiler, ast->loc, "@size_of takes 1 parameter");
+                    a->compiler, ast->loc, "'size_of' takes 1 parameter");
                 break;
             }
 
@@ -3663,7 +3667,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "@size_of does not apply for this type");
+                    "'size_of' does not apply for this type");
                 break;
             }
 
@@ -3676,7 +3680,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
-                    a->compiler, ast->loc, "@align_of takes 1 parameter");
+                    a->compiler, ast->loc, "'align_of' takes 1 parameter");
                 break;
             }
 
@@ -3695,7 +3699,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "@align_of does not apply for this type");
+                    "'align_of' does not apply for this type");
                 break;
             }
 
@@ -3708,7 +3712,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
-                    a->compiler, ast->loc, "@type_info_of takes 1 parameter");
+                    a->compiler, ast->loc, "'type_info_of' takes 1 parameter");
                 break;
             }
 
@@ -3726,7 +3730,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     param->loc,
-                    "@type_info_of takes a type as a parameter");
+                    "'type_info_of' takes a type as a parameter");
                 break;
             }
 
@@ -3785,7 +3789,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "@realloc takes a pointer as the first parameter");
+                    "'realloc' takes a pointer as the first parameter");
                 break;
             }
 
@@ -3817,7 +3821,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "@dealloc takes a pointer as a parameter");
+                    "'dealloc' takes a pointer as a parameter");
                 break;
             }
 
@@ -3854,7 +3858,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->intrinsic_call.params.len != 3)
             {
                 compile_error(
-                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
+                    a->compiler, ast->loc, "intrinsic takes 2 or 3 parameters");
                 break;
             }
 
@@ -3892,7 +3896,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     compile_error(
                         a->compiler,
                         cap->loc,
-                        "@make only supports capacity for dynamic arrays");
+                        "'make' only supports capacity for dynamic arrays");
                 }
                 break;
             }
@@ -3901,7 +3905,9 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
             default: {
                 compile_error(
-                    a->compiler, type->loc, "@make does not support this type");
+                    a->compiler,
+                    type->loc,
+                    "'make' does not support this type");
                 break;
             }
             }
@@ -3933,7 +3939,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     value->loc,
-                    "@delete takes a pointer to a slice or a dynamic array");
+                    "'delete' takes a pointer to a slice or a dynamic array");
                 break;
             }
 
@@ -3960,7 +3966,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             if (ast->intrinsic_call.params.len != 2)
             {
                 compile_error(
-                    a->compiler, ast->loc, "intrinsic takes 1 parameters");
+                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
                 break;
             }
 
@@ -3979,7 +3985,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     array->loc,
-                    "@append takes a pointer to a slice or a dynamic array");
+                    "'append' takes a pointer to a slice or a dynamic array");
                 break;
             }
 
@@ -3997,6 +4003,23 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
         }
+
+        break;
+    }
+
+    case AST_EMBED: {
+        char *c_path = bump_c_str(&a->compiler->bump, ast->embed.abs_path);
+        if (!file_exists(c_path))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "embedded file does not exist: '%.*s'",
+                PRINT_STR(ast->embed.path));
+            break;
+        }
+
+        ast->type_info = create_slice_type(a->compiler, a->compiler->u8_type);
 
         break;
     }
@@ -5567,6 +5590,7 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_EMBED:
     case AST_NOTHING:
     case AST_TYPE:
     case AST_BUILTIN_LEN:
