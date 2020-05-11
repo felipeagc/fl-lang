@@ -33,9 +33,6 @@ typedef enum BinOpType {
 typedef enum IntrinsicType {
     INTRINSIC_SIZE_OF,
     INTRINSIC_ALIGN_OF,
-    INTRINSIC_SQRT,
-    INTRINSIC_SIN,
-    INTRINSIC_COS,
     INTRINSIC_VECTOR_TYPE,
     INTRINSIC_TYPE_INFO_OF,
     INTRINSIC_ALLOC,

@@ -1,0 +1,57 @@
+module math
+
+// Float functions
+
+pub extern func fabsf(_: float) -> float;
+pub extern func expf(_: float) -> float;
+pub extern func logf(_: float) -> float;
+pub extern func powf(base: float, exponent: float) -> float;
+pub extern func sqrtf(_: float) -> float;
+pub extern func sinf(_: float) -> float;
+pub extern func cosf(_: float) -> float;
+pub extern func tanf(_: float) -> float;
+pub extern func asinf(_: float) -> float;
+pub extern func acosf(_: float) -> float;
+pub extern func atanf(_: float) -> float;
+pub extern func sinhf(_: float) -> float;
+pub extern func coshf(_: float) -> float;
+pub extern func tanhf(_: float) -> float;
+pub extern func asinhf(_: float) -> float;
+pub extern func acoshf(_: float) -> float;
+pub extern func atanhf(_: float) -> float;
+
+pub extern func atan2f(y: float, x: float) -> float;
+pub extern func log10f(_: float) -> float;
+pub extern func log2f(_: float) -> float;
+pub extern func fmodf(x: float, y: float) -> float;
+pub extern func floorf(_: float) -> float;
+pub extern func ceilf(_: float) -> float;
+pub extern func truncf(_: float) -> float;
+
+// Double functions
+
+pub extern func fabs(_: double) -> double;
+pub extern func exp(_: double) -> double;
+pub extern func log(_: double) -> double;
+pub extern func pow(base: double, exponent: double) -> double;
+pub extern func sqrt(_: double) -> double;
+pub extern func sin(_: double) -> double;
+pub extern func cos(_: double) -> double;
+pub extern func tan(_: double) -> double;
+pub extern func asin(_: double) -> double;
+pub extern func acos(_: double) -> double;
+pub extern func atan(_: double) -> double;
+pub extern func sinh(_: double) -> double;
+pub extern func cosh(_: double) -> double;
+pub extern func tanh(_: double) -> double;
+pub extern func asinh(_: double) -> double;
+pub extern func acosh(_: double) -> double;
+pub extern func atanh(_: double) -> double;
+
+pub extern func atan2(y: double, x: double) -> double;
+pub extern func log10(_: double) -> double;
+pub extern func log2(_: double) -> double;
+pub extern func fmod(x: double, y: double) -> double;
+pub extern func floor(_: double) -> double;
+pub extern func ceil(_: double) -> double;
+pub extern func trunc(_: double) -> double;

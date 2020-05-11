@@ -418,10 +418,6 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
 
         case INTRINSIC_TYPE_INFO_OF: res = false; break;
 
-        case INTRINSIC_SQRT:
-        case INTRINSIC_COS:
-        case INTRINSIC_SIN: res = false; break;
-
         case INTRINSIC_VECTOR_TYPE: res = true; break;
 
         case INTRINSIC_APPEND:
@@ -3750,40 +3746,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             ast->type_info = a->compiler->type_info_type;
 
             add_rtti_type_info(a->compiler, param->as_type);
-
-            break;
-        }
-
-        case INTRINSIC_COS:
-        case INTRINSIC_SIN:
-        case INTRINSIC_SQRT: {
-            if (ast->intrinsic_call.params.len != 1)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "intrinsic takes one parameter");
-
-                break;
-            }
-
-            Ast *param = &ast->intrinsic_call.params.ptr[0];
-            analyze_ast(a, param, NULL);
-
-            if (!param->type_info)
-            {
-                assert(a->compiler->errors.len > 0);
-                break;
-            }
-
-            if (param->type_info->kind != TYPE_FLOAT)
-            {
-                compile_error(
-                    a->compiler,
-                    param->loc,
-                    "intrinsic does not apply for this type");
-                break;
-            }
-
-            ast->type_info = param->type_info;
 
             break;
         }

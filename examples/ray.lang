@@ -1,6 +1,7 @@
 module main
 
 import "core:c"
+import "core:math"
 
 typedef Vec3 @vector_type(float, 3);
 
@@ -20,7 +21,7 @@ func v3_cross(u: Vec3, v: Vec3) -> Vec3 {
 
 #[inline]
 func v3_length(u: Vec3) -> float {
-    return @sqrt(v3_dot(u, u));
+    return math.sqrtf(v3_dot(u, u));
 }
 
 #[inline]
@@ -53,7 +54,7 @@ func hit_sphere(center: Vec3, radius: float, ray: Ray) -> float {
         return -1;
     }
 
-    return (-half_b - @sqrt(discriminant)) / a;
+    return (-half_b - math.sqrtf(discriminant)) / a;
 }
 
 func ray_color(ray: Ray) -> Vec3 {

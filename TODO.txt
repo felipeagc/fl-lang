@@ -12,6 +12,7 @@ General constant expression evaluator
 Static assert
 
 "Methods" (functions associated with a type)
+Explicit overloading
 
 TODO:
 - compiler API
@@ -39,6 +40,14 @@ Standard library:
 Safety:
 - null pointer dereference checking
 - bounds checking
+
+Syntax changes:
+- paren-less if, while, for, version
+- version takes a string
+- function calling convention
+- @-less intrinsics
+- new vector type syntax: <2>float maybe?
+- no semicolon needed after typedef?
 
 Bugs:
 - Duplicate switch case values

@@ -161,18 +161,6 @@ static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
             }
-            else if (string_equals(expr.primary.tok->str, STR("sqrt")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SQRT;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("sin")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SIN;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("cos")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_COS;
-            }
             else if (string_equals(expr.primary.tok->str, STR("vector_type")))
             {
                 ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
