@@ -221,6 +221,12 @@ static bool parse_array_type(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_RBRACK)) res = false;
 
+        if (ast->array_type.size && parser_peek(p, 0)->type == TOKEN_ARROW)
+        {
+            ast->type = AST_VECTOR_TYPE;
+            parser_next(p, 1);
+        }
+
         Ast sub = {0};
         if (parse_expr(p, &sub, true))
         {
@@ -413,10 +419,6 @@ static bool parse_intrinsic_call(Parser *p, Ast *ast, bool parsing_type)
         else if (string_equals(intrin_name, STR("align_of")))
         {
             ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
-        }
-        else if (string_equals(intrin_name, STR("vector_type")))
-        {
-            ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
         }
         else if (string_equals(intrin_name, STR("type_info_of")))
         {

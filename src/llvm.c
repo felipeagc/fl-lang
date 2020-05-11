@@ -2084,8 +2084,6 @@ static void llvm_codegen_ast(
 
             break;
         }
-
-        case INTRINSIC_VECTOR_TYPE: break;
         }
 
         break;

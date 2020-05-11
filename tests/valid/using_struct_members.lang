@@ -13,7 +13,7 @@ typedef Sub struct {
 
 typedef Struct struct {
     using sub: Sub,
-    using vec: vector_type(float, 3),
+    using vec: [3]->float,
     field: i32,
 };
 

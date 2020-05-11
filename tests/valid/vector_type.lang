@@ -2,7 +2,7 @@ module main
 
 import "core:c"
 
-typedef Vec3 vector_type(float, 3);
+typedef Vec3 [3]->float;
 
 const a = Vec3{50} + 5;
 

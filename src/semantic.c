@@ -255,6 +255,7 @@ static void instantiate_template(
         break;
     }
 
+    case AST_VECTOR_TYPE:
     case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE:
     case AST_ARRAY_TYPE: {
@@ -417,8 +418,6 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         case INTRINSIC_ALIGN_OF: res = true; break;
 
         case INTRINSIC_TYPE_INFO_OF: res = false; break;
-
-        case INTRINSIC_VECTOR_TYPE: res = true; break;
 
         case INTRINSIC_APPEND:
         case INTRINSIC_MAKE:
@@ -958,6 +957,30 @@ static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
         break;
     }
 
+    case AST_VECTOR_TYPE: {
+        if (!ast->array_type.size) break;
+
+        int64_t size = 0;
+        bool resolves = resolve_expr_int(a, scope, ast->array_type.size, &size);
+
+        if (!ast_as_type(a, scope, ast->array_type.sub, NULL)) break;
+
+        if (!resolves)
+        {
+            break;
+        }
+
+        if (resolves && size < 0)
+        {
+            break;
+        }
+
+        ast->as_type =
+            create_vector_type(a->compiler, ast->array_type.sub->as_type, size);
+
+        break;
+    }
+
     case AST_VARIADIC_ARG: {
         if (!ast_as_type(a, scope, ast->expr, NULL)) break;
 
@@ -1139,35 +1162,6 @@ static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
             proc_type->file = ast->loc.file;
             ast->as_type = create_pointer_type(a->compiler, proc_type);
         }
-        break;
-    }
-
-    case AST_INTRINSIC_CALL: {
-
-        switch (ast->intrinsic_call.type)
-        {
-        case INTRINSIC_VECTOR_TYPE: {
-            if (ast->intrinsic_call.params.len != 2) break;
-
-            Ast *elem_type = &ast->intrinsic_call.params.ptr[0];
-            Ast *vec_width = &ast->intrinsic_call.params.ptr[1];
-
-            ast_as_type(a, scope, elem_type, NULL);
-            if (!elem_type->as_type) break;
-
-            int64_t width;
-            if (!resolve_expr_int(a, scope, vec_width, &width)) break;
-            if (width <= 0) break;
-
-            ast->as_type = create_vector_type(
-                a->compiler, elem_type->as_type, (size_t)width);
-
-            break;
-        }
-
-        default: break;
-        }
-
         break;
     }
 
@@ -1655,6 +1649,7 @@ static void create_scopes_ast(Analyzer *a, Ast *ast)
     case AST_ARRAY_TYPE:
     case AST_SLICE_TYPE:
     case AST_DYNAMIC_ARRAY_TYPE:
+    case AST_VECTOR_TYPE:
     case AST_EXPR_STMT:
     case AST_ACCESS:
     case AST_PROC_PARAM:
@@ -3743,46 +3738,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        case INTRINSIC_VECTOR_TYPE: {
-            if (ast->intrinsic_call.params.len != 2)
-            {
-                compile_error(
-                    a->compiler, ast->loc, "intrinsic takes 2 parameters");
-
-                break;
-            }
-
-            Ast *elem_type = &ast->intrinsic_call.params.ptr[0];
-            Ast *vec_width = &ast->intrinsic_call.params.ptr[1];
-            analyze_ast(a, elem_type, a->compiler->type_type);
-            analyze_ast(a, vec_width, a->compiler->uint_type);
-
-            if (!elem_type->type_info || !vec_width->type_info)
-            {
-                assert(a->compiler->errors.len > 0);
-                break;
-            }
-
-            if (!elem_type->as_type)
-            {
-                assert(a->compiler->errors.len > 0);
-                break;
-            }
-
-            if (elem_type->as_type->kind != TYPE_FLOAT)
-            {
-                compile_error(
-                    a->compiler,
-                    elem_type->loc,
-                    "intrinsic does not apply for this type");
-                break;
-            }
-
-            ast->type_info = a->compiler->type_type;
-
-            break;
-        }
-
         case INTRINSIC_ALLOC: {
             if (ast->intrinsic_call.params.len != 1)
             {
@@ -4830,6 +4785,38 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         break;
     }
 
+    case AST_VECTOR_TYPE: {
+        Ast *elem_type = ast->array_type.sub;
+        Ast *vec_width = ast->array_type.size;
+        analyze_ast(a, elem_type, a->compiler->type_type);
+        analyze_ast(a, vec_width, a->compiler->uint_type);
+
+        if (!elem_type->type_info || !vec_width->type_info)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        if (!elem_type->as_type)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        if (elem_type->as_type->kind != TYPE_FLOAT)
+        {
+            compile_error(
+                a->compiler,
+                elem_type->loc,
+                "can only create vectors of floats");
+            break;
+        }
+
+        ast->type_info = a->compiler->type_type;
+
+        break;
+    }
+
     case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE: {
         ast->type_info = a->compiler->type_type;
@@ -5448,6 +5435,7 @@ static void check_used_asts(Analyzer *a, Ast *ast)
         break;
     }
 
+    case AST_VECTOR_TYPE:
     case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE:
     case AST_ARRAY_TYPE: {
