@@ -45,7 +45,6 @@ Syntax changes:
 - paren-less if, while, for, version
 - version takes a string
 - function calling convention
-- @-less intrinsics
 - new vector type syntax: <2>float maybe?
 - no semicolon needed after typedef?
 

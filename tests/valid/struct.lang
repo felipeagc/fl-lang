@@ -52,15 +52,15 @@ func main() {
     printf(c"nested.name = %s\n", nested.name);
     print_nested(&nested);
 
-    printf(c"@size_of(NestedStruct) = %lu\n", @size_of(NestedStruct));
-    printf(c"@size_of(nested) = %lu\n", @size_of(nested));
-    printf(c"@align_of(NestedStruct) = %lu\n", @align_of(NestedStruct));
-    printf(c"@align_of(nested) = %lu\n", @align_of(nested));
+    printf(c"size_of(NestedStruct) = %lu\n", size_of(NestedStruct));
+    printf(c"size_of(nested) = %lu\n", size_of(nested));
+    printf(c"align_of(NestedStruct) = %lu\n", align_of(NestedStruct));
+    printf(c"align_of(nested) = %lu\n", align_of(nested));
 
-    var ptr: *NestedStruct = malloc(@size_of(ptr.*));
+    var ptr: *NestedStruct = malloc(size_of(ptr.*));
     free(ptr);
 
-    printf(c"@size_of(*ptr) = %lu\n", @size_of(ptr.*));
+    printf(c"size_of(*ptr) = %lu\n", size_of(ptr.*));
 
     var my_u32: u32 = 123;
     printf(c"my_u32 = %u\n", my_u32);

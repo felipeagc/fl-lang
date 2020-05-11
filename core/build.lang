@@ -17,7 +17,7 @@ pub typedef Target struct {
 };
 
 pub func add_target(builder: *Workspace, target: *Target) {
-    @append(&builder.targets, target.*);
+    append(&builder.targets, target.*);
 }
 
 pub func build(builder: *Workspace) {
@@ -34,7 +34,7 @@ pub func build(builder: *Workspace) {
         var output_time, _ = os.last_write_time(target.output);
 
         var deps = compiler.get_deps_alloc(comp);
-        defer @delete(&deps);
+        defer delete(&deps);
 
         var should_recompile = false;
 

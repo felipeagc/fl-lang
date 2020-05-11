@@ -9,5 +9,5 @@ typedef MyStruct struct {
 };
 
 func main() {
-    if (@size_of(MyStruct) != 32) c.abort();
+    if (size_of(MyStruct) != 32) c.abort();
 }

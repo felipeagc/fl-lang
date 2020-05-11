@@ -25,7 +25,7 @@ extern func get_deps(compiler: *Compiler, count: *uint, buf: *string);
 pub func get_deps_alloc(compiler: *Compiler) -> []string {
     var result: []string;
     get_deps(compiler, &result.len, null);
-    result.ptr = @alloc(@size_of(string) * result.len);
+    result.ptr = alloc(size_of(string) * result.len);
     get_deps(compiler, &result.len, result.ptr);
     return result;
 }

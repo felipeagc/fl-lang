@@ -3,5 +3,5 @@ module main
 import "core:c"
 
 func main() {
-    if (@size_of(int) != @size_of(*void)) c.abort();
+    if (size_of(int) != size_of(*void)) c.abort();
 }

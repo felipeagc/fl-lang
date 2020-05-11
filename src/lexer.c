@@ -371,22 +371,6 @@ void lex_token(Lexer *l)
         }
         break;
     }
-    case '@': {
-        tok.loc.length = 1;
-        while (is_alphanum(tok.loc.buf[tok.loc.length]))
-        {
-            tok.loc.length++;
-        }
-
-        l->col += tok.loc.length;
-
-        lex_next(l, tok.loc.length);
-
-        tok.type = TOKEN_INTRINSIC;
-        tok.str.ptr = tok.loc.buf + 1;
-        tok.str.len = tok.loc.length - 1;
-        break;
-    }
     case '\'': {
         tok.type = TOKEN_CHAR_LIT;
 
@@ -550,6 +534,7 @@ void lex_token(Lexer *l)
             LEX_MATCH_STR("using", TOKEN_USING);
             LEX_MATCH_STR("defer", TOKEN_DEFER);
             LEX_MATCH_STR("string", TOKEN_STRING);
+            LEX_MATCH_STR("any", TOKEN_ANY);
             LEX_MATCH_STR("return", TOKEN_RETURN);
             LEX_MATCH_STR("extern", TOKEN_EXTERN);
             LEX_MATCH_STR("dyn", TOKEN_DYN);

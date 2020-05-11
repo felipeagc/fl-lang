@@ -12,7 +12,7 @@ typedef Struct struct {
 
 
 func test() -> *Struct {
-    return c.malloc(@size_of(Struct));
+    return c.malloc(size_of(Struct));
 }
 
 func main() {

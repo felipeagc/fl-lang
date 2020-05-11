@@ -56,7 +56,6 @@ typedef enum TokenKind {
     TOKEN_OR,  // ||
 
     TOKEN_IDENT,
-    TOKEN_INTRINSIC,
     TOKEN_STRING_LIT,
     TOKEN_CSTRING_LIT,
     TOKEN_CHAR_LIT,
@@ -89,6 +88,7 @@ typedef enum TokenKind {
     TOKEN_USING,
     TOKEN_DEFER,
     TOKEN_STRING,
+    TOKEN_ANY,
 
     TOKEN_INT_LIT,
     TOKEN_FLOAT_LIT,
@@ -177,7 +177,6 @@ static const char *token_strings[] = {
     [TOKEN_OR] = "||",
 
     [TOKEN_IDENT] = "identifier",
-    [TOKEN_INTRINSIC] = "intrinsic",
     [TOKEN_STRING_LIT] = "string literal",
     [TOKEN_CSTRING_LIT] = "c-string literal",
     [TOKEN_CHAR_LIT] = "char literal",
@@ -210,6 +209,7 @@ static const char *token_strings[] = {
     [TOKEN_USING] = "using",
     [TOKEN_DEFER] = "defer",
     [TOKEN_STRING] = "string",
+    [TOKEN_ANY] = "any",
 
     [TOKEN_INT_LIT] = "integer literal",
     [TOKEN_FLOAT_LIT] = "float literal",

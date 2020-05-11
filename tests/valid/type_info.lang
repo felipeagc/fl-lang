@@ -14,7 +14,7 @@ func main() {
 
     // Integer
     {
-        var t: runtime.TypeInfo = @type_info_of(i32);
+        var t: runtime.TypeInfo = type_info_of(i32);
         if (t.kind != runtime.TypeKind.Int) abort();
         if (t.integer.num_bits != 32) abort();
         if (t.integer.is_signed != true) abort();
@@ -22,14 +22,14 @@ func main() {
 
     // Pointer
     {
-        var t = @type_info_of(*i32);
+        var t = type_info_of(*i32);
         if (t.kind != runtime.TypeKind.Pointer) abort();
         if (t.pointer.sub.kind != runtime.TypeKind.Int) abort();
     }
 
     // Array
     {
-        var t = @type_info_of([2]i32);
+        var t = type_info_of([2]i32);
         if (t.kind != runtime.TypeKind.Array) abort();
         if (t.array.size != 2) abort();
         if (t.array.sub.kind != runtime.TypeKind.Int) abort();
@@ -37,7 +37,7 @@ func main() {
 
     // Slice
     {
-        var t = @type_info_of([]i32);
+        var t = type_info_of([]i32);
         if (t.kind != runtime.TypeKind.Slice) abort();
         if (t.array.size != 0) abort();
         if (t.array.sub.kind != runtime.TypeKind.Int) abort();
@@ -45,7 +45,7 @@ func main() {
 
     // Struct
     {
-        var t = @type_info_of(MyStruct);
+        var t = type_info_of(MyStruct);
         if (t.kind != runtime.TypeKind.Struct) abort();
         if (t.structure.fields.len != 2) abort();
         if (t.structure.fields[0].kind != runtime.TypeKind.Int) abort();
@@ -54,7 +54,7 @@ func main() {
 
     // Function
     {
-        var t = @type_info_of(func* (a: i32, b: []int) -> i32);
+        var t = type_info_of(func* (a: i32, b: []int) -> i32);
         if (t.kind != runtime.TypeKind.Pointer) abort();
         if (t.pointer.sub.kind != runtime.TypeKind.Function) abort();
         if (t.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();
@@ -66,7 +66,7 @@ func main() {
 
     // Enum
     {
-        var t = @type_info_of(runtime.TypeKind);
+        var t = type_info_of(runtime.TypeKind);
         if (t.kind != runtime.TypeKind.Enum) abort();
         if (t.enumeration.underlying_type.kind != runtime.TypeKind.Int) abort();
     }

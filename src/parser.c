@@ -66,7 +66,6 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     switch (tok->type)
     {
     case TOKEN_IDENT:
-    case TOKEN_INTRINSIC:
     case TOKEN_TRUE:
     case TOKEN_FALSE:
     case TOKEN_VOID:
@@ -76,6 +75,7 @@ static bool parse_primary_expr(Parser *p, Ast *ast, bool parsing_type)
     case TOKEN_CSTRING_LIT:
     case TOKEN_CHAR_LIT:
     case TOKEN_STRING:
+    case TOKEN_ANY:
     case TOKEN_U8:
     case TOKEN_U16:
     case TOKEN_U32:
@@ -144,98 +144,11 @@ static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
 
     while (parser_peek(p, 0)->type == TOKEN_LPAREN && !parser_is_at_end(p, 0))
     {
-        Ast expr = *ast;
-        memset(&ast->proc_call, 0, sizeof(ast->proc_call));
-
-        if (expr.type == AST_PRIMARY &&
-            expr.primary.tok->type == TOKEN_INTRINSIC)
-        {
-            // Intrinsic call
-
-            ast->type = AST_INTRINSIC_CALL;
-            if (string_equals(expr.primary.tok->str, STR("size_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_SIZE_OF;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("align_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("vector_type")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("type_info_of")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("alloc")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_ALLOC;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("realloc")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_REALLOC;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("dealloc")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_DEALLOC;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("new")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_NEW;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("make")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_MAKE;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("delete")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_DELETE;
-            }
-            else if (string_equals(expr.primary.tok->str, STR("append")))
-            {
-                ast->intrinsic_call.type = INTRINSIC_APPEND;
-            }
-            else
-            {
-                compile_error(
-                    p->compiler,
-                    expr.loc,
-                    "unknown intrinsic: '%.*s'",
-                    PRINT_STR(expr.primary.tok->str));
-                res = false;
-            }
-
-            if (!parser_consume(p, TOKEN_LPAREN))
-            {
-                res = false;
-                break;
-            }
-
-            while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
-                   !parser_is_at_end(p, 0))
-            {
-                Ast param = {0};
-                if (parse_expr(p, &param, parsing_type))
-                    array_push(&ast->intrinsic_call.params, param);
-                else
-                    res = false;
-
-                if (parser_peek(p, 0)->type != TOKEN_RPAREN)
-                {
-                    if (!parser_consume(p, TOKEN_COMMA)) res = false;
-                }
-            }
-
-            if (!parser_consume(p, TOKEN_RPAREN)) res = false;
-
-            break;
-        }
-
         // Proc call
+        Ast expr = *ast;
 
         ast->type = AST_PROC_CALL;
+        memset(&ast->proc_call, 0, sizeof(ast->proc_call));
 
         ast->proc_call.expr =
             bump_alloc(&p->compiler->bump, sizeof(*ast->proc_call.expr));
@@ -482,11 +395,108 @@ static bool parse_access(Parser *p, Ast *ast, bool parsing_type)
     return res;
 }
 
+static bool parse_intrinsic_call(Parser *p, Ast *ast, bool parsing_type)
+{
+    bool res = true;
+
+    if (parser_peek(p, 0)->type == TOKEN_IDENT &&
+        parser_peek(p, 1)->type == TOKEN_LPAREN && !parser_is_at_end(p, 1))
+    {
+        // Intrinsic call
+        ast->type = AST_INTRINSIC_CALL;
+        String intrin_name = parser_peek(p, 0)->str;
+
+        if (string_equals(intrin_name, STR("size_of")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_SIZE_OF;
+        }
+        else if (string_equals(intrin_name, STR("align_of")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_ALIGN_OF;
+        }
+        else if (string_equals(intrin_name, STR("vector_type")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_VECTOR_TYPE;
+        }
+        else if (string_equals(intrin_name, STR("type_info_of")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_TYPE_INFO_OF;
+        }
+        else if (string_equals(intrin_name, STR("alloc")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_ALLOC;
+        }
+        else if (string_equals(intrin_name, STR("realloc")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_REALLOC;
+        }
+        else if (string_equals(intrin_name, STR("dealloc")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_DEALLOC;
+        }
+        else if (string_equals(intrin_name, STR("new")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_NEW;
+        }
+        else if (string_equals(intrin_name, STR("make")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_MAKE;
+        }
+        else if (string_equals(intrin_name, STR("delete")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_DELETE;
+        }
+        else if (string_equals(intrin_name, STR("append")))
+        {
+            ast->intrinsic_call.type = INTRINSIC_APPEND;
+        }
+        else
+        {
+            return parse_access(p, ast, parsing_type);
+        }
+
+        if (!parser_consume(p, TOKEN_IDENT))
+        {
+            res = false;
+            return res;
+        }
+
+        if (!parser_consume(p, TOKEN_LPAREN))
+        {
+            res = false;
+            return res;
+        }
+
+        while (parser_peek(p, 0)->type != TOKEN_RPAREN &&
+               !parser_is_at_end(p, 0))
+        {
+            Ast param = {0};
+            if (parse_expr(p, &param, parsing_type))
+                array_push(&ast->intrinsic_call.params, param);
+            else
+                res = false;
+
+            if (parser_peek(p, 0)->type != TOKEN_RPAREN)
+            {
+                if (!parser_consume(p, TOKEN_COMMA)) res = false;
+            }
+        }
+
+        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
+    }
+    else
+    {
+        return parse_access(p, ast, parsing_type);
+    }
+
+    return res;
+}
+
 static bool parse_compound_literal(Parser *p, Ast *ast, bool parsing_type)
 {
     bool res = true;
 
-    if (!parse_access(p, ast, parsing_type)) res = false;
+    if (!parse_intrinsic_call(p, ast, parsing_type)) res = false;
     Location last_loc = parser_peek(p, -1)->loc;
     ast->loc.length = last_loc.buf + last_loc.length - ast->loc.buf;
 

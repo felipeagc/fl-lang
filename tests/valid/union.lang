@@ -11,8 +11,8 @@ func main() {
     var u: MyUnion;
     u.b = 123133.1258;
 
-    if (@size_of(u) != @size_of(u64)) c.abort();
-    if (@align_of(u) != @align_of(u64)) c.abort();
+    if (size_of(u) != size_of(u64)) c.abort();
+    if (align_of(u) != align_of(u64)) c.abort();
 
     c.printf(c"%f\n", u.b);
     c.printf(c"%lu\n", u.a);

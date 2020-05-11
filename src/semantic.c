@@ -805,21 +805,14 @@ static TypeInfo *ast_as_type(Analyzer *a, Scope *scope, Ast *ast, String *name)
 
         case TOKEN_STRING: ast->as_type = a->compiler->string_type; break;
 
+        case TOKEN_ANY: ast->as_type = a->compiler->any_type; break;
+
         case TOKEN_IDENT: {
             Ast *sym = get_symbol(scope, ast->primary.tok->str, ast->loc.file);
             if (sym)
             {
                 ast->as_type = ast_as_type(a, sym->sym_scope, sym, NULL);
             }
-            break;
-        }
-
-        case TOKEN_INTRINSIC: {
-            if (string_equals(ast->primary.tok->str, STR("Any")))
-            {
-                ast->as_type = a->compiler->any_type;
-            }
-
             break;
         }
 
@@ -1724,7 +1717,8 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
             &a->compiler->files, ast->import.abs_path, (void **)&imported_file);
         assert(found);
 
-        if (!string_equals(imported_file->module_name, ast->loc.file->module_name))
+        if (!string_equals(
+                imported_file->module_name, ast->loc.file->module_name))
         {
             sym_name = imported_file->module_name;
         }
@@ -3090,12 +3084,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        case TOKEN_INTRINSIC: {
-            if (string_equals(ast->primary.tok->str, STR("Any")))
-            {
-                ast->type_info = a->compiler->type_type;
-            }
-
+        case TOKEN_ANY: {
+            ast->type_info = a->compiler->type_type;
             break;
         }
 
@@ -3315,7 +3305,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         analyze_ast(a, ast->proc_call.expr, NULL);
         if (!ast->proc_call.expr->type_info)
         {
-            assert(a->compiler->errors.len > 0);
+            compile_error(
+                a->compiler,
+                ast->proc_call.expr->loc,
+                "could not resolve type for called function");
             break;
         }
 
@@ -5634,7 +5627,8 @@ static void use_imported_scope(Analyzer *a, Ast *ast)
             &a->compiler->files, ast->import.abs_path, (void **)&imported_file);
         assert(found);
 
-        if (string_equals(imported_file->module_name, ast->loc.file->module_name))
+        if (string_equals(
+                imported_file->module_name, ast->loc.file->module_name))
         {
             Scope *scope = *array_last(&a->scope_stack);
             assert(scope);
@@ -5670,8 +5664,8 @@ static void use_imported_scope(Analyzer *a, Ast *ast)
         else
         {
             for (Ast *stmt = ast->version_block.else_stmts.ptr;
-                 stmt !=
-                 ast->version_block.else_stmts.ptr + ast->version_block.else_stmts.len;
+                 stmt != ast->version_block.else_stmts.ptr +
+                             ast->version_block.else_stmts.len;
                  ++stmt)
             {
                 use_imported_scope(a, stmt);

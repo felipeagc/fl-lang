@@ -42,14 +42,14 @@ version(posix) {
             return NULL_HANDLE, Error.InvalidSpawnArgs;
         }
 
-        var actual_args: **char = @alloc(@size_of(*char) * (args.len + 1));
-        defer @dealloc(actual_args);
+        var actual_args: **char = alloc(size_of(*char) * (args.len + 1));
+        defer dealloc(actual_args);
 
         for (var i: uint = 0; i < args.len; i += 1) {
             actual_args[i] = strings.to_c_str_alloc(args[i]);
         }
         defer for (var i: uint = 0; i < args.len; i += 1) {
-            @dealloc(actual_args[i]);
+            dealloc(actual_args[i]);
         }
 
         actual_args[args.len] = null; // null terminate the list
@@ -108,7 +108,7 @@ version(posix) {
     pub func last_write_time(path: string) -> (TimeSpec, Error) {
         var stat: posix.stat_t;
         c_path := strings.to_c_str_alloc(path);
-        defer @dealloc(c_path);
+        defer dealloc(c_path);
 
         var result = posix.stat(c_path, &stat);
         if (result == -1) {

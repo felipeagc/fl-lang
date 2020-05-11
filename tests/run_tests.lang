@@ -21,7 +21,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
     defer files.dir_entries_free(entries);
 
     var runs: [dyn]TestRun;
-    defer @delete(&runs);
+    defer delete(&runs);
 
     for (entry in entries) 
     {
@@ -44,7 +44,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
                 var run: TestRun;
                 run.pid = pid;
                 run.path = path;
-                @append(&runs, run);
+                append(&runs, run);
                 fmt.eprintf("Testing '%'\n", path);
             }
         }
@@ -52,7 +52,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
 
     defer for (run in runs)
     {
-        @delete(&run.path);
+        delete(&run.path);
     }
 
     for (*run in runs)

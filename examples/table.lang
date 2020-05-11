@@ -47,9 +47,9 @@ pub func table_init(V)(table: *Table(V), size: u64) {
     table.size += 1;
 
     // Init memory
-    table.hashes = c.calloc(table.size, @size_of(table.hashes[0]));
-    table.values = c.calloc(table.size, @size_of(table.values[0]));
-    table.keys = c.calloc(table.size, @size_of(table.keys[0]));
+    table.hashes = c.calloc(table.size, size_of(table.hashes[0]));
+    table.values = c.calloc(table.size, size_of(table.values[0]));
+    table.keys = c.calloc(table.size, size_of(table.keys[0]));
 }
 
 pub func table_deinit(V)(table: *Table(V)) {
@@ -113,9 +113,9 @@ func table_grow(V)(table: *Table(V)) {
     var old_values = table.values;
 
     table.size *= 2;
-    table.hashes = c.calloc(table.size, @size_of(table.hashes[0]));
-    table.values = c.calloc(table.size, @size_of(table.values[0]));
-    table.keys = c.calloc(table.size, @size_of(table.keys[0]));
+    table.hashes = c.calloc(table.size, size_of(table.hashes[0]));
+    table.values = c.calloc(table.size, size_of(table.values[0]));
+    table.keys = c.calloc(table.size, size_of(table.keys[0]));
 
     for (var i: u64 = 0; i < old_size; i += 1) {
         if (old_hashes[i] != 0) {
