@@ -1,6 +1,6 @@
 module os
 
-version(posix) {
+version "posix" {
     import "core:posix"
     import "core:strings"
     import "core:c"

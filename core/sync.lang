@@ -2,7 +2,7 @@ module sync
 
 pub typedef ThreadStart func* (arg: *void) -> *void;
 
-version (posix) {
+version "posix" {
     import "core:posix"
     pub typedef Thread posix.pthread_t;
     pub typedef Mutex posix.pthread_mutex_t;
@@ -13,7 +13,7 @@ version (posix) {
 // Threads
 //
 
-version (posix) {
+version "posix" {
     #[inline]
     pub func thread_create(start: ThreadStart, arg: *void) -> Thread {
         var thread: Thread;
@@ -46,7 +46,7 @@ version (posix) {
 // Mutex
 //
 
-version (posix) {
+version "posix" {
     #[inline]
     pub func mutex_init(mtx: *Mutex) {
         posix.pthread_mutex_init(mtx, null);
@@ -77,7 +77,7 @@ version (posix) {
 // Condition variable
 //
 
-version (posix) {
+version "posix" {
     #[inline]
     pub func cond_init(cond: *Cond) {
         posix.pthread_cond_init(cond, null);

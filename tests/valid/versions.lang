@@ -3,11 +3,11 @@ module main
 import "core:c"
 
 func main() {
-    version (linux) {
+    version "linux" {
         c.printf(c"I'm on linux\n");
     }
 
-    version (win32) {
+    version "win32" {
         c.printf(c"I'm on windows\n");
     }
 }

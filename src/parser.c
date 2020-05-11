@@ -1497,19 +1497,11 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
         ast->type = AST_VERSION_BLOCK;
         need_semi = false;
 
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        Token *version_ident = parser_consume(p, TOKEN_IDENT);
+        Token *version_ident = parser_consume(p, TOKEN_STRING_LIT);
         if (version_ident)
             ast->version_block.version = version_ident->str;
         else
             res = false;
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {
@@ -2411,19 +2403,11 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
 
         ast->type = AST_VERSION_BLOCK;
 
-        if (!parser_consume(p, TOKEN_LPAREN))
-        {
-            res = false;
-            break;
-        }
-
-        Token *version_ident = parser_consume(p, TOKEN_IDENT);
+        Token *version_ident = parser_consume(p, TOKEN_STRING_LIT);
         if (version_ident)
             ast->version_block.version = version_ident->str;
         else
             res = false;
-
-        if (!parser_consume(p, TOKEN_RPAREN)) res = false;
 
         if (parser_peek(p, 0)->type == TOKEN_LCURLY)
         {

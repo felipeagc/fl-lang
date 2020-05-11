@@ -4,8 +4,8 @@ module posix
 // types
 //
 
-version (glibc) {
-    version (x86_64) {
+version "glibc" {
+    version "x86_64" {
         pub typedef ssize_t i64;
         pub typedef off_t i64;
         pub typedef off64_t i64;
@@ -155,7 +155,7 @@ version (glibc) {
             return status & 0x7f; 
         }
     }
-} else version(darwin) {
+} else version "darwin" {
     pub const FD_CLOEXEC: i32 = 1;
 
     pub const F_RDLCK: i32 = 1;
