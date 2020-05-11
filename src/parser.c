@@ -177,9 +177,9 @@ static bool parse_proc_call(Parser *p, Ast *ast, bool parsing_type)
             {
                 ast->intrinsic_call.type = INTRINSIC_REALLOC;
             }
-            else if (string_equals(expr.primary.tok->str, STR("free")))
+            else if (string_equals(expr.primary.tok->str, STR("dealloc")))
             {
-                ast->intrinsic_call.type = INTRINSIC_FREE;
+                ast->intrinsic_call.type = INTRINSIC_DEALLOC;
             }
             else if (string_equals(expr.primary.tok->str, STR("new")))
             {

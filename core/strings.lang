@@ -9,10 +9,6 @@ pub func to_c_str_alloc(str: string) -> *char {
     return cstr;
 }
 
-pub func free(str: string) {
-    @free(str.ptr);
-}
-
 pub func concat_alloc(a: string, b: string) -> string {
     var chars: *char = @alloc(a.len + b.len);
     var str = chars[0:(a.len+b.len)];

@@ -424,7 +424,7 @@ static bool is_expr_const(Compiler *compiler, Scope *scope, Ast *ast)
         case INTRINSIC_MAKE:
         case INTRINSIC_DELETE:
         case INTRINSIC_NEW:
-        case INTRINSIC_FREE:
+        case INTRINSIC_DEALLOC:
         case INTRINSIC_REALLOC:
         case INTRINSIC_ALLOC: res = false; break;
         }
@@ -3846,7 +3846,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             break;
         }
 
-        case INTRINSIC_FREE: {
+        case INTRINSIC_DEALLOC: {
             if (ast->intrinsic_call.params.len != 1)
             {
                 compile_error(
@@ -3869,7 +3869,7 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 compile_error(
                     a->compiler,
                     ast->loc,
-                    "@free takes a pointer as a parameter");
+                    "@dealloc takes a pointer as a parameter");
                 break;
             }
 

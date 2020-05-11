@@ -1750,7 +1750,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_FREE: {
+        case INTRINSIC_DEALLOC: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             LLVMValueRef free_fn = llvm_get_free_fn(l, mod);
