@@ -1,0 +1,39 @@
+module main
+
+import "core:fmt"
+import "core:c"
+import "sdl.lang"
+
+func main() {
+    sdl.Init(sdl.INIT_EVERYTHING);
+    defer sdl.Quit();
+
+    var win = sdl.CreateWindow(c"Hello World!", 100, 100, 640, 480, sdl.WINDOW_SHOWN);
+    if (!win) {
+        fmt.print("Failed to open window!\n");
+        c.exit(1);
+    }
+    defer sdl.DestroyWindow(win);
+
+    var ren = sdl.CreateRenderer(win, -1, sdl.RENDERER_ACCELERATED | sdl.RENDERER_PRESENTVSYNC);
+    if (!ren){
+        fmt.print("Failed to create renderer!\n");
+        c.exit(1);
+    }
+    defer sdl.DestroyRenderer(ren);
+
+    var should_close = false;
+
+    while (!should_close) {
+        var e: sdl.Event;
+        while (sdl.PollEvent(&e)) {
+            switch (e.type) {
+                case sdl.QUIT:
+                    should_close = true;
+            }
+        }
+
+        sdl.RenderClear(ren);
+        sdl.RenderPresent(ren);
+    }
+}

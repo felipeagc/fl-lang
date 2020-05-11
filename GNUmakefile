@@ -26,8 +26,10 @@ test: compiler
 	./compiler -r ./tests/run_tests.lang
 
 examples:
-	rm -f examples/ray examples/table examples/sdl_game
+	rm -f examples/ray examples/table
 	./compiler build examples
+	rm -f examples/game
+	./compiler build game
 
 bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang

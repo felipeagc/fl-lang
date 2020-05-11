@@ -1,0 +1,2908 @@
+module sdl
+
+pub const INIT_TIMER: u32 = 0x00000001;
+pub const INIT_AUDIO: u32 = 0x00000010;
+pub const INIT_VIDEO: u32 = 0x00000020;
+pub const INIT_JOYSTICK: u32 = 0x00000200;
+pub const INIT_HAPTIC: u32 = 0x00001000;
+pub const INIT_GAMECONTROLLER: u32 = 0x00002000;
+pub const INIT_EVENTS: u32 = 0x00004000;
+pub const INIT_SENSOR: u32 = 0x00008000;
+pub const INIT_NOPARACHUTE: u32 = 0x00100000;
+pub const INIT_EVERYTHING: u32 =
+    INIT_TIMER | INIT_AUDIO | INIT_VIDEO | INIT_EVENTS |
+    INIT_JOYSTICK | INIT_HAPTIC | INIT_GAMECONTROLLER | INIT_SENSOR;
+
+pub typedef Bool u32;
+
+#[link_name="SDL_malloc"]
+pub extern func malloc(size: uint) -> *void;
+#[link_name="SDL_calloc"]
+pub extern func calloc(nmemb: uint, size: uint) -> *void;
+#[link_name="SDL_realloc"]
+pub extern func realloc(mem: *void, size: uint) -> *void;
+#[link_name="SDL_free"]
+pub extern func free(mem: *void);
+
+pub typedef malloc_func func* (_: uint) -> *void;
+pub typedef calloc_func func* (_: uint, _: uint) -> *void;
+pub typedef realloc_func func* (_: *void, _: uint) -> *void;
+pub typedef free_func func* (_: *void);
+
+#[link_name="SDL_GetMemoryFunctions"]
+pub extern func GetMemoryFunctions(malloc_func: *malloc_func, calloc_func: *calloc_func, realloc_func: *realloc_func, free_func: *free_func);
+#[link_name="SDL_SetMemoryFunctions"]
+pub extern func SetMemoryFunctions(malloc_func: malloc_func, calloc_func: calloc_func, realloc_func: realloc_func, free_func: free_func) -> i32;
+#[link_name="SDL_GetNumAllocations"]
+pub extern func GetNumAllocations() -> i32;
+#[link_name="SDL_getenv"]
+pub extern func getenv(name: *i8) -> *i8;
+#[link_name="SDL_setenv"]
+pub extern func setenv(name: *i8, value: *i8, overwrite: i32) -> i32;
+#[link_name="SDL_qsort"]
+pub extern func qsort(base: *void, nmemb: uint, size: uint, compare: func* (_: *void, _: *void) -> i32);
+#[link_name="SDL_abs"]
+pub extern func abs(x: i32) -> i32;
+#[link_name="SDL_isdigit"]
+pub extern func isdigit(x: i32) -> i32;
+#[link_name="SDL_isspace"]
+pub extern func isspace(x: i32) -> i32;
+#[link_name="SDL_toupper"]
+pub extern func toupper(x: i32) -> i32;
+#[link_name="SDL_tolower"]
+pub extern func tolower(x: i32) -> i32;
+#[link_name="SDL_memset"]
+pub extern func memset(dst: *void, c: i32, len: uint) -> *void;
+#[link_name="SDL_memset4"]
+pub extern func memset4(dst: *void, val: u32, dwords: uint);
+#[link_name="SDL_memcpy"]
+pub extern func memcpy(dst: *void, src: *void, len: uint) -> *void;
+#[link_name="SDL_memmove"]
+pub extern func memmove(dst: *void, src: *void, len: uint) -> *void;
+#[link_name="SDL_memcmp"]
+pub extern func memcmp(s1: *void, s2: *void, len: uint) -> i32;
+#[link_name="SDL_wcsdup"]
+pub extern func wcsdup(wstr: *i32) -> *i32;
+#[link_name="SDL_wcslen"]
+pub extern func wcslen(wstr: *i32) -> uint;
+#[link_name="SDL_wcslcpy"]
+pub extern func wcslcpy(dst: *i32, src: *i32, maxlen: uint) -> uint;
+#[link_name="SDL_wcslcat"]
+pub extern func wcslcat(dst: *i32, src: *i32, maxlen: uint) -> uint;
+#[link_name="SDL_wcscmp"]
+pub extern func wcscmp(str1: *i32, str2: *i32) -> i32;
+#[link_name="SDL_strlen"]
+pub extern func strlen(str: *i8) -> uint;
+#[link_name="SDL_strlcpy"]
+pub extern func strlcpy(dst: *i8, src: *i8, maxlen: uint) -> uint;
+#[link_name="SDL_utf8strlcpy"]
+pub extern func utf8strlcpy(dst: *i8, src: *i8, dst_bytes: uint) -> uint;
+#[link_name="SDL_strlcat"]
+pub extern func strlcat(dst: *i8, src: *i8, maxlen: uint) -> uint;
+#[link_name="SDL_strdup"]
+pub extern func strdup(str: *i8) -> *i8;
+#[link_name="SDL_strrev"]
+pub extern func strrev(str: *i8) -> *i8;
+#[link_name="SDL_strupr"]
+pub extern func strupr(str: *i8) -> *i8;
+#[link_name="SDL_strlwr"]
+pub extern func strlwr(str: *i8) -> *i8;
+#[link_name="SDL_strchr"]
+pub extern func strchr(str: *i8, c: i32) -> *i8;
+#[link_name="SDL_strrchr"]
+pub extern func strrchr(str: *i8, c: i32) -> *i8;
+#[link_name="SDL_strstr"]
+pub extern func strstr(haystack: *i8, needle: *i8) -> *i8;
+#[link_name="SDL_utf8strlen"]
+pub extern func utf8strlen(str: *i8) -> uint;
+#[link_name="SDL_itoa"]
+pub extern func itoa(value: i32, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_uitoa"]
+pub extern func uitoa(value: u32, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_ltoa"]
+pub extern func ltoa(value: i64, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_ultoa"]
+pub extern func ultoa(value: u64, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_lltoa"]
+pub extern func lltoa(value: i64, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_ulltoa"]
+pub extern func ulltoa(value: u64, str: *i8, radix: i32) -> *i8;
+#[link_name="SDL_atoi"]
+pub extern func atoi(str: *i8) -> i32;
+#[link_name="SDL_atof"]
+pub extern func atof(str: *i8) -> double;
+#[link_name="SDL_strtol"]
+pub extern func strtol(str: *i8, endp: **i8, base: i32) -> i64;
+#[link_name="SDL_strtoul"]
+pub extern func strtoul(str: *i8, endp: **i8, base: i32) -> u64;
+#[link_name="SDL_strtoll"]
+pub extern func strtoll(str: *i8, endp: **i8, base: i32) -> i64;
+#[link_name="SDL_strtoull"]
+pub extern func strtoull(str: *i8, endp: **i8, base: i32) -> u64;
+#[link_name="SDL_strtod"]
+pub extern func strtod(str: *i8, endp: **i8) -> double;
+#[link_name="SDL_strcmp"]
+pub extern func strcmp(str1: *i8, str2: *i8) -> i32;
+#[link_name="SDL_strncmp"]
+pub extern func strncmp(str1: *i8, str2: *i8, maxlen: uint) -> i32;
+#[link_name="SDL_strcasecmp"]
+pub extern func strcasecmp(str1: *i8, str2: *i8) -> i32;
+#[link_name="SDL_strncasecmp"]
+pub extern func strncasecmp(str1: *i8, str2: *i8, len: uint) -> i32;
+#[link_name="SDL_sscanf"]
+pub extern func sscanf(text: *i8, fmt: *i8) -> i32;
+#[link_name="SDL_snprintf"]
+pub extern func snprintf(text: *i8, maxlen: uint, fmt: *i8) -> i32;
+#[link_name="SDL_acos"]
+pub extern func acos(x: double) -> double;
+#[link_name="SDL_acosf"]
+pub extern func acosf(x: float) -> float;
+#[link_name="SDL_asin"]
+pub extern func asin(x: double) -> double;
+#[link_name="SDL_asinf"]
+pub extern func asinf(x: float) -> float;
+#[link_name="SDL_atan"]
+pub extern func atan(x: double) -> double;
+#[link_name="SDL_atanf"]
+pub extern func atanf(x: float) -> float;
+#[link_name="SDL_atan2"]
+pub extern func atan2(x: double, y: double) -> double;
+#[link_name="SDL_atan2f"]
+pub extern func atan2f(x: float, y: float) -> float;
+#[link_name="SDL_ceil"]
+pub extern func ceil(x: double) -> double;
+#[link_name="SDL_ceilf"]
+pub extern func ceilf(x: float) -> float;
+#[link_name="SDL_copysign"]
+pub extern func copysign(x: double, y: double) -> double;
+#[link_name="SDL_copysignf"]
+pub extern func copysignf(x: float, y: float) -> float;
+#[link_name="SDL_cos"]
+pub extern func cos(x: double) -> double;
+#[link_name="SDL_cosf"]
+pub extern func cosf(x: float) -> float;
+#[link_name="SDL_exp"]
+pub extern func exp(x: double) -> double;
+#[link_name="SDL_expf"]
+pub extern func expf(x: float) -> float;
+#[link_name="SDL_fabs"]
+pub extern func fabs(x: double) -> double;
+#[link_name="SDL_fabsf"]
+pub extern func fabsf(x: float) -> float;
+#[link_name="SDL_floor"]
+pub extern func floor(x: double) -> double;
+#[link_name="SDL_floorf"]
+pub extern func floorf(x: float) -> float;
+#[link_name="SDL_fmod"]
+pub extern func fmod(x: double, y: double) -> double;
+#[link_name="SDL_fmodf"]
+pub extern func fmodf(x: float, y: float) -> float;
+#[link_name="SDL_log"]
+pub extern func log(x: double) -> double;
+#[link_name="SDL_logf"]
+pub extern func logf(x: float) -> float;
+#[link_name="SDL_log10"]
+pub extern func log10(x: double) -> double;
+#[link_name="SDL_log10f"]
+pub extern func log10f(x: float) -> float;
+#[link_name="SDL_pow"]
+pub extern func pow(x: double, y: double) -> double;
+#[link_name="SDL_powf"]
+pub extern func powf(x: float, y: float) -> float;
+#[link_name="SDL_scalbn"]
+pub extern func scalbn(x: double, n: i32) -> double;
+#[link_name="SDL_scalbnf"]
+pub extern func scalbnf(x: float, n: i32) -> float;
+#[link_name="SDL_sin"]
+pub extern func sin(x: double) -> double;
+#[link_name="SDL_sinf"]
+pub extern func sinf(x: float) -> float;
+#[link_name="SDL_sqrt"]
+pub extern func sqrt(x: double) -> double;
+#[link_name="SDL_sqrtf"]
+pub extern func sqrtf(x: float) -> float;
+#[link_name="SDL_tan"]
+pub extern func tan(x: double) -> double;
+#[link_name="SDL_tanf"]
+pub extern func tanf(x: float) -> float;
+pub typedef _SDL_iconv_t struct {
+};
+pub typedef iconv_t *_SDL_iconv_t;
+#[link_name="SDL_iconv_open"]
+pub extern func iconv_open(tocode: *i8, fromcode: *i8) -> iconv_t;
+#[link_name="SDL_iconv_close"]
+pub extern func iconv_close(cd: iconv_t) -> i32;
+#[link_name="SDL_iconv"]
+pub extern func iconv(cd: iconv_t, inbuf: **i8, inbytesleft: *uint, outbuf: **i8, outbytesleft: *uint) -> uint;
+#[link_name="SDL_iconv_string"]
+pub extern func iconv_string(tocode: *i8, fromcode: *i8, inbuf: *i8, inbytesleft: uint) -> *i8;
+#[link_name="SDL_memcpy4"]
+pub extern func memcpy4(dst: *void, src: *void, dwords: uint) -> *void;
+pub typedef main_func func* (_: i32, _: **i8) -> i32;
+#[link_name="SDL_main"]
+pub extern func main(argc: i32, argv: **i8) -> i32;
+#[link_name="SDL_SetMainReady"]
+pub extern func SetMainReady();
+pub const ASSERTION_RETRY: u32 = 0;
+pub const ASSERTION_BREAK: u32 = 1;
+pub const ASSERTION_ABORT: u32 = 2;
+pub const ASSERTION_IGNORE: u32 = 3;
+pub const ASSERTION_ALWAYS_IGNORE: u32 = 4;
+pub typedef AssertState u32;
+pub typedef AssertData struct {
+    always_ignore: i32,
+    trigger_count: u32,
+    condition: *i8,
+    filename: *i8,
+    linenum: i32,
+    function: *i8,
+    next: *struct {},
+};
+#[link_name="SDL_ReportAssertion"]
+pub extern func ReportAssertion(_: *AssertData, _: *i8, _: *i8, _: i32) -> AssertState;
+pub typedef AssertionHandler func* (_: *AssertData, _: *void) -> AssertState;
+#[link_name="SDL_SetAssertionHandler"]
+pub extern func SetAssertionHandler(handler: AssertionHandler, userdata: *void);
+#[link_name="SDL_GetDefaultAssertionHandler"]
+pub extern func GetDefaultAssertionHandler() -> AssertionHandler;
+#[link_name="SDL_GetAssertionHandler"]
+pub extern func GetAssertionHandler(puserdata: **void) -> AssertionHandler;
+#[link_name="SDL_GetAssertionReport"]
+pub extern func GetAssertionReport() -> *AssertData;
+#[link_name="SDL_ResetAssertionReport"]
+pub extern func ResetAssertionReport();
+pub typedef SpinLock i32;
+#[link_name="SDL_AtomicTryLock"]
+pub extern func AtomicTryLock(lock: *SpinLock) -> Bool;
+#[link_name="SDL_AtomicLock"]
+pub extern func AtomicLock(lock: *SpinLock);
+#[link_name="SDL_AtomicUnlock"]
+pub extern func AtomicUnlock(lock: *SpinLock);
+#[link_name="SDL_MemoryBarrierReleaseFunction"]
+pub extern func MemoryBarrierReleaseFunction();
+#[link_name="SDL_MemoryBarrierAcquireFunction"]
+pub extern func MemoryBarrierAcquireFunction();
+pub typedef atomic_t struct {
+    value: i32,
+};
+#[link_name="SDL_AtomicCAS"]
+pub extern func AtomicCAS(a: *atomic_t, oldval: i32, newval: i32) -> Bool;
+#[link_name="SDL_AtomicSet"]
+pub extern func AtomicSet(a: *atomic_t, v: i32) -> i32;
+#[link_name="SDL_AtomicGet"]
+pub extern func AtomicGet(a: *atomic_t) -> i32;
+#[link_name="SDL_AtomicAdd"]
+pub extern func AtomicAdd(a: *atomic_t, v: i32) -> i32;
+#[link_name="SDL_AtomicCASPtr"]
+pub extern func AtomicCASPtr(a: **void, oldval: *void, newval: *void) -> Bool;
+#[link_name="SDL_AtomicSetPtr"]
+pub extern func AtomicSetPtr(a: **void, v: *void) -> *void;
+#[link_name="SDL_AtomicGetPtr"]
+pub extern func AtomicGetPtr(a: **void) -> *void;
+#[link_name="SDL_SetError"]
+pub extern func SetError(fmt: *i8) -> i32;
+#[link_name="SDL_GetError"]
+pub extern func GetError() -> *i8;
+#[link_name="SDL_ClearError"]
+pub extern func ClearError();
+pub const ENOMEM: u32 = 0;
+pub const EFREAD: u32 = 1;
+pub const EFWRITE: u32 = 2;
+pub const EFSEEK: u32 = 3;
+pub const UNSUPPORTED: u32 = 4;
+pub const LASTERROR: u32 = 5;
+pub typedef errorcode u32;
+#[link_name="SDL_Error"]
+pub extern func Error(code: errorcode) -> i32;
+#[link_name="SDL_Swap16"]
+pub extern func Swap16(x: u16) -> u16;
+#[link_name="SDL_Swap32"]
+pub extern func Swap32(x: u32) -> u32;
+#[link_name="SDL_Swap64"]
+pub extern func Swap64(x: u64) -> u64;
+#[link_name="SDL_SwapFloat"]
+pub extern func SwapFloat(x: float) -> float;
+pub typedef Mutex struct {};
+#[link_name="SDL_CreateMutex"]
+pub extern func CreateMutex() -> *Mutex;
+#[link_name="SDL_LockMutex"]
+pub extern func LockMutex(mutex: *Mutex) -> i32;
+#[link_name="SDL_TryLockMutex"]
+pub extern func TryLockMutex(mutex: *Mutex) -> i32;
+#[link_name="SDL_UnlockMutex"]
+pub extern func UnlockMutex(mutex: *Mutex) -> i32;
+#[link_name="SDL_DestroyMutex"]
+pub extern func DestroyMutex(mutex: *Mutex);
+pub typedef Semaphore struct {};
+#[link_name="SDL_CreateSemaphore"]
+pub extern func CreateSemaphore(initial_value: u32) -> *Semaphore;
+#[link_name="SDL_DestroySemaphore"]
+pub extern func DestroySemaphore(sem: *Semaphore);
+#[link_name="SDL_SemWait"]
+pub extern func SemWait(sem: *Semaphore) -> i32;
+#[link_name="SDL_SemTryWait"]
+pub extern func SemTryWait(sem: *Semaphore) -> i32;
+#[link_name="SDL_SemWaitTimeout"]
+pub extern func SemWaitTimeout(sem: *Semaphore, ms: u32) -> i32;
+#[link_name="SDL_SemPost"]
+pub extern func SemPost(sem: *Semaphore) -> i32;
+#[link_name="SDL_SemValue"]
+pub extern func SemValue(sem: *Semaphore) -> u32;
+pub typedef Cond struct {};
+#[link_name="SDL_CreateCond"]
+pub extern func CreateCond() -> *Cond;
+#[link_name="SDL_DestroyCond"]
+pub extern func DestroyCond(cond: *Cond);
+#[link_name="SDL_CondSignal"]
+pub extern func CondSignal(cond: *Cond) -> i32;
+#[link_name="SDL_CondBroadcast"]
+pub extern func CondBroadcast(cond: *Cond) -> i32;
+#[link_name="SDL_CondWait"]
+pub extern func CondWait(cond: *Cond, mutex: *Mutex) -> i32;
+#[link_name="SDL_CondWaitTimeout"]
+pub extern func CondWaitTimeout(cond: *Cond, mutex: *Mutex, ms: u32) -> i32;
+pub typedef Thread struct {};
+pub typedef threadID u64;
+pub typedef TLSID u32;
+pub const THREAD_PRIORITY_LOW: u32 = 0;
+pub const THREAD_PRIORITY_NORMAL: u32 = 1;
+pub const THREAD_PRIORITY_HIGH: u32 = 2;
+pub const THREAD_PRIORITY_TIME_CRITICAL: u32 = 3;
+pub typedef ThreadPriority u32;
+pub typedef ThreadFunction func* (_: *void) -> i32;
+#[link_name="SDL_CreateThread"]
+pub extern func CreateThread(func_: ThreadFunction, name: *i8, data: *void) -> *Thread;
+#[link_name="SDL_CreateThreadWithStackSize"]
+pub extern func CreateThreadWithStackSize(func_: ThreadFunction, name: *i8, stacksize: uint, data: *void) -> *Thread;
+#[link_name="SDL_GetThreadName"]
+pub extern func GetThreadName(thread: *Thread) -> *i8;
+#[link_name="ThreadID"]
+pub extern func ThreadID() -> threadID;
+#[link_name="SDL_GetThreadID"]
+pub extern func GetThreadID(thread: *Thread) -> threadID;
+#[link_name="SDL_SetThreadPriority"]
+pub extern func SetThreadPriority(priority: ThreadPriority) -> i32;
+#[link_name="SDL_WaitThread"]
+pub extern func WaitThread(thread: *Thread, status: *i32);
+#[link_name="SDL_DetachThread"]
+pub extern func DetachThread(thread: *Thread);
+pub extern func TLSCreate() -> TLSID;
+pub extern func TLSGet(id: TLSID) -> *void;
+pub extern func TLSSet(id: TLSID, value: *void, destructor: func* (_: *void)) -> i32;
+pub typedef RWops struct {
+    size: func* (_: *struct {}) -> i64,
+    seek: func* (_: *struct {}, _: i64, _: i32) -> i64,
+    read: func* (_: *struct {}, _: *void, _: uint, _: uint) -> uint,
+    write: func* (_: *struct {}, _: *void, _: uint, _: uint) -> uint,
+    close: func* (_: *struct {}) -> i32,
+    type: u32,
+    hidden: union {
+        stdio: struct {
+            autoclose: Bool,
+            fp: *void,
+        },
+        mem: struct {
+            base: *u8,
+            here: *u8,
+            stop: *u8,
+        },
+        unknown: struct {
+            data1: *void,
+            data2: *void,
+        },
+    },
+};
+#[link_name="SDL_RWFromFile"]
+pub extern func RWFromFile(file: *i8, mode: *i8) -> *RWops;
+#[link_name="SDL_RWFromFP"]
+pub extern func RWFromFP(fp: *void, autoclose: Bool) -> *RWops;
+#[link_name="SDL_RWFromMem"]
+pub extern func RWFromMem(mem: *void, size: i32) -> *RWops;
+#[link_name="SDL_RWFromConstMem"]
+pub extern func RWFromConstMem(mem: *void, size: i32) -> *RWops;
+#[link_name="SDL_AllocRW"]
+pub extern func AllocRW() -> *RWops;
+#[link_name="SDL_FreeRW"]
+pub extern func FreeRW(area: *RWops);
+#[link_name="SDL_RWsize"]
+pub extern func RWsize(context: *RWops) -> i64;
+#[link_name="SDL_RWseek"]
+pub extern func RWseek(context: *RWops, offset: i64, whence: i32) -> i64;
+#[link_name="SDL_RWtell"]
+pub extern func RWtell(context: *RWops) -> i64;
+#[link_name="SDL_RWread"]
+pub extern func RWread(context: *RWops, ptr: *void, size: uint, maxnum: uint) -> uint;
+#[link_name="SDL_RWwrite"]
+pub extern func RWwrite(context: *RWops, ptr: *void, size: uint, num: uint) -> uint;
+#[link_name="SDL_RWclose"]
+pub extern func RWclose(context: *RWops) -> i32;
+#[link_name="SDL_LoadFile_RW"]
+pub extern func LoadFile_RW(src: *RWops, datasize: *uint, freesrc: i32) -> *void;
+#[link_name="SDL_LoadFile"]
+pub extern func LoadFile(file: *i8, datasize: *uint) -> *void;
+#[link_name="SDL_ReadU8"]
+pub extern func ReadU8(src: *RWops) -> u8;
+#[link_name="SDL_ReadLE16"]
+pub extern func ReadLE16(src: *RWops) -> u16;
+#[link_name="SDL_ReadBE16"]
+pub extern func ReadBE16(src: *RWops) -> u16;
+#[link_name="SDL_ReadLE32"]
+pub extern func ReadLE32(src: *RWops) -> u32;
+#[link_name="SDL_ReadBE32"]
+pub extern func ReadBE32(src: *RWops) -> u32;
+#[link_name="SDL_ReadLE64"]
+pub extern func ReadLE64(src: *RWops) -> u64;
+#[link_name="SDL_ReadBE64"]
+pub extern func ReadBE64(src: *RWops) -> u64;
+#[link_name="SDL_WriteU8"]
+pub extern func WriteU8(dst: *RWops, value: u8) -> uint;
+#[link_name="SDL_WriteLE16"]
+pub extern func WriteLE16(dst: *RWops, value: u16) -> uint;
+#[link_name="SDL_WriteBE16"]
+pub extern func WriteBE16(dst: *RWops, value: u16) -> uint;
+#[link_name="SDL_WriteLE32"]
+pub extern func WriteLE32(dst: *RWops, value: u32) -> uint;
+#[link_name="SDL_WriteBE32"]
+pub extern func WriteBE32(dst: *RWops, value: u32) -> uint;
+#[link_name="SDL_WriteLE64"]
+pub extern func WriteLE64(dst: *RWops, value: u64) -> uint;
+#[link_name="SDL_WriteBE64"]
+pub extern func WriteBE64(dst: *RWops, value: u64) -> uint;
+pub typedef AudioFormat u16;
+pub typedef AudioCallback func* (_: *void, _: *u8, _: i32);
+pub typedef AudioSpec struct {
+    freq: i32,
+    format: AudioFormat,
+    channels: u8,
+    silence: u8,
+    samples: u16,
+    padding: u16,
+    size: u32,
+    callback: AudioCallback,
+    userdata: *void,
+};
+pub typedef AudioCVT struct {
+    needed: i32,
+    src_format: AudioFormat,
+    dst_format: AudioFormat,
+    rate_incr: double,
+    buf: *u8,
+    len: i32,
+    len_cvt: i32,
+    len_mult: i32,
+    len_ratio: double,
+    filters: [10]AudioFilter,
+    filter_index: i32,
+};
+pub typedef AudioFilter func* (_: *AudioCVT, _: AudioFormat);
+#[link_name="SDL_GetNumAudioDrivers"]
+pub extern func GetNumAudioDrivers() -> i32;
+#[link_name="SDL_GetAudioDriver"]
+pub extern func GetAudioDriver(index: i32) -> *i8;
+#[link_name="SDL_AudioInit"]
+pub extern func AudioInit(driver_name: *i8) -> i32;
+#[link_name="SDL_AudioQuit"]
+pub extern func AudioQuit();
+#[link_name="SDL_GetCurrentAudioDriver"]
+pub extern func GetCurrentAudioDriver() -> *i8;
+#[link_name="SDL_OpenAudio"]
+pub extern func OpenAudio(desired: *AudioSpec, obtained: *AudioSpec) -> i32;
+pub typedef AudioDeviceID u32;
+#[link_name="SDL_GetNumAudioDevices"]
+pub extern func GetNumAudioDevices(iscapture: i32) -> i32;
+#[link_name="SDL_GetAudioDeviceName"]
+pub extern func GetAudioDeviceName(index: i32, iscapture: i32) -> *i8;
+#[link_name="SDL_OpenAudioDevice"]
+pub extern func OpenAudioDevice(device: *i8, iscapture: i32, desired: *AudioSpec, obtained: *AudioSpec, allowed_changes: i32) -> AudioDeviceID;
+pub const AUDIO_STOPPED: u32 = 0;
+pub const AUDIO_PLAYING: u32 = 1;
+pub const AUDIO_PAUSED: u32 = 2;
+pub typedef AudioStatus u32;
+#[link_name="SDL_GetAudioStatus"]
+pub extern func GetAudioStatus() -> AudioStatus;
+#[link_name="SDL_GetAudioDeviceStatus"]
+pub extern func GetAudioDeviceStatus(dev: AudioDeviceID) -> AudioStatus;
+#[link_name="SDL_PauseAudio"]
+pub extern func PauseAudio(pause_on: i32);
+#[link_name="SDL_PauseAudioDevice"]
+pub extern func PauseAudioDevice(dev: AudioDeviceID, pause_on: i32);
+#[link_name="SDL_LoadWAV_RW"]
+pub extern func LoadWAV_RW(src: *RWops, freesrc: i32, spec: *AudioSpec, audio_buf: **u8, audio_len: *u32) -> *AudioSpec;
+#[link_name="SDL_FreeWAV"]
+pub extern func FreeWAV(audio_buf: *u8);
+#[link_name="SDL_BuildAudioCVT"]
+pub extern func BuildAudioCVT(cvt: *AudioCVT, src_format: AudioFormat, src_channels: u8, src_rate: i32, dst_format: AudioFormat, dst_channels: u8, dst_rate: i32) -> i32;
+#[link_name="SDL_ConvertAudio"]
+pub extern func ConvertAudio(cvt: *AudioCVT) -> i32;
+pub typedef _SDL_AudioStream struct {
+};
+pub typedef AudioStream _SDL_AudioStream;
+#[link_name="SDL_NewAudioStream"]
+pub extern func NewAudioStream(src_format: AudioFormat, src_channels: u8, src_rate: i32, dst_format: AudioFormat, dst_channels: u8, dst_rate: i32) -> *AudioStream;
+#[link_name="SDL_AudioStreamPut"]
+pub extern func AudioStreamPut(stream: *AudioStream, buf: *void, len: i32) -> i32;
+#[link_name="SDL_AudioStreamGet"]
+pub extern func AudioStreamGet(stream: *AudioStream, buf: *void, len: i32) -> i32;
+#[link_name="SDL_AudioStreamAvailable"]
+pub extern func AudioStreamAvailable(stream: *AudioStream) -> i32;
+#[link_name="SDL_AudioStreamFlush"]
+pub extern func AudioStreamFlush(stream: *AudioStream) -> i32;
+#[link_name="SDL_AudioStreamClear"]
+pub extern func AudioStreamClear(stream: *AudioStream);
+#[link_name="SDL_FreeAudioStream"]
+pub extern func FreeAudioStream(stream: *AudioStream);
+#[link_name="SDL_MixAudio"]
+pub extern func MixAudio(dst: *u8, src: *u8, len: u32, volume: i32);
+#[link_name="SDL_MixAudioFormat"]
+pub extern func MixAudioFormat(dst: *u8, src: *u8, format: AudioFormat, len: u32, volume: i32);
+#[link_name="SDL_QueueAudio"]
+pub extern func QueueAudio(dev: AudioDeviceID, data: *void, len: u32) -> i32;
+#[link_name="SDL_DequeueAudio"]
+pub extern func DequeueAudio(dev: AudioDeviceID, data: *void, len: u32) -> u32;
+#[link_name="SDL_GetQueuedAudioSize"]
+pub extern func GetQueuedAudioSize(dev: AudioDeviceID) -> u32;
+#[link_name="SDL_ClearQueuedAudio"]
+pub extern func ClearQueuedAudio(dev: AudioDeviceID);
+#[link_name="SDL_LockAudio"]
+pub extern func LockAudio();
+#[link_name="SDL_LockAudioDevice"]
+pub extern func LockAudioDevice(dev: AudioDeviceID);
+#[link_name="SDL_UnlockAudio"]
+pub extern func UnlockAudio();
+#[link_name="SDL_UnlockAudioDevice"]
+pub extern func UnlockAudioDevice(dev: AudioDeviceID);
+#[link_name="SDL_CloseAudio"]
+pub extern func CloseAudio();
+#[link_name="SDL_CloseAudioDevice"]
+pub extern func CloseAudioDevice(dev: AudioDeviceID);
+#[link_name="SDL_SetClipboardText"]
+pub extern func SetClipboardText(text: *i8) -> i32;
+#[link_name="SDL_GetClipboardText"]
+pub extern func GetClipboardText() -> *i8;
+#[link_name="SDL_HasClipboardText"]
+pub extern func HasClipboardText() -> Bool;
+#[link_name="SDL_GetCPUCount"]
+pub extern func GetCPUCount() -> i32;
+#[link_name="SDL_GetCPUCacheLineSize"]
+pub extern func GetCPUCacheLineSize() -> i32;
+#[link_name="SDL_HasRDTSC"]
+pub extern func HasRDTSC() -> Bool;
+#[link_name="SDL_HasAltiVec"]
+pub extern func HasAltiVec() -> Bool;
+#[link_name="SDL_HasMMX"]
+pub extern func HasMMX() -> Bool;
+#[link_name="SDL_Has3DNow"]
+pub extern func Has3DNow() -> Bool;
+#[link_name="SDL_HasSSE"]
+pub extern func HasSSE() -> Bool;
+#[link_name="SDL_HasSSE2"]
+pub extern func HasSSE2() -> Bool;
+#[link_name="SDL_HasSSE3"]
+pub extern func HasSSE3() -> Bool;
+#[link_name="SDL_HasSSE41"]
+pub extern func HasSSE41() -> Bool;
+#[link_name="SDL_HasSSE42"]
+pub extern func HasSSE42() -> Bool;
+#[link_name="SDL_HasAVX"]
+pub extern func HasAVX() -> Bool;
+#[link_name="SDL_HasAVX2"]
+pub extern func HasAVX2() -> Bool;
+#[link_name="SDL_HasAVX512F"]
+pub extern func HasAVX512F() -> Bool;
+#[link_name="SDL_HasNEON"]
+pub extern func HasNEON() -> Bool;
+#[link_name="SDL_GetSystemRAM"]
+pub extern func GetSystemRAM() -> i32;
+#[link_name="SDL_SIMDGetAlignment"]
+pub extern func SIMDGetAlignment() -> uint;
+#[link_name="SDL_SIMDAlloc"]
+pub extern func SIMDAlloc(len: uint) -> *void;
+#[link_name="SDL_SIMDFree"]
+pub extern func SIMDFree(ptr: *void);
+pub const PIXELTYPE_UNKNOWN: u32 = 0;
+pub const PIXELTYPE_INDEX1: u32 = 1;
+pub const PIXELTYPE_INDEX4: u32 = 2;
+pub const PIXELTYPE_INDEX8: u32 = 3;
+pub const PIXELTYPE_PACKED8: u32 = 4;
+pub const PIXELTYPE_PACKED16: u32 = 5;
+pub const PIXELTYPE_PACKED32: u32 = 6;
+pub const PIXELTYPE_ARRAYU8: u32 = 7;
+pub const PIXELTYPE_ARRAYU16: u32 = 8;
+pub const PIXELTYPE_ARRAYU32: u32 = 9;
+pub const PIXELTYPE_ARRAYF16: u32 = 10;
+pub const PIXELTYPE_ARRAYF32: u32 = 11;
+pub const BITMAPORDER_NONE: u32 = 0;
+pub const BITMAPORDER_4321: u32 = 1;
+pub const BITMAPORDER_1234: u32 = 2;
+pub const PACKEDORDER_NONE: u32 = 0;
+pub const PACKEDORDER_XRGB: u32 = 1;
+pub const PACKEDORDER_RGBX: u32 = 2;
+pub const PACKEDORDER_ARGB: u32 = 3;
+pub const PACKEDORDER_RGBA: u32 = 4;
+pub const PACKEDORDER_XBGR: u32 = 5;
+pub const PACKEDORDER_BGRX: u32 = 6;
+pub const PACKEDORDER_ABGR: u32 = 7;
+pub const PACKEDORDER_BGRA: u32 = 8;
+pub const ARRAYORDER_NONE: u32 = 0;
+pub const ARRAYORDER_RGB: u32 = 1;
+pub const ARRAYORDER_RGBA: u32 = 2;
+pub const ARRAYORDER_ARGB: u32 = 3;
+pub const ARRAYORDER_BGR: u32 = 4;
+pub const ARRAYORDER_BGRA: u32 = 5;
+pub const ARRAYORDER_ABGR: u32 = 6;
+pub const PACKEDLAYOUT_NONE: u32 = 0;
+pub const PACKEDLAYOUT_332: u32 = 1;
+pub const PACKEDLAYOUT_4444: u32 = 2;
+pub const PACKEDLAYOUT_1555: u32 = 3;
+pub const PACKEDLAYOUT_5551: u32 = 4;
+pub const PACKEDLAYOUT_565: u32 = 5;
+pub const PACKEDLAYOUT_8888: u32 = 6;
+pub const PACKEDLAYOUT_2101010: u32 = 7;
+pub const PACKEDLAYOUT_1010102: u32 = 8;
+pub const PIXELFORMAT_UNKNOWN: u32 = 0;
+pub const PIXELFORMAT_INDEX1LSB: u32 = 286261504;
+pub const PIXELFORMAT_INDEX1MSB: u32 = 287310080;
+pub const PIXELFORMAT_INDEX4LSB: u32 = 303039488;
+pub const PIXELFORMAT_INDEX4MSB: u32 = 304088064;
+pub const PIXELFORMAT_INDEX8: u32 = 318769153;
+pub const PIXELFORMAT_RGB332: u32 = 336660481;
+pub const PIXELFORMAT_RGB444: u32 = 353504258;
+pub const PIXELFORMAT_RGB555: u32 = 353570562;
+pub const PIXELFORMAT_BGR555: u32 = 357764866;
+pub const PIXELFORMAT_ARGB4444: u32 = 355602434;
+pub const PIXELFORMAT_RGBA4444: u32 = 356651010;
+pub const PIXELFORMAT_ABGR4444: u32 = 359796738;
+pub const PIXELFORMAT_BGRA4444: u32 = 360845314;
+pub const PIXELFORMAT_ARGB1555: u32 = 355667970;
+pub const PIXELFORMAT_RGBA5551: u32 = 356782082;
+pub const PIXELFORMAT_ABGR1555: u32 = 359862274;
+pub const PIXELFORMAT_BGRA5551: u32 = 360976386;
+pub const PIXELFORMAT_RGB565: u32 = 353701890;
+pub const PIXELFORMAT_BGR565: u32 = 357896194;
+pub const PIXELFORMAT_RGB24: u32 = 386930691;
+pub const PIXELFORMAT_BGR24: u32 = 390076419;
+pub const PIXELFORMAT_RGB888: u32 = 370546692;
+pub const PIXELFORMAT_RGBX8888: u32 = 371595268;
+pub const PIXELFORMAT_BGR888: u32 = 374740996;
+pub const PIXELFORMAT_BGRX8888: u32 = 375789572;
+pub const PIXELFORMAT_ARGB8888: u32 = 372645892;
+pub const PIXELFORMAT_RGBA8888: u32 = 373694468;
+pub const PIXELFORMAT_ABGR8888: u32 = 376840196;
+pub const PIXELFORMAT_BGRA8888: u32 = 377888772;
+pub const PIXELFORMAT_ARGB2101010: u32 = 372711428;
+pub const PIXELFORMAT_RGBA32: u32 = 376840196;
+pub const PIXELFORMAT_ARGB32: u32 = 377888772;
+pub const PIXELFORMAT_BGRA32: u32 = 372645892;
+pub const PIXELFORMAT_ABGR32: u32 = 373694468;
+pub const PIXELFORMAT_YV12: u32 = 842094169;
+pub const PIXELFORMAT_IYUV: u32 = 1448433993;
+pub const PIXELFORMAT_YUY2: u32 = 844715353;
+pub const PIXELFORMAT_UYVY: u32 = 1498831189;
+pub const PIXELFORMAT_YVYU: u32 = 1431918169;
+pub const PIXELFORMAT_NV12: u32 = 842094158;
+pub const PIXELFORMAT_NV21: u32 = 825382478;
+pub const PIXELFORMAT_EXTERNAL_OES: u32 = 542328143;
+pub typedef PixelFormatEnum u32;
+pub typedef Color struct {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8,
+};
+pub typedef Palette struct {
+    ncolors: i32,
+    colors: *Color,
+    version_: u32,
+    refcount: i32,
+};
+pub typedef PixelFormat struct {
+    format: u32,
+    palette: *Palette,
+    BitsPerPixel: u8,
+    BytesPerPixel: u8,
+    padding: [2]u8,
+    Rmask: u32,
+    Gmask: u32,
+    Bmask: u32,
+    Amask: u32,
+    Rloss: u8,
+    Gloss: u8,
+    Bloss: u8,
+    Aloss: u8,
+    Rshift: u8,
+    Gshift: u8,
+    Bshift: u8,
+    Ashift: u8,
+    refcount: i32,
+    next: *struct {},
+};
+#[link_name="SDL_GetPixelFormatName"]
+pub extern func GetPixelFormatName(format: u32) -> *i8;
+#[link_name="SDL_PixelFormatEnumToMasks"]
+pub extern func PixelFormatEnumToMasks(format: u32, bpp: *i32, Rmask: *u32, Gmask: *u32, Bmask: *u32, Amask: *u32) -> Bool;
+#[link_name="SDL_MasksToPixelFormatEnum"]
+pub extern func MasksToPixelFormatEnum(bpp: i32, Rmask: u32, Gmask: u32, Bmask: u32, Amask: u32) -> u32;
+#[link_name="SDL_AllocFormat"]
+pub extern func AllocFormat(pixel_format: u32) -> *PixelFormat;
+#[link_name="SDL_FreeFormat"]
+pub extern func FreeFormat(format: *PixelFormat);
+#[link_name="SDL_AllocPalette"]
+pub extern func AllocPalette(ncolors: i32) -> *Palette;
+#[link_name="SDL_SetPixelFormatPalette"]
+pub extern func SetPixelFormatPalette(format: *PixelFormat, palette: *Palette) -> i32;
+#[link_name="SDL_SetPaletteColors"]
+pub extern func SetPaletteColors(palette: *Palette, colors: *Color, firstcolor: i32, ncolors: i32) -> i32;
+#[link_name="SDL_FreePalette"]
+pub extern func FreePalette(palette: *Palette);
+#[link_name="SDL_MapRGB"]
+pub extern func MapRGB(format: *PixelFormat, r: u8, g: u8, b: u8) -> u32;
+#[link_name="SDL_MapRGBA"]
+pub extern func MapRGBA(format: *PixelFormat, r: u8, g: u8, b: u8, a: u8) -> u32;
+#[link_name="SDL_GetRGB"]
+pub extern func GetRGB(pixel: u32, format: *PixelFormat, r: *u8, g: *u8, b: *u8);
+#[link_name="SDL_GetRGBA"]
+pub extern func GetRGBA(pixel: u32, format: *PixelFormat, r: *u8, g: *u8, b: *u8, a: *u8);
+#[link_name="SDL_CalculateGammaRamp"]
+pub extern func CalculateGammaRamp(gamma: float, ramp: *u16);
+pub typedef Point struct {
+    x: i32,
+    y: i32,
+};
+pub typedef FPoint struct {
+    x: float,
+    y: float,
+};
+pub typedef Rect struct {
+    x: i32,
+    y: i32,
+    w: i32,
+    h: i32,
+};
+pub typedef FRect struct {
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+};
+#[link_name="SDL_PointInRect"]
+pub extern func PointInRect(p: *Point, r: *Rect) -> Bool;
+#[link_name="SDL_RectEmpty"]
+pub extern func RectEmpty(r: *Rect) -> Bool;
+#[link_name="SDL_RectEquals"]
+pub extern func RectEquals(a: *Rect, b: *Rect) -> Bool;
+#[link_name="SDL_HasIntersection"]
+pub extern func HasIntersection(A: *Rect, B: *Rect) -> Bool;
+#[link_name="SDL_IntersectRect"]
+pub extern func IntersectRect(A: *Rect, B: *Rect, result: *Rect) -> Bool;
+#[link_name="SDL_UnionRect"]
+pub extern func UnionRect(A: *Rect, B: *Rect, result: *Rect);
+#[link_name="SDL_EnclosePoints"]
+pub extern func EnclosePoints(points: *Point, count: i32, clip: *Rect, result: *Rect) -> Bool;
+#[link_name="SDL_IntersectRectAndLine"]
+pub extern func IntersectRectAndLine(rect: *Rect, X1: *i32, Y1: *i32, X2: *i32, Y2: *i32) -> Bool;
+pub const BLENDMODE_NONE: u32 = 0;
+pub const BLENDMODE_BLEND: u32 = 1;
+pub const BLENDMODE_ADD: u32 = 2;
+pub const BLENDMODE_MOD: u32 = 4;
+pub const BLENDMODE_INVALID: u32 = 2147483647;
+pub typedef BlendMode u32;
+pub const BLENDOPERATION_ADD: u32 = 1;
+pub const BLENDOPERATION_SUBTRACT: u32 = 2;
+pub const BLENDOPERATION_REV_SUBTRACT: u32 = 3;
+pub const BLENDOPERATION_MINIMUM: u32 = 4;
+pub const BLENDOPERATION_MAXIMUM: u32 = 5;
+pub typedef BlendOperation u32;
+pub const BLENDFACTOR_ZERO: u32 = 1;
+pub const BLENDFACTOR_ONE: u32 = 2;
+pub const BLENDFACTOR_SRC_COLOR: u32 = 3;
+pub const BLENDFACTOR_ONE_MINUS_SRC_COLOR: u32 = 4;
+pub const BLENDFACTOR_SRC_ALPHA: u32 = 5;
+pub const BLENDFACTOR_ONE_MINUS_SRC_ALPHA: u32 = 6;
+pub const BLENDFACTOR_DST_COLOR: u32 = 7;
+pub const BLENDFACTOR_ONE_MINUS_DST_COLOR: u32 = 8;
+pub const BLENDFACTOR_DST_ALPHA: u32 = 9;
+pub const BLENDFACTOR_ONE_MINUS_DST_ALPHA: u32 = 10;
+pub typedef BlendFactor u32;
+#[link_name="SDL_ComposeCustomBlendMode"]
+pub extern func ComposeCustomBlendMode(srcColorFactor: BlendFactor, dstColorFactor: BlendFactor, colorOperation: BlendOperation, srcAlphaFactor: BlendFactor, dstAlphaFactor: BlendFactor, alphaOperation: BlendOperation) -> BlendMode;
+pub typedef Surface struct {
+    flags: u32,
+    format: *PixelFormat,
+    w: i32,
+    h: i32,
+    pitch: i32,
+    pixels: *void,
+    userdata: *void,
+    locked: i32,
+    lock_data: *void,
+    clip_rect: Rect,
+    map: *struct {},
+    refcount: i32,
+};
+pub typedef blit func* (_: *Surface, _: *Rect, _: *Surface, _: *Rect) -> i32;
+pub const YUV_CONVERSION_JPEG: u32 = 0;
+pub const YUV_CONVERSION_BT601: u32 = 1;
+pub const YUV_CONVERSION_BT709: u32 = 2;
+pub const YUV_CONVERSION_AUTOMATIC: u32 = 3;
+pub typedef YUV_CONVERSION_MODE u32;
+#[link_name="SDL_CreateRGBSurface"]
+pub extern func CreateRGBSurface(flags: u32, width: i32, height: i32, depth: i32, Rmask: u32, Gmask: u32, Bmask: u32, Amask: u32) -> *Surface;
+#[link_name="SDL_CreateRGBSurfaceWithFormat"]
+pub extern func CreateRGBSurfaceWithFormat(flags: u32, width: i32, height: i32, depth: i32, format: u32) -> *Surface;
+#[link_name="SDL_CreateRGBSurfaceFrom"]
+pub extern func CreateRGBSurfaceFrom(pixels: *void, width: i32, height: i32, depth: i32, pitch: i32, Rmask: u32, Gmask: u32, Bmask: u32, Amask: u32) -> *Surface;
+#[link_name="SDL_CreateRGBSurfaceWithFormatFrom"]
+pub extern func CreateRGBSurfaceWithFormatFrom(pixels: *void, width: i32, height: i32, depth: i32, pitch: i32, format: u32) -> *Surface;
+#[link_name="SDL_FreeSurface"]
+pub extern func FreeSurface(surface: *Surface);
+#[link_name="SDL_SetSurfacePalette"]
+pub extern func SetSurfacePalette(surface: *Surface, palette: *Palette) -> i32;
+#[link_name="SDL_LockSurface"]
+pub extern func LockSurface(surface: *Surface) -> i32;
+#[link_name="SDL_UnlockSurface"]
+pub extern func UnlockSurface(surface: *Surface);
+#[link_name="SDL_LoadBMP_RW"]
+pub extern func LoadBMP_RW(src: *RWops, freesrc: i32) -> *Surface;
+#[link_name="SDL_SaveBMP_RW"]
+pub extern func SaveBMP_RW(surface: *Surface, dst: *RWops, freedst: i32) -> i32;
+#[link_name="SDL_SetSurfaceRLE"]
+pub extern func SetSurfaceRLE(surface: *Surface, flag: i32) -> i32;
+#[link_name="SDL_SetColorKey"]
+pub extern func SetColorKey(surface: *Surface, flag: i32, key: u32) -> i32;
+#[link_name="SDL_HasColorKey"]
+pub extern func HasColorKey(surface: *Surface) -> Bool;
+#[link_name="SDL_GetColorKey"]
+pub extern func GetColorKey(surface: *Surface, key: *u32) -> i32;
+#[link_name="SDL_SetSurfaceColorMod"]
+pub extern func SetSurfaceColorMod(surface: *Surface, r: u8, g: u8, b: u8) -> i32;
+#[link_name="SDL_GetSurfaceColorMod"]
+pub extern func GetSurfaceColorMod(surface: *Surface, r: *u8, g: *u8, b: *u8) -> i32;
+#[link_name="SDL_SetSurfaceAlphaMod"]
+pub extern func SetSurfaceAlphaMod(surface: *Surface, alpha: u8) -> i32;
+#[link_name="SDL_GetSurfaceAlphaMod"]
+#[link_name="SDL_GetSurfaceAlphaMod"]
+pub extern func GetSurfaceAlphaMod(surface: *Surface, alpha: *u8) -> i32;
+#[link_name="SDL_SetSurfaceBlendMode"]
+pub extern func SetSurfaceBlendMode(surface: *Surface, blendMode: BlendMode) -> i32;
+#[link_name="SDL_GetSurfaceBlendMode"]
+pub extern func GetSurfaceBlendMode(surface: *Surface, blendMode: *BlendMode) -> i32;
+#[link_name="SDL_SetClipRect"]
+pub extern func SetClipRect(surface: *Surface, rect: *Rect) -> Bool;
+#[link_name="SDL_GetClipRect"]
+pub extern func GetClipRect(surface: *Surface, rect: *Rect);
+#[link_name="SDL_DuplicateSurface"]
+pub extern func DuplicateSurface(surface: *Surface) -> *Surface;
+#[link_name="SDL_ConvertSurface"]
+pub extern func ConvertSurface(src: *Surface, fmt: *PixelFormat, flags: u32) -> *Surface;
+#[link_name="SDL_ConvertSurfaceFormat"]
+pub extern func ConvertSurfaceFormat(src: *Surface, pixel_format: u32, flags: u32) -> *Surface;
+#[link_name="SDL_ConvertPixels"]
+pub extern func ConvertPixels(width: i32, height: i32, src_format: u32, src: *void, src_pitch: i32, dst_format: u32, dst: *void, dst_pitch: i32) -> i32;
+#[link_name="SDL_FillRect"]
+pub extern func FillRect(dst: *Surface, rect: *Rect, color: u32) -> i32;
+#[link_name="SDL_FillRects"]
+pub extern func FillRects(dst: *Surface, rects: *Rect, count: i32, color: u32) -> i32;
+#[link_name="SDL_UpperBlit"]
+pub extern func UpperBlit(src: *Surface, srcrect: *Rect, dst: *Surface, dstrect: *Rect) -> i32;
+#[link_name="SDL_LowerBlit"]
+pub extern func LowerBlit(src: *Surface, srcrect: *Rect, dst: *Surface, dstrect: *Rect) -> i32;
+#[link_name="SDL_SoftStretch"]
+pub extern func SoftStretch(src: *Surface, srcrect: *Rect, dst: *Surface, dstrect: *Rect) -> i32;
+#[link_name="SDL_UpperBlitScaled"]
+pub extern func UpperBlitScaled(src: *Surface, srcrect: *Rect, dst: *Surface, dstrect: *Rect) -> i32;
+#[link_name="SDL_LowerBlitScaled"]
+pub extern func LowerBlitScaled(src: *Surface, srcrect: *Rect, dst: *Surface, dstrect: *Rect) -> i32;
+#[link_name="SDL_SetYUVConversionMode"]
+pub extern func SetYUVConversionMode(mode: YUV_CONVERSION_MODE);
+#[link_name="SDL_GetYUVConversionMode"]
+pub extern func GetYUVConversionMode() -> YUV_CONVERSION_MODE;
+#[link_name="SDL_GetYUVConversionModeForResolution"]
+pub extern func GetYUVConversionModeForResolution(width: i32, height: i32) -> YUV_CONVERSION_MODE;
+pub typedef DisplayMode struct {
+    format: u32,
+    w: i32,
+    h: i32,
+    refresh_rate: i32,
+    driverdata: *void,
+};
+pub typedef Window struct {
+};
+pub const WINDOW_FULLSCREEN: u32 = 1;
+pub const WINDOW_OPENGL: u32 = 2;
+pub const WINDOW_SHOWN: u32 = 4;
+pub const WINDOW_HIDDEN: u32 = 8;
+pub const WINDOW_BORDERLESS: u32 = 16;
+pub const WINDOW_RESIZABLE: u32 = 32;
+pub const WINDOW_MINIMIZED: u32 = 64;
+pub const WINDOW_MAXIMIZED: u32 = 128;
+pub const WINDOW_INPUT_GRABBED: u32 = 256;
+pub const WINDOW_INPUT_FOCUS: u32 = 512;
+pub const WINDOW_MOUSE_FOCUS: u32 = 1024;
+pub const WINDOW_FULLSCREEN_DESKTOP: u32 = 4097;
+pub const WINDOW_FOREIGN: u32 = 2048;
+pub const WINDOW_ALLOW_HIGHDPI: u32 = 8192;
+pub const WINDOW_MOUSE_CAPTURE: u32 = 16384;
+pub const WINDOW_ALWAYS_ON_TOP: u32 = 32768;
+pub const WINDOW_SKIP_TASKBAR: u32 = 65536;
+pub const WINDOW_UTILITY: u32 = 131072;
+pub const WINDOW_TOOLTIP: u32 = 262144;
+pub const WINDOW_POPUP_MENU: u32 = 524288;
+pub const WINDOW_VULKAN: u32 = 268435456;
+pub typedef WindowFlags u32;
+pub const WINDOWEVENT_NONE: u32 = 0;
+pub const WINDOWEVENT_SHOWN: u32 = 1;
+pub const WINDOWEVENT_HIDDEN: u32 = 2;
+pub const WINDOWEVENT_EXPOSED: u32 = 3;
+pub const WINDOWEVENT_MOVED: u32 = 4;
+pub const WINDOWEVENT_RESIZED: u32 = 5;
+pub const WINDOWEVENT_SIZE_CHANGED: u32 = 6;
+pub const WINDOWEVENT_MINIMIZED: u32 = 7;
+pub const WINDOWEVENT_MAXIMIZED: u32 = 8;
+pub const WINDOWEVENT_RESTORED: u32 = 9;
+pub const WINDOWEVENT_ENTER: u32 = 10;
+pub const WINDOWEVENT_LEAVE: u32 = 11;
+pub const WINDOWEVENT_FOCUS_GAINED: u32 = 12;
+pub const WINDOWEVENT_FOCUS_LOST: u32 = 13;
+pub const WINDOWEVENT_CLOSE: u32 = 14;
+pub const WINDOWEVENT_TAKE_FOCUS: u32 = 15;
+pub const WINDOWEVENT_HIT_TEST: u32 = 16;
+pub typedef WindowEventID u32;
+pub const DISPLAYEVENT_NONE: u32 = 0;
+pub const DISPLAYEVENT_ORIENTATION: u32 = 1;
+pub typedef DisplayEventID u32;
+pub const ORIENTATION_UNKNOWN: u32 = 0;
+pub const ORIENTATION_LANDSCAPE: u32 = 1;
+pub const ORIENTATION_LANDSCAPE_FLIPPED: u32 = 2;
+pub const ORIENTATION_PORTRAIT: u32 = 3;
+pub const ORIENTATION_PORTRAIT_FLIPPED: u32 = 4;
+pub typedef DisplayOrientation u32;
+pub typedef GLContext *void;
+pub const GL_RED_SIZE: u32 = 0;
+pub const GL_GREEN_SIZE: u32 = 1;
+pub const GL_BLUE_SIZE: u32 = 2;
+pub const GL_ALPHA_SIZE: u32 = 3;
+pub const GL_BUFFER_SIZE: u32 = 4;
+pub const GL_DOUBLEBUFFER: u32 = 5;
+pub const GL_DEPTH_SIZE: u32 = 6;
+pub const GL_STENCIL_SIZE: u32 = 7;
+pub const GL_ACCUM_RED_SIZE: u32 = 8;
+pub const GL_ACCUM_GREEN_SIZE: u32 = 9;
+pub const GL_ACCUM_BLUE_SIZE: u32 = 10;
+pub const GL_ACCUM_ALPHA_SIZE: u32 = 11;
+pub const GL_STEREO: u32 = 12;
+pub const GL_MULTISAMPLEBUFFERS: u32 = 13;
+pub const GL_MULTISAMPLESAMPLES: u32 = 14;
+pub const GL_ACCELERATED_VISUAL: u32 = 15;
+pub const GL_RETAINED_BACKING: u32 = 16;
+pub const GL_CONTEXT_MAJOR_VERSION: u32 = 17;
+pub const GL_CONTEXT_MINOR_VERSION: u32 = 18;
+pub const GL_CONTEXT_EGL: u32 = 19;
+pub const GL_CONTEXT_FLAGS: u32 = 20;
+pub const GL_CONTEXT_PROFILE_MASK: u32 = 21;
+pub const GL_SHARE_WITH_CURRENT_CONTEXT: u32 = 22;
+pub const GL_FRAMEBUFFER_SRGB_CAPABLE: u32 = 23;
+pub const GL_CONTEXT_RELEASE_BEHAVIOR: u32 = 24;
+pub const GL_CONTEXT_RESET_NOTIFICATION: u32 = 25;
+pub const GL_CONTEXT_NO_ERROR: u32 = 26;
+pub typedef GLattr u32;
+pub const GL_CONTEXT_PROFILE_CORE: u32 = 1;
+pub const GL_CONTEXT_PROFILE_COMPATIBILITY: u32 = 2;
+pub const GL_CONTEXT_PROFILE_ES: u32 = 4;
+pub typedef GLprofile u32;
+pub const GL_CONTEXT_DEBUG_FLAG: u32 = 1;
+pub const GL_CONTEXT_FORWARD_COMPATIBLE_FLAG: u32 = 2;
+pub const GL_CONTEXT_ROBUST_ACCESS_FLAG: u32 = 4;
+pub const GL_CONTEXT_RESET_ISOLATION_FLAG: u32 = 8;
+pub typedef GLcontextFlag u32;
+pub const GL_CONTEXT_RELEASE_BEHAVIOR_NONE: u32 = 0;
+pub const GL_CONTEXT_RELEASE_BEHAVIOR_FLUSH: u32 = 1;
+pub typedef GLcontextReleaseFlag u32;
+pub const GL_CONTEXT_RESET_NO_NOTIFICATION: u32 = 0;
+pub const GL_CONTEXT_RESET_LOSE_CONTEXT: u32 = 1;
+pub typedef GLContextResetNotification u32;
+#[link_name="SDL_GetNumVideoDrivers"]
+pub extern func GetNumVideoDrivers() -> i32;
+#[link_name="SDL_GetVideoDriver"]
+pub extern func GetVideoDriver(index: i32) -> *i8;
+#[link_name="SDL_VideoInit"]
+pub extern func VideoInit(driver_name: *i8) -> i32;
+#[link_name="SDL_VideoQuit"]
+pub extern func VideoQuit();
+#[link_name="SDL_GetCurrentVideoDriver"]
+pub extern func GetCurrentVideoDriver() -> *i8;
+#[link_name="SDL_GetNumVideoDisplays"]
+pub extern func GetNumVideoDisplays() -> i32;
+#[link_name="SDL_GetDisplayName"]
+pub extern func GetDisplayName(displayIndex: i32) -> *i8;
+#[link_name="SDL_GetDisplayBounds"]
+pub extern func GetDisplayBounds(displayIndex: i32, rect: *Rect) -> i32;
+#[link_name="SDL_GetDisplayUsableBounds"]
+pub extern func GetDisplayUsableBounds(displayIndex: i32, rect: *Rect) -> i32;
+#[link_name="SDL_GetDisplayDPI"]
+pub extern func GetDisplayDPI(displayIndex: i32, ddpi: *float, hdpi: *float, vdpi: *float) -> i32;
+#[link_name="SDL_GetDisplayOrientation"]
+pub extern func GetDisplayOrientation(displayIndex: i32) -> DisplayOrientation;
+#[link_name="SDL_GetNumDisplayModes"]
+pub extern func GetNumDisplayModes(displayIndex: i32) -> i32;
+#[link_name="SDL_GetDisplayMode"]
+pub extern func GetDisplayMode(displayIndex: i32, modeIndex: i32, mode: *DisplayMode) -> i32;
+#[link_name="SDL_GetDesktopDisplayMode"]
+pub extern func GetDesktopDisplayMode(displayIndex: i32, mode: *DisplayMode) -> i32;
+#[link_name="SDL_GetCurrentDisplayMode"]
+pub extern func GetCurrentDisplayMode(displayIndex: i32, mode: *DisplayMode) -> i32;
+#[link_name="SDL_GetClosestDisplayMode"]
+pub extern func GetClosestDisplayMode(displayIndex: i32, mode: *DisplayMode, closest: *DisplayMode) -> *DisplayMode;
+#[link_name="SDL_GetWindowDisplayIndex"]
+pub extern func GetWindowDisplayIndex(window: *Window) -> i32;
+#[link_name="SDL_SetWindowDisplayMode"]
+pub extern func SetWindowDisplayMode(window: *Window, mode: *DisplayMode) -> i32;
+#[link_name="SDL_GetWindowDisplayMode"]
+pub extern func GetWindowDisplayMode(window: *Window, mode: *DisplayMode) -> i32;
+#[link_name="SDL_GetWindowPixelFormat"]
+pub extern func GetWindowPixelFormat(window: *Window) -> u32;
+#[link_name="SDL_CreateWindow"]
+pub extern func CreateWindow(title: *i8, x: i32, y: i32, w: i32, h: i32, flags: u32) -> *Window;
+#[link_name="SDL_CreateWindowFrom"]
+pub extern func CreateWindowFrom(data: *void) -> *Window;
+#[link_name="SDL_GetWindowID"]
+pub extern func GetWindowID(window: *Window) -> u32;
+#[link_name="SDL_GetWindowFromID"]
+pub extern func GetWindowFromID(id: u32) -> *Window;
+#[link_name="SDL_GetWindowFlags"]
+pub extern func GetWindowFlags(window: *Window) -> u32;
+#[link_name="SDL_SetWindowTitle"]
+pub extern func SetWindowTitle(window: *Window, title: *i8);
+#[link_name="SDL_GetWindowTitle"]
+pub extern func GetWindowTitle(window: *Window) -> *i8;
+#[link_name="SDL_SetWindowIcon"]
+pub extern func SetWindowIcon(window: *Window, icon: *Surface);
+#[link_name="SDL_SetWindowData"]
+pub extern func SetWindowData(window: *Window, name: *i8, userdata: *void) -> *void;
+#[link_name="SDL_GetWindowData"]
+pub extern func GetWindowData(window: *Window, name: *i8) -> *void;
+#[link_name="SDL_SetWindowPosition"]
+pub extern func SetWindowPosition(window: *Window, x: i32, y: i32);
+#[link_name="SDL_GetWindowPosition"]
+pub extern func GetWindowPosition(window: *Window, x: *i32, y: *i32);
+#[link_name="SDL_SetWindowSize"]
+pub extern func SetWindowSize(window: *Window, w: i32, h: i32);
+#[link_name="SDL_GetWindowSize"]
+pub extern func GetWindowSize(window: *Window, w: *i32, h: *i32);
+#[link_name="SDL_GetWindowBordersSize"]
+pub extern func GetWindowBordersSize(window: *Window, top: *i32, left: *i32, bottom: *i32, right: *i32) -> i32;
+#[link_name="SDL_SetWindowMinimumSize"]
+pub extern func SetWindowMinimumSize(window: *Window, min_w: i32, min_h: i32);
+#[link_name="SDL_GetWindowMinimumSize"]
+pub extern func GetWindowMinimumSize(window: *Window, w: *i32, h: *i32);
+#[link_name="SDL_SetWindowMaximumSize"]
+pub extern func SetWindowMaximumSize(window: *Window, max_w: i32, max_h: i32);
+#[link_name="SDL_GetWindowMaximumSize"]
+pub extern func GetWindowMaximumSize(window: *Window, w: *i32, h: *i32);
+#[link_name="SDL_SetWindowBordered"]
+pub extern func SetWindowBordered(window: *Window, bordered: Bool);
+#[link_name="SDL_SetWindowResizable"]
+pub extern func SetWindowResizable(window: *Window, resizable: Bool);
+#[link_name="SDL_ShowWindow"]
+pub extern func ShowWindow(window: *Window);
+#[link_name="SDL_HideWindow"]
+pub extern func HideWindow(window: *Window);
+#[link_name="SDL_RaiseWindow"]
+pub extern func RaiseWindow(window: *Window);
+#[link_name="SDL_MaximizeWindow"]
+pub extern func MaximizeWindow(window: *Window);
+#[link_name="SDL_MinimizeWindow"]
+pub extern func MinimizeWindow(window: *Window);
+#[link_name="SDL_RestoreWindow"]
+pub extern func RestoreWindow(window: *Window);
+#[link_name="SDL_SetWindowFullscreen"]
+pub extern func SetWindowFullscreen(window: *Window, flags: u32) -> i32;
+#[link_name="SDL_GetWindowSurface"]
+pub extern func GetWindowSurface(window: *Window) -> *Surface;
+#[link_name="SDL_UpdateWindowSurface"]
+pub extern func UpdateWindowSurface(window: *Window) -> i32;
+#[link_name="SDL_UpdateWindowSurfaceRects"]
+pub extern func UpdateWindowSurfaceRects(window: *Window, rects: *Rect, numrects: i32) -> i32;
+#[link_name="SDL_SetWindowGrab"]
+pub extern func SetWindowGrab(window: *Window, grabbed: Bool);
+#[link_name="SDL_GetWindowGrab"]
+pub extern func GetWindowGrab(window: *Window) -> Bool;
+#[link_name="SDL_GetGrabbedWindow"]
+pub extern func GetGrabbedWindow() -> *Window;
+#[link_name="SDL_SetWindowBrightness"]
+pub extern func SetWindowBrightness(window: *Window, brightness: float) -> i32;
+#[link_name="SDL_GetWindowBrightness"]
+pub extern func GetWindowBrightness(window: *Window) -> float;
+#[link_name="SDL_SetWindowOpacity"]
+pub extern func SetWindowOpacity(window: *Window, opacity: float) -> i32;
+#[link_name="SDL_GetWindowOpacity"]
+pub extern func GetWindowOpacity(window: *Window, out_opacity: *float) -> i32;
+#[link_name="SDL_SetWindowModalFor"]
+pub extern func SetWindowModalFor(modal_window: *Window, parent_window: *Window) -> i32;
+#[link_name="SDL_SetWindowInputFocus"]
+pub extern func SetWindowInputFocus(window: *Window) -> i32;
+#[link_name="SDL_SetWindowGammaRamp"]
+pub extern func SetWindowGammaRamp(window: *Window, red: *u16, green: *u16, blue: *u16) -> i32;
+#[link_name="SDL_GetWindowGammaRamp"]
+pub extern func GetWindowGammaRamp(window: *Window, red: *u16, green: *u16, blue: *u16) -> i32;
+pub const HITTEST_NORMAL: u32 = 0;
+pub const HITTEST_DRAGGABLE: u32 = 1;
+pub const HITTEST_RESIZE_TOPLEFT: u32 = 2;
+pub const HITTEST_RESIZE_TOP: u32 = 3;
+pub const HITTEST_RESIZE_TOPRIGHT: u32 = 4;
+pub const HITTEST_RESIZE_RIGHT: u32 = 5;
+pub const HITTEST_RESIZE_BOTTOMRIGHT: u32 = 6;
+pub const HITTEST_RESIZE_BOTTOM: u32 = 7;
+pub const HITTEST_RESIZE_BOTTOMLEFT: u32 = 8;
+pub const HITTEST_RESIZE_LEFT: u32 = 9;
+pub typedef HitTestResult u32;
+pub typedef HitTest func* (_: *Window, _: *Point, _: *void) -> HitTestResult;
+#[link_name="SDL_SetWindowHitTest"]
+pub extern func SetWindowHitTest(window: *Window, callback: HitTest, callback_data: *void) -> i32;
+#[link_name="SDL_DestroyWindow"]
+pub extern func DestroyWindow(window: *Window);
+#[link_name="SDL_IsScreenSaverEnabled"]
+pub extern func IsScreenSaverEnabled() -> Bool;
+#[link_name="SDL_EnableScreenSaver"]
+pub extern func EnableScreenSaver();
+#[link_name="SDL_DisableScreenSaver"]
+pub extern func DisableScreenSaver();
+#[link_name="SDL_GL_LoadLibrary"]
+pub extern func GL_LoadLibrary(path: *i8) -> i32;
+#[link_name="SDL_GL_GetProcAddress"]
+pub extern func GL_GetProcAddress(proc: *i8) -> *void;
+#[link_name="SDL_GL_UnloadLibrary"]
+pub extern func GL_UnloadLibrary();
+#[link_name="SDL_GL_ExtensionSupported"]
+pub extern func GL_ExtensionSupported(extension: *i8) -> Bool;
+#[link_name="SDL_GL_ResetAttributes"]
+pub extern func GL_ResetAttributes();
+#[link_name="SDL_GL_SetAttribute"]
+pub extern func GL_SetAttribute(attr: GLattr, value: i32) -> i32;
+#[link_name="SDL_GL_GetAttribute"]
+pub extern func GL_GetAttribute(attr: GLattr, value: *i32) -> i32;
+#[link_name="SDL_GL_CreateContext"]
+pub extern func GL_CreateContext(window: *Window) -> GLContext;
+#[link_name="SDL_GL_MakeCurrent"]
+pub extern func GL_MakeCurrent(window: *Window, context: GLContext) -> i32;
+#[link_name="SDL_GL_GetCurrentWindow"]
+pub extern func GL_GetCurrentWindow() -> *Window;
+#[link_name="SDL_GL_GetCurrentContext"]
+pub extern func GL_GetCurrentContext() -> GLContext;
+#[link_name="SDL_GL_GetDrawableSize"]
+pub extern func GL_GetDrawableSize(window: *Window, w: *i32, h: *i32);
+#[link_name="SDL_GL_SetSwapInterval"]
+pub extern func GL_SetSwapInterval(interval: i32) -> i32;
+#[link_name="SDL_GL_GetSwapInterval"]
+pub extern func GL_GetSwapInterval() -> i32;
+#[link_name="SDL_GL_SwapWindow"]
+pub extern func GL_SwapWindow(window: *Window);
+#[link_name="SDL_GL_DeleteContext"]
+pub extern func GL_DeleteContext(context: GLContext);
+pub const SCANCODE_UNKNOWN: u32 = 0;
+pub const SCANCODE_A: u32 = 4;
+pub const SCANCODE_B: u32 = 5;
+pub const SCANCODE_C: u32 = 6;
+pub const SCANCODE_D: u32 = 7;
+pub const SCANCODE_E: u32 = 8;
+pub const SCANCODE_F: u32 = 9;
+pub const SCANCODE_G: u32 = 10;
+pub const SCANCODE_H: u32 = 11;
+pub const SCANCODE_I: u32 = 12;
+pub const SCANCODE_J: u32 = 13;
+pub const SCANCODE_K: u32 = 14;
+pub const SCANCODE_L: u32 = 15;
+pub const SCANCODE_M: u32 = 16;
+pub const SCANCODE_N: u32 = 17;
+pub const SCANCODE_O: u32 = 18;
+pub const SCANCODE_P: u32 = 19;
+pub const SCANCODE_Q: u32 = 20;
+pub const SCANCODE_R: u32 = 21;
+pub const SCANCODE_S: u32 = 22;
+pub const SCANCODE_T: u32 = 23;
+pub const SCANCODE_U: u32 = 24;
+pub const SCANCODE_V: u32 = 25;
+pub const SCANCODE_W: u32 = 26;
+pub const SCANCODE_X: u32 = 27;
+pub const SCANCODE_Y: u32 = 28;
+pub const SCANCODE_Z: u32 = 29;
+pub const SCANCODE_1: u32 = 30;
+pub const SCANCODE_2: u32 = 31;
+pub const SCANCODE_3: u32 = 32;
+pub const SCANCODE_4: u32 = 33;
+pub const SCANCODE_5: u32 = 34;
+pub const SCANCODE_6: u32 = 35;
+pub const SCANCODE_7: u32 = 36;
+pub const SCANCODE_8: u32 = 37;
+pub const SCANCODE_9: u32 = 38;
+pub const SCANCODE_0: u32 = 39;
+pub const SCANCODE_RETURN: u32 = 40;
+pub const SCANCODE_ESCAPE: u32 = 41;
+pub const SCANCODE_BACKSPACE: u32 = 42;
+pub const SCANCODE_TAB: u32 = 43;
+pub const SCANCODE_SPACE: u32 = 44;
+pub const SCANCODE_MINUS: u32 = 45;
+pub const SCANCODE_EQUALS: u32 = 46;
+pub const SCANCODE_LEFTBRACKET: u32 = 47;
+pub const SCANCODE_RIGHTBRACKET: u32 = 48;
+pub const SCANCODE_BACKSLASH: u32 = 49;
+pub const SCANCODE_NONUSHASH: u32 = 50;
+pub const SCANCODE_SEMICOLON: u32 = 51;
+pub const SCANCODE_APOSTROPHE: u32 = 52;
+pub const SCANCODE_GRAVE: u32 = 53;
+pub const SCANCODE_COMMA: u32 = 54;
+pub const SCANCODE_PERIOD: u32 = 55;
+pub const SCANCODE_SLASH: u32 = 56;
+pub const SCANCODE_CAPSLOCK: u32 = 57;
+pub const SCANCODE_F1: u32 = 58;
+pub const SCANCODE_F2: u32 = 59;
+pub const SCANCODE_F3: u32 = 60;
+pub const SCANCODE_F4: u32 = 61;
+pub const SCANCODE_F5: u32 = 62;
+pub const SCANCODE_F6: u32 = 63;
+pub const SCANCODE_F7: u32 = 64;
+pub const SCANCODE_F8: u32 = 65;
+pub const SCANCODE_F9: u32 = 66;
+pub const SCANCODE_F10: u32 = 67;
+pub const SCANCODE_F11: u32 = 68;
+pub const SCANCODE_F12: u32 = 69;
+pub const SCANCODE_PRINTSCREEN: u32 = 70;
+pub const SCANCODE_SCROLLLOCK: u32 = 71;
+pub const SCANCODE_PAUSE: u32 = 72;
+pub const SCANCODE_INSERT: u32 = 73;
+pub const SCANCODE_HOME: u32 = 74;
+pub const SCANCODE_PAGEUP: u32 = 75;
+pub const SCANCODE_DELETE: u32 = 76;
+pub const SCANCODE_END: u32 = 77;
+pub const SCANCODE_PAGEDOWN: u32 = 78;
+pub const SCANCODE_RIGHT: u32 = 79;
+pub const SCANCODE_LEFT: u32 = 80;
+pub const SCANCODE_DOWN: u32 = 81;
+pub const SCANCODE_UP: u32 = 82;
+pub const SCANCODE_NUMLOCKCLEAR: u32 = 83;
+pub const SCANCODE_KP_DIVIDE: u32 = 84;
+pub const SCANCODE_KP_MULTIPLY: u32 = 85;
+pub const SCANCODE_KP_MINUS: u32 = 86;
+pub const SCANCODE_KP_PLUS: u32 = 87;
+pub const SCANCODE_KP_ENTER: u32 = 88;
+pub const SCANCODE_KP_1: u32 = 89;
+pub const SCANCODE_KP_2: u32 = 90;
+pub const SCANCODE_KP_3: u32 = 91;
+pub const SCANCODE_KP_4: u32 = 92;
+pub const SCANCODE_KP_5: u32 = 93;
+pub const SCANCODE_KP_6: u32 = 94;
+pub const SCANCODE_KP_7: u32 = 95;
+pub const SCANCODE_KP_8: u32 = 96;
+pub const SCANCODE_KP_9: u32 = 97;
+pub const SCANCODE_KP_0: u32 = 98;
+pub const SCANCODE_KP_PERIOD: u32 = 99;
+pub const SCANCODE_NONUSBACKSLASH: u32 = 100;
+pub const SCANCODE_APPLICATION: u32 = 101;
+pub const SCANCODE_POWER: u32 = 102;
+pub const SCANCODE_KP_EQUALS: u32 = 103;
+pub const SCANCODE_F13: u32 = 104;
+pub const SCANCODE_F14: u32 = 105;
+pub const SCANCODE_F15: u32 = 106;
+pub const SCANCODE_F16: u32 = 107;
+pub const SCANCODE_F17: u32 = 108;
+pub const SCANCODE_F18: u32 = 109;
+pub const SCANCODE_F19: u32 = 110;
+pub const SCANCODE_F20: u32 = 111;
+pub const SCANCODE_F21: u32 = 112;
+pub const SCANCODE_F22: u32 = 113;
+pub const SCANCODE_F23: u32 = 114;
+pub const SCANCODE_F24: u32 = 115;
+pub const SCANCODE_EXECUTE: u32 = 116;
+pub const SCANCODE_HELP: u32 = 117;
+pub const SCANCODE_MENU: u32 = 118;
+pub const SCANCODE_SELECT: u32 = 119;
+pub const SCANCODE_STOP: u32 = 120;
+pub const SCANCODE_AGAIN: u32 = 121;
+pub const SCANCODE_UNDO: u32 = 122;
+pub const SCANCODE_CUT: u32 = 123;
+pub const SCANCODE_COPY: u32 = 124;
+pub const SCANCODE_PASTE: u32 = 125;
+pub const SCANCODE_FIND: u32 = 126;
+pub const SCANCODE_MUTE: u32 = 127;
+pub const SCANCODE_VOLUMEUP: u32 = 128;
+pub const SCANCODE_VOLUMEDOWN: u32 = 129;
+pub const SCANCODE_KP_COMMA: u32 = 133;
+pub const SCANCODE_KP_EQUALSAS400: u32 = 134;
+pub const SCANCODE_INTERNATIONAL1: u32 = 135;
+pub const SCANCODE_INTERNATIONAL2: u32 = 136;
+pub const SCANCODE_INTERNATIONAL3: u32 = 137;
+pub const SCANCODE_INTERNATIONAL4: u32 = 138;
+pub const SCANCODE_INTERNATIONAL5: u32 = 139;
+pub const SCANCODE_INTERNATIONAL6: u32 = 140;
+pub const SCANCODE_INTERNATIONAL7: u32 = 141;
+pub const SCANCODE_INTERNATIONAL8: u32 = 142;
+pub const SCANCODE_INTERNATIONAL9: u32 = 143;
+pub const SCANCODE_LANG1: u32 = 144;
+pub const SCANCODE_LANG2: u32 = 145;
+pub const SCANCODE_LANG3: u32 = 146;
+pub const SCANCODE_LANG4: u32 = 147;
+pub const SCANCODE_LANG5: u32 = 148;
+pub const SCANCODE_LANG6: u32 = 149;
+pub const SCANCODE_LANG7: u32 = 150;
+pub const SCANCODE_LANG8: u32 = 151;
+pub const SCANCODE_LANG9: u32 = 152;
+pub const SCANCODE_ALTERASE: u32 = 153;
+pub const SCANCODE_SYSREQ: u32 = 154;
+pub const SCANCODE_CANCEL: u32 = 155;
+pub const SCANCODE_CLEAR: u32 = 156;
+pub const SCANCODE_PRIOR: u32 = 157;
+pub const SCANCODE_RETURN2: u32 = 158;
+pub const SCANCODE_SEPARATOR: u32 = 159;
+pub const SCANCODE_OUT: u32 = 160;
+pub const SCANCODE_OPER: u32 = 161;
+pub const SCANCODE_CLEARAGAIN: u32 = 162;
+pub const SCANCODE_CRSEL: u32 = 163;
+pub const SCANCODE_EXSEL: u32 = 164;
+pub const SCANCODE_KP_00: u32 = 176;
+pub const SCANCODE_KP_000: u32 = 177;
+pub const SCANCODE_THOUSANDSSEPARATOR: u32 = 178;
+pub const SCANCODE_DECIMALSEPARATOR: u32 = 179;
+pub const SCANCODE_CURRENCYUNIT: u32 = 180;
+pub const SCANCODE_CURRENCYSUBUNIT: u32 = 181;
+pub const SCANCODE_KP_LEFTPAREN: u32 = 182;
+pub const SCANCODE_KP_RIGHTPAREN: u32 = 183;
+pub const SCANCODE_KP_LEFTBRACE: u32 = 184;
+pub const SCANCODE_KP_RIGHTBRACE: u32 = 185;
+pub const SCANCODE_KP_TAB: u32 = 186;
+pub const SCANCODE_KP_BACKSPACE: u32 = 187;
+pub const SCANCODE_KP_A: u32 = 188;
+pub const SCANCODE_KP_B: u32 = 189;
+pub const SCANCODE_KP_C: u32 = 190;
+pub const SCANCODE_KP_D: u32 = 191;
+pub const SCANCODE_KP_E: u32 = 192;
+pub const SCANCODE_KP_F: u32 = 193;
+pub const SCANCODE_KP_XOR: u32 = 194;
+pub const SCANCODE_KP_POWER: u32 = 195;
+pub const SCANCODE_KP_PERCENT: u32 = 196;
+pub const SCANCODE_KP_LESS: u32 = 197;
+pub const SCANCODE_KP_GREATER: u32 = 198;
+pub const SCANCODE_KP_AMPERSAND: u32 = 199;
+pub const SCANCODE_KP_DBLAMPERSAND: u32 = 200;
+pub const SCANCODE_KP_VERTICALBAR: u32 = 201;
+pub const SCANCODE_KP_DBLVERTICALBAR: u32 = 202;
+pub const SCANCODE_KP_COLON: u32 = 203;
+pub const SCANCODE_KP_HASH: u32 = 204;
+pub const SCANCODE_KP_SPACE: u32 = 205;
+pub const SCANCODE_KP_AT: u32 = 206;
+pub const SCANCODE_KP_EXCLAM: u32 = 207;
+pub const SCANCODE_KP_MEMSTORE: u32 = 208;
+pub const SCANCODE_KP_MEMRECALL: u32 = 209;
+pub const SCANCODE_KP_MEMCLEAR: u32 = 210;
+pub const SCANCODE_KP_MEMADD: u32 = 211;
+pub const SCANCODE_KP_MEMSUBTRACT: u32 = 212;
+pub const SCANCODE_KP_MEMMULTIPLY: u32 = 213;
+pub const SCANCODE_KP_MEMDIVIDE: u32 = 214;
+pub const SCANCODE_KP_PLUSMINUS: u32 = 215;
+pub const SCANCODE_KP_CLEAR: u32 = 216;
+pub const SCANCODE_KP_CLEARENTRY: u32 = 217;
+pub const SCANCODE_KP_BINARY: u32 = 218;
+pub const SCANCODE_KP_OCTAL: u32 = 219;
+pub const SCANCODE_KP_DECIMAL: u32 = 220;
+pub const SCANCODE_KP_HEXADECIMAL: u32 = 221;
+pub const SCANCODE_LCTRL: u32 = 224;
+pub const SCANCODE_LSHIFT: u32 = 225;
+pub const SCANCODE_LALT: u32 = 226;
+pub const SCANCODE_LGUI: u32 = 227;
+pub const SCANCODE_RCTRL: u32 = 228;
+pub const SCANCODE_RSHIFT: u32 = 229;
+pub const SCANCODE_RALT: u32 = 230;
+pub const SCANCODE_RGUI: u32 = 231;
+pub const SCANCODE_MODE: u32 = 257;
+pub const SCANCODE_AUDIONEXT: u32 = 258;
+pub const SCANCODE_AUDIOPREV: u32 = 259;
+pub const SCANCODE_AUDIOSTOP: u32 = 260;
+pub const SCANCODE_AUDIOPLAY: u32 = 261;
+pub const SCANCODE_AUDIOMUTE: u32 = 262;
+pub const SCANCODE_MEDIASELECT: u32 = 263;
+pub const SCANCODE_WWW: u32 = 264;
+pub const SCANCODE_MAIL: u32 = 265;
+pub const SCANCODE_CALCULATOR: u32 = 266;
+pub const SCANCODE_COMPUTER: u32 = 267;
+pub const SCANCODE_AC_SEARCH: u32 = 268;
+pub const SCANCODE_AC_HOME: u32 = 269;
+pub const SCANCODE_AC_BACK: u32 = 270;
+pub const SCANCODE_AC_FORWARD: u32 = 271;
+pub const SCANCODE_AC_STOP: u32 = 272;
+pub const SCANCODE_AC_REFRESH: u32 = 273;
+pub const SCANCODE_AC_BOOKMARKS: u32 = 274;
+pub const SCANCODE_BRIGHTNESSDOWN: u32 = 275;
+pub const SCANCODE_BRIGHTNESSUP: u32 = 276;
+pub const SCANCODE_DISPLAYSWITCH: u32 = 277;
+pub const SCANCODE_KBDILLUMTOGGLE: u32 = 278;
+pub const SCANCODE_KBDILLUMDOWN: u32 = 279;
+pub const SCANCODE_KBDILLUMUP: u32 = 280;
+pub const SCANCODE_EJECT: u32 = 281;
+pub const SCANCODE_SLEEP: u32 = 282;
+pub const SCANCODE_APP1: u32 = 283;
+pub const SCANCODE_APP2: u32 = 284;
+pub const SCANCODE_AUDIOREWIND: u32 = 285;
+pub const SCANCODE_AUDIOFASTFORWARD: u32 = 286;
+pub const NUM_SCANCODES: u32 = 512;
+pub typedef Scancode u32;
+pub typedef Keycode i32;
+pub const SDLK_UNKNOWN: u32 = 0;
+pub const SDLK_RETURN: u32 = 13;
+pub const SDLK_ESCAPE: u32 = 27;
+pub const SDLK_BACKSPACE: u32 = 8;
+pub const SDLK_TAB: u32 = 9;
+pub const SDLK_SPACE: u32 = 32;
+pub const SDLK_EXCLAIM: u32 = 33;
+pub const SDLK_QUOTEDBL: u32 = 34;
+pub const SDLK_HASH: u32 = 35;
+pub const SDLK_PERCENT: u32 = 37;
+pub const SDLK_DOLLAR: u32 = 36;
+pub const SDLK_AMPERSAND: u32 = 38;
+pub const SDLK_QUOTE: u32 = 39;
+pub const SDLK_LEFTPAREN: u32 = 40;
+pub const SDLK_RIGHTPAREN: u32 = 41;
+pub const SDLK_ASTERISK: u32 = 42;
+pub const SDLK_PLUS: u32 = 43;
+pub const SDLK_COMMA: u32 = 44;
+pub const SDLK_MINUS: u32 = 45;
+pub const SDLK_PERIOD: u32 = 46;
+pub const SDLK_SLASH: u32 = 47;
+pub const SDLK_0: u32 = 48;
+pub const SDLK_1: u32 = 49;
+pub const SDLK_2: u32 = 50;
+pub const SDLK_3: u32 = 51;
+pub const SDLK_4: u32 = 52;
+pub const SDLK_5: u32 = 53;
+pub const SDLK_6: u32 = 54;
+pub const SDLK_7: u32 = 55;
+pub const SDLK_8: u32 = 56;
+pub const SDLK_9: u32 = 57;
+pub const SDLK_COLON: u32 = 58;
+pub const SDLK_SEMICOLON: u32 = 59;
+pub const SDLK_LESS: u32 = 60;
+pub const SDLK_EQUALS: u32 = 61;
+pub const SDLK_GREATER: u32 = 62;
+pub const SDLK_QUESTION: u32 = 63;
+pub const SDLK_AT: u32 = 64;
+pub const SDLK_LEFTBRACKET: u32 = 91;
+pub const SDLK_BACKSLASH: u32 = 92;
+pub const SDLK_RIGHTBRACKET: u32 = 93;
+pub const SDLK_CARET: u32 = 94;
+pub const SDLK_UNDERSCORE: u32 = 95;
+pub const SDLK_BACKQUOTE: u32 = 96;
+pub const SDLK_a: u32 = 97;
+pub const SDLK_b: u32 = 98;
+pub const SDLK_c: u32 = 99;
+pub const SDLK_d: u32 = 100;
+pub const SDLK_e: u32 = 101;
+pub const SDLK_f: u32 = 102;
+pub const SDLK_g: u32 = 103;
+pub const SDLK_h: u32 = 104;
+pub const SDLK_i: u32 = 105;
+pub const SDLK_j: u32 = 106;
+pub const SDLK_k: u32 = 107;
+pub const SDLK_l: u32 = 108;
+pub const SDLK_m: u32 = 109;
+pub const SDLK_n: u32 = 110;
+pub const SDLK_o: u32 = 111;
+pub const SDLK_p: u32 = 112;
+pub const SDLK_q: u32 = 113;
+pub const SDLK_r: u32 = 114;
+pub const SDLK_s: u32 = 115;
+pub const SDLK_t: u32 = 116;
+pub const SDLK_u: u32 = 117;
+pub const SDLK_v: u32 = 118;
+pub const SDLK_w: u32 = 119;
+pub const SDLK_x: u32 = 120;
+pub const SDLK_y: u32 = 121;
+pub const SDLK_z: u32 = 122;
+pub const SDLK_CAPSLOCK: u32 = 1073741881;
+pub const SDLK_F1: u32 = 1073741882;
+pub const SDLK_F2: u32 = 1073741883;
+pub const SDLK_F3: u32 = 1073741884;
+pub const SDLK_F4: u32 = 1073741885;
+pub const SDLK_F5: u32 = 1073741886;
+pub const SDLK_F6: u32 = 1073741887;
+pub const SDLK_F7: u32 = 1073741888;
+pub const SDLK_F8: u32 = 1073741889;
+pub const SDLK_F9: u32 = 1073741890;
+pub const SDLK_F10: u32 = 1073741891;
+pub const SDLK_F11: u32 = 1073741892;
+pub const SDLK_F12: u32 = 1073741893;
+pub const SDLK_PRINTSCREEN: u32 = 1073741894;
+pub const SDLK_SCROLLLOCK: u32 = 1073741895;
+pub const SDLK_PAUSE: u32 = 1073741896;
+pub const SDLK_INSERT: u32 = 1073741897;
+pub const SDLK_HOME: u32 = 1073741898;
+pub const SDLK_PAGEUP: u32 = 1073741899;
+pub const SDLK_DELETE: u32 = 127;
+pub const SDLK_END: u32 = 1073741901;
+pub const SDLK_PAGEDOWN: u32 = 1073741902;
+pub const SDLK_RIGHT: u32 = 1073741903;
+pub const SDLK_LEFT: u32 = 1073741904;
+pub const SDLK_DOWN: u32 = 1073741905;
+pub const SDLK_UP: u32 = 1073741906;
+pub const SDLK_NUMLOCKCLEAR: u32 = 1073741907;
+pub const SDLK_KP_DIVIDE: u32 = 1073741908;
+pub const SDLK_KP_MULTIPLY: u32 = 1073741909;
+pub const SDLK_KP_MINUS: u32 = 1073741910;
+pub const SDLK_KP_PLUS: u32 = 1073741911;
+pub const SDLK_KP_ENTER: u32 = 1073741912;
+pub const SDLK_KP_1: u32 = 1073741913;
+pub const SDLK_KP_2: u32 = 1073741914;
+pub const SDLK_KP_3: u32 = 1073741915;
+pub const SDLK_KP_4: u32 = 1073741916;
+pub const SDLK_KP_5: u32 = 1073741917;
+pub const SDLK_KP_6: u32 = 1073741918;
+pub const SDLK_KP_7: u32 = 1073741919;
+pub const SDLK_KP_8: u32 = 1073741920;
+pub const SDLK_KP_9: u32 = 1073741921;
+pub const SDLK_KP_0: u32 = 1073741922;
+pub const SDLK_KP_PERIOD: u32 = 1073741923;
+pub const SDLK_APPLICATION: u32 = 1073741925;
+pub const SDLK_POWER: u32 = 1073741926;
+pub const SDLK_KP_EQUALS: u32 = 1073741927;
+pub const SDLK_F13: u32 = 1073741928;
+pub const SDLK_F14: u32 = 1073741929;
+pub const SDLK_F15: u32 = 1073741930;
+pub const SDLK_F16: u32 = 1073741931;
+pub const SDLK_F17: u32 = 1073741932;
+pub const SDLK_F18: u32 = 1073741933;
+pub const SDLK_F19: u32 = 1073741934;
+pub const SDLK_F20: u32 = 1073741935;
+pub const SDLK_F21: u32 = 1073741936;
+pub const SDLK_F22: u32 = 1073741937;
+pub const SDLK_F23: u32 = 1073741938;
+pub const SDLK_F24: u32 = 1073741939;
+pub const SDLK_EXECUTE: u32 = 1073741940;
+pub const SDLK_HELP: u32 = 1073741941;
+pub const SDLK_MENU: u32 = 1073741942;
+pub const SDLK_SELECT: u32 = 1073741943;
+pub const SDLK_STOP: u32 = 1073741944;
+pub const SDLK_AGAIN: u32 = 1073741945;
+pub const SDLK_UNDO: u32 = 1073741946;
+pub const SDLK_CUT: u32 = 1073741947;
+pub const SDLK_COPY: u32 = 1073741948;
+pub const SDLK_PASTE: u32 = 1073741949;
+pub const SDLK_FIND: u32 = 1073741950;
+pub const SDLK_MUTE: u32 = 1073741951;
+pub const SDLK_VOLUMEUP: u32 = 1073741952;
+pub const SDLK_VOLUMEDOWN: u32 = 1073741953;
+pub const SDLK_KP_COMMA: u32 = 1073741957;
+pub const SDLK_KP_EQUALSAS400: u32 = 1073741958;
+pub const SDLK_ALTERASE: u32 = 1073741977;
+pub const SDLK_SYSREQ: u32 = 1073741978;
+pub const SDLK_CANCEL: u32 = 1073741979;
+pub const SDLK_CLEAR: u32 = 1073741980;
+pub const SDLK_PRIOR: u32 = 1073741981;
+pub const SDLK_RETURN2: u32 = 1073741982;
+pub const SDLK_SEPARATOR: u32 = 1073741983;
+pub const SDLK_OUT: u32 = 1073741984;
+pub const SDLK_OPER: u32 = 1073741985;
+pub const SDLK_CLEARAGAIN: u32 = 1073741986;
+pub const SDLK_CRSEL: u32 = 1073741987;
+pub const SDLK_EXSEL: u32 = 1073741988;
+pub const SDLK_KP_00: u32 = 1073742000;
+pub const SDLK_KP_000: u32 = 1073742001;
+pub const SDLK_THOUSANDSSEPARATOR: u32 = 1073742002;
+pub const SDLK_DECIMALSEPARATOR: u32 = 1073742003;
+pub const SDLK_CURRENCYUNIT: u32 = 1073742004;
+pub const SDLK_CURRENCYSUBUNIT: u32 = 1073742005;
+pub const SDLK_KP_LEFTPAREN: u32 = 1073742006;
+pub const SDLK_KP_RIGHTPAREN: u32 = 1073742007;
+pub const SDLK_KP_LEFTBRACE: u32 = 1073742008;
+pub const SDLK_KP_RIGHTBRACE: u32 = 1073742009;
+pub const SDLK_KP_TAB: u32 = 1073742010;
+pub const SDLK_KP_BACKSPACE: u32 = 1073742011;
+pub const SDLK_KP_A: u32 = 1073742012;
+pub const SDLK_KP_B: u32 = 1073742013;
+pub const SDLK_KP_C: u32 = 1073742014;
+pub const SDLK_KP_D: u32 = 1073742015;
+pub const SDLK_KP_E: u32 = 1073742016;
+pub const SDLK_KP_F: u32 = 1073742017;
+pub const SDLK_KP_XOR: u32 = 1073742018;
+pub const SDLK_KP_POWER: u32 = 1073742019;
+pub const SDLK_KP_PERCENT: u32 = 1073742020;
+pub const SDLK_KP_LESS: u32 = 1073742021;
+pub const SDLK_KP_GREATER: u32 = 1073742022;
+pub const SDLK_KP_AMPERSAND: u32 = 1073742023;
+pub const SDLK_KP_DBLAMPERSAND: u32 = 1073742024;
+pub const SDLK_KP_VERTICALBAR: u32 = 1073742025;
+pub const SDLK_KP_DBLVERTICALBAR: u32 = 1073742026;
+pub const SDLK_KP_COLON: u32 = 1073742027;
+pub const SDLK_KP_HASH: u32 = 1073742028;
+pub const SDLK_KP_SPACE: u32 = 1073742029;
+pub const SDLK_KP_AT: u32 = 1073742030;
+pub const SDLK_KP_EXCLAM: u32 = 1073742031;
+pub const SDLK_KP_MEMSTORE: u32 = 1073742032;
+pub const SDLK_KP_MEMRECALL: u32 = 1073742033;
+pub const SDLK_KP_MEMCLEAR: u32 = 1073742034;
+pub const SDLK_KP_MEMADD: u32 = 1073742035;
+pub const SDLK_KP_MEMSUBTRACT: u32 = 1073742036;
+pub const SDLK_KP_MEMMULTIPLY: u32 = 1073742037;
+pub const SDLK_KP_MEMDIVIDE: u32 = 1073742038;
+pub const SDLK_KP_PLUSMINUS: u32 = 1073742039;
+pub const SDLK_KP_CLEAR: u32 = 1073742040;
+pub const SDLK_KP_CLEARENTRY: u32 = 1073742041;
+pub const SDLK_KP_BINARY: u32 = 1073742042;
+pub const SDLK_KP_OCTAL: u32 = 1073742043;
+pub const SDLK_KP_DECIMAL: u32 = 1073742044;
+pub const SDLK_KP_HEXADECIMAL: u32 = 1073742045;
+pub const SDLK_LCTRL: u32 = 1073742048;
+pub const SDLK_LSHIFT: u32 = 1073742049;
+pub const SDLK_LALT: u32 = 1073742050;
+pub const SDLK_LGUI: u32 = 1073742051;
+pub const SDLK_RCTRL: u32 = 1073742052;
+pub const SDLK_RSHIFT: u32 = 1073742053;
+pub const SDLK_RALT: u32 = 1073742054;
+pub const SDLK_RGUI: u32 = 1073742055;
+pub const SDLK_MODE: u32 = 1073742081;
+pub const SDLK_AUDIONEXT: u32 = 1073742082;
+pub const SDLK_AUDIOPREV: u32 = 1073742083;
+pub const SDLK_AUDIOSTOP: u32 = 1073742084;
+pub const SDLK_AUDIOPLAY: u32 = 1073742085;
+pub const SDLK_AUDIOMUTE: u32 = 1073742086;
+pub const SDLK_MEDIASELECT: u32 = 1073742087;
+pub const SDLK_WWW: u32 = 1073742088;
+pub const SDLK_MAIL: u32 = 1073742089;
+pub const SDLK_CALCULATOR: u32 = 1073742090;
+pub const SDLK_COMPUTER: u32 = 1073742091;
+pub const SDLK_AC_SEARCH: u32 = 1073742092;
+pub const SDLK_AC_HOME: u32 = 1073742093;
+pub const SDLK_AC_BACK: u32 = 1073742094;
+pub const SDLK_AC_FORWARD: u32 = 1073742095;
+pub const SDLK_AC_STOP: u32 = 1073742096;
+pub const SDLK_AC_REFRESH: u32 = 1073742097;
+pub const SDLK_AC_BOOKMARKS: u32 = 1073742098;
+pub const SDLK_BRIGHTNESSDOWN: u32 = 1073742099;
+pub const SDLK_BRIGHTNESSUP: u32 = 1073742100;
+pub const SDLK_DISPLAYSWITCH: u32 = 1073742101;
+pub const SDLK_KBDILLUMTOGGLE: u32 = 1073742102;
+pub const SDLK_KBDILLUMDOWN: u32 = 1073742103;
+pub const SDLK_KBDILLUMUP: u32 = 1073742104;
+pub const SDLK_EJECT: u32 = 1073742105;
+pub const SDLK_SLEEP: u32 = 1073742106;
+pub const SDLK_APP1: u32 = 1073742107;
+pub const SDLK_APP2: u32 = 1073742108;
+pub const SDLK_AUDIOREWIND: u32 = 1073742109;
+pub const SDLK_AUDIOFASTFORWARD: u32 = 1073742110;
+pub const KMOD_NONE: u32 = 0;
+pub const KMOD_LSHIFT: u32 = 1;
+pub const KMOD_RSHIFT: u32 = 2;
+pub const KMOD_LCTRL: u32 = 64;
+pub const KMOD_RCTRL: u32 = 128;
+pub const KMOD_LALT: u32 = 256;
+pub const KMOD_RALT: u32 = 512;
+pub const KMOD_LGUI: u32 = 1024;
+pub const KMOD_RGUI: u32 = 2048;
+pub const KMOD_NUM: u32 = 4096;
+pub const KMOD_CAPS: u32 = 8192;
+pub const KMOD_MODE: u32 = 16384;
+pub const KMOD_RESERVED: u32 = 32768;
+pub typedef Keymod u32;
+pub typedef Keysym struct {
+    scancode: Scancode,
+    sym: Keycode,
+    mod: u16,
+    unused: u32,
+};
+#[link_name="SDL_GetKeyboardFocus"]
+pub extern func GetKeyboardFocus() -> *Window;
+#[link_name="SDL_GetKeyboardState"]
+pub extern func GetKeyboardState(numkeys: *i32) -> *u8;
+#[link_name="SDL_GetModState"]
+pub extern func GetModState() -> Keymod;
+#[link_name="SDL_SetModState"]
+pub extern func SetModState(modstate: Keymod);
+#[link_name="SDL_GetKeyFromScancode"]
+pub extern func GetKeyFromScancode(scancode: Scancode) -> Keycode;
+#[link_name="SDL_GetScancodeFromKey"]
+pub extern func GetScancodeFromKey(key: Keycode) -> Scancode;
+#[link_name="SDL_GetScancodeName"]
+pub extern func GetScancodeName(scancode: Scancode) -> *i8;
+#[link_name="SDL_GetScancodeFromName"]
+pub extern func GetScancodeFromName(name: *i8) -> Scancode;
+#[link_name="SDL_GetKeyName"]
+pub extern func GetKeyName(key: Keycode) -> *i8;
+#[link_name="SDL_GetKeyFromName"]
+pub extern func GetKeyFromName(name: *i8) -> Keycode;
+#[link_name="SDL_StartTextInput"]
+pub extern func StartTextInput();
+#[link_name="SDL_IsTextInputActive"]
+pub extern func IsTextInputActive() -> Bool;
+#[link_name="SDL_StopTextInput"]
+pub extern func StopTextInput();
+#[link_name="SDL_SetTextInputRect"]
+pub extern func SetTextInputRect(rect: *Rect);
+#[link_name="SDL_HasScreenKeyboardSupport"]
+pub extern func HasScreenKeyboardSupport() -> Bool;
+#[link_name="SDL_IsScreenKeyboardShown"]
+pub extern func IsScreenKeyboardShown(window: *Window) -> Bool;
+pub typedef Cursor struct {
+};
+pub const SYSTEM_CURSOR_ARROW: u32 = 0;
+pub const SYSTEM_CURSOR_IBEAM: u32 = 1;
+pub const SYSTEM_CURSOR_WAIT: u32 = 2;
+pub const SYSTEM_CURSOR_CROSSHAIR: u32 = 3;
+pub const SYSTEM_CURSOR_WAITARROW: u32 = 4;
+pub const SYSTEM_CURSOR_SIZENWSE: u32 = 5;
+pub const SYSTEM_CURSOR_SIZENESW: u32 = 6;
+pub const SYSTEM_CURSOR_SIZEWE: u32 = 7;
+pub const SYSTEM_CURSOR_SIZENS: u32 = 8;
+pub const SYSTEM_CURSOR_SIZEALL: u32 = 9;
+pub const SYSTEM_CURSOR_NO: u32 = 10;
+pub const SYSTEM_CURSOR_HAND: u32 = 11;
+pub const NUM_SYSTEM_CURSORS: u32 = 12;
+pub typedef SystemCursor u32;
+pub const MOUSEWHEEL_NORMAL: u32 = 0;
+pub const MOUSEWHEEL_FLIPPED: u32 = 1;
+pub typedef MouseWheelDirection u32;
+#[link_name="SDL_GetMouseFocus"]
+pub extern func GetMouseFocus() -> *Window;
+#[link_name="SDL_GetMouseState"]
+pub extern func GetMouseState(x: *i32, y: *i32) -> u32;
+#[link_name="SDL_GetGlobalMouseState"]
+pub extern func GetGlobalMouseState(x: *i32, y: *i32) -> u32;
+#[link_name="SDL_GetRelativeMouseState"]
+pub extern func GetRelativeMouseState(x: *i32, y: *i32) -> u32;
+#[link_name="SDL_WarpMouseInWindow"]
+pub extern func WarpMouseInWindow(window: *Window, x: i32, y: i32);
+#[link_name="SDL_WarpMouseGlobal"]
+pub extern func WarpMouseGlobal(x: i32, y: i32) -> i32;
+#[link_name="SDL_SetRelativeMouseMode"]
+pub extern func SetRelativeMouseMode(enabled: Bool) -> i32;
+#[link_name="SDL_CaptureMouse"]
+pub extern func CaptureMouse(enabled: Bool) -> i32;
+#[link_name="SDL_GetRelativeMouseMode"]
+pub extern func GetRelativeMouseMode() -> Bool;
+#[link_name="SDL_CreateCursor"]
+pub extern func CreateCursor(data: *u8, mask: *u8, w: i32, h: i32, hot_x: i32, hot_y: i32) -> *Cursor;
+#[link_name="SDL_CreateColorCursor"]
+pub extern func CreateColorCursor(surface: *Surface, hot_x: i32, hot_y: i32) -> *Cursor;
+#[link_name="SDL_CreateSystemCursor"]
+pub extern func CreateSystemCursor(id: SystemCursor) -> *Cursor;
+#[link_name="SDL_SetCursor"]
+pub extern func SetCursor(cursor: *Cursor);
+#[link_name="SDL_GetCursor"]
+pub extern func GetCursor() -> *Cursor;
+#[link_name="SDL_GetDefaultCursor"]
+pub extern func GetDefaultCursor() -> *Cursor;
+#[link_name="SDL_FreeCursor"]
+pub extern func FreeCursor(cursor: *Cursor);
+#[link_name="SDL_ShowCursor"]
+pub extern func ShowCursor(toggle: i32) -> i32;
+pub typedef _SDL_Joystick struct {
+};
+pub typedef Joystick _SDL_Joystick;
+pub typedef JoystickGUID struct {
+    data: [16]u8,
+};
+pub typedef JoystickID i32;
+pub const JOYSTICK_TYPE_UNKNOWN: u32 = 0;
+pub const JOYSTICK_TYPE_GAMECONTROLLER: u32 = 1;
+pub const JOYSTICK_TYPE_WHEEL: u32 = 2;
+pub const JOYSTICK_TYPE_ARCADE_STICK: u32 = 3;
+pub const JOYSTICK_TYPE_FLIGHT_STICK: u32 = 4;
+pub const JOYSTICK_TYPE_DANCE_PAD: u32 = 5;
+pub const JOYSTICK_TYPE_GUITAR: u32 = 6;
+pub const JOYSTICK_TYPE_DRUM_KIT: u32 = 7;
+pub const JOYSTICK_TYPE_ARCADE_PAD: u32 = 8;
+pub const JOYSTICK_TYPE_THROTTLE: u32 = 9;
+pub typedef JoystickType u32;
+pub const JOYSTICK_POWER_UNKNOWN: i32 = -1;
+pub const JOYSTICK_POWER_EMPTY: i32 = 0;
+pub const JOYSTICK_POWER_LOW: i32 = 1;
+pub const JOYSTICK_POWER_MEDIUM: i32 = 2;
+pub const JOYSTICK_POWER_FULL: i32 = 3;
+pub const JOYSTICK_POWER_WIRED: i32 = 4;
+pub const JOYSTICK_POWER_MAX: i32 = 5;
+pub typedef JoystickPowerLevel i32;
+#[link_name="SDL_LockJoysticks"]
+pub extern func LockJoysticks();
+#[link_name="SDL_UnlockJoysticks"]
+pub extern func UnlockJoysticks();
+#[link_name="SDL_NumJoysticks"]
+pub extern func NumJoysticks() -> i32;
+#[link_name="SDL_JoystickNameForIndex"]
+pub extern func JoystickNameForIndex(device_index: i32) -> *i8;
+#[link_name="SDL_JoystickGetDevicePlayerIndex"]
+pub extern func JoystickGetDevicePlayerIndex(device_index: i32) -> i32;
+#[link_name="SDL_JoystickGetDeviceGUID"]
+pub extern func JoystickGetDeviceGUID(device_index: i32) -> JoystickGUID;
+#[link_name="SDL_JoystickGetDeviceVendor"]
+pub extern func JoystickGetDeviceVendor(device_index: i32) -> u16;
+#[link_name="SDL_JoystickGetDeviceProduct"]
+pub extern func JoystickGetDeviceProduct(device_index: i32) -> u16;
+#[link_name="SDL_JoystickGetDeviceProductVersion"]
+pub extern func JoystickGetDeviceProductVersion(device_index: i32) -> u16;
+#[link_name="SDL_JoystickGetDeviceType"]
+pub extern func JoystickGetDeviceType(device_index: i32) -> JoystickType;
+#[link_name="SDL_JoystickGetDeviceInstanceID"]
+pub extern func JoystickGetDeviceInstanceID(device_index: i32) -> JoystickID;
+#[link_name="SDL_JoystickOpen"]
+pub extern func JoystickOpen(device_index: i32) -> *Joystick;
+#[link_name="SDL_JoystickFromInstanceID"]
+pub extern func JoystickFromInstanceID(joyid: JoystickID) -> *Joystick;
+#[link_name="SDL_JoystickName"]
+pub extern func JoystickName(joystick: *Joystick) -> *i8;
+#[link_name="SDL_JoystickGetPlayerIndex"]
+pub extern func JoystickGetPlayerIndex(joystick: *Joystick) -> i32;
+#[link_name="SDL_JoystickGetGUID"]
+pub extern func JoystickGetGUID(joystick: *Joystick) -> JoystickGUID;
+#[link_name="SDL_JoystickGetVendor"]
+pub extern func JoystickGetVendor(joystick: *Joystick) -> u16;
+#[link_name="SDL_JoystickGetProduct"]
+pub extern func JoystickGetProduct(joystick: *Joystick) -> u16;
+#[link_name="SDL_JoystickGetProductVersion"]
+pub extern func JoystickGetProductVersion(joystick: *Joystick) -> u16;
+#[link_name="SDL_JoystickGetType"]
+pub extern func JoystickGetType(joystick: *Joystick) -> JoystickType;
+#[link_name="SDL_JoystickGetGUIDFromString"]
+pub extern func JoystickGetGUIDFromString(pchGUID: *i8) -> JoystickGUID;
+#[link_name="SDL_JoystickGetAttached"]
+pub extern func JoystickGetAttached(joystick: *Joystick) -> Bool;
+#[link_name="SDL_JoystickInstanceID"]
+pub extern func JoystickInstanceID(joystick: *Joystick) -> JoystickID;
+#[link_name="SDL_JoystickNumAxes"]
+pub extern func JoystickNumAxes(joystick: *Joystick) -> i32;
+#[link_name="SDL_JoystickNumBalls"]
+pub extern func JoystickNumBalls(joystick: *Joystick) -> i32;
+#[link_name="SDL_JoystickNumHats"]
+pub extern func JoystickNumHats(joystick: *Joystick) -> i32;
+#[link_name="SDL_JoystickNumButtons"]
+pub extern func JoystickNumButtons(joystick: *Joystick) -> i32;
+#[link_name="SDL_JoystickUpdate"]
+pub extern func JoystickUpdate();
+#[link_name="SDL_JoystickEventState"]
+pub extern func JoystickEventState(state: i32) -> i32;
+#[link_name="SDL_JoystickGetAxis"]
+pub extern func JoystickGetAxis(joystick: *Joystick, axis: i32) -> i16;
+#[link_name="SDL_JoystickGetAxisInitialState"]
+pub extern func JoystickGetAxisInitialState(joystick: *Joystick, axis: i32, state: *i16) -> Bool;
+#[link_name="SDL_JoystickGetHat"]
+pub extern func JoystickGetHat(joystick: *Joystick, hat: i32) -> u8;
+#[link_name="SDL_JoystickGetBall"]
+pub extern func JoystickGetBall(joystick: *Joystick, ball: i32, dx: *i32, dy: *i32) -> i32;
+#[link_name="SDL_JoystickGetButton"]
+pub extern func JoystickGetButton(joystick: *Joystick, button: i32) -> u8;
+#[link_name="SDL_JoystickRumble"]
+pub extern func JoystickRumble(joystick: *Joystick, low_frequency_rumble: u16, high_frequency_rumble: u16, duration_ms: u32) -> i32;
+#[link_name="SDL_JoystickClose"]
+pub extern func JoystickClose(joystick: *Joystick);
+#[link_name="SDL_JoystickCurrentPowerLevel"]
+pub extern func JoystickCurrentPowerLevel(joystick: *Joystick) -> JoystickPowerLevel;
+pub typedef _SDL_GameController struct {
+};
+pub typedef GameController _SDL_GameController;
+pub const CONTROLLER_BINDTYPE_NONE: u32 = 0;
+pub const CONTROLLER_BINDTYPE_BUTTON: u32 = 1;
+pub const CONTROLLER_BINDTYPE_AXIS: u32 = 2;
+pub const CONTROLLER_BINDTYPE_HAT: u32 = 3;
+pub typedef GameControllerBindType u32;
+pub typedef GameControllerButtonBind struct {
+    bindType: GameControllerBindType,
+    value: union {
+        button: i32,
+        axis: i32,
+        hat: struct {
+            hat: i32,
+            hat_mask: i32,
+        },
+    },
+};
+#[link_name="SDL_GameControllerAddMappingsFromRW"]
+pub extern func GameControllerAddMappingsFromRW(rw: *RWops, freerw: i32) -> i32;
+#[link_name="SDL_GameControllerAddMapping"]
+pub extern func GameControllerAddMapping(mappingString: *i8) -> i32;
+#[link_name="SDL_GameControllerNumMappings"]
+pub extern func GameControllerNumMappings() -> i32;
+#[link_name="SDL_GameControllerMappingForIndex"]
+pub extern func GameControllerMappingForIndex(mapping_index: i32) -> *i8;
+#[link_name="SDL_GameControllerMapping"]
+pub extern func GameControllerMapping(gamecontroller: *GameController) -> *i8;
+#[link_name="SDL_IsGameController"]
+pub extern func IsGameController(joystick_index: i32) -> Bool;
+#[link_name="SDL_GameControllerNameForIndex"]
+pub extern func GameControllerNameForIndex(joystick_index: i32) -> *i8;
+#[link_name="SDL_GameControllerMappingForDeviceIndex"]
+pub extern func GameControllerMappingForDeviceIndex(joystick_index: i32) -> *i8;
+#[link_name="SDL_GameControllerOpen"]
+pub extern func GameControllerOpen(joystick_index: i32) -> *GameController;
+#[link_name="SDL_GameControllerFromInstanceID"]
+pub extern func GameControllerFromInstanceID(joyid: JoystickID) -> *GameController;
+#[link_name="SDL_GameControllerName"]
+pub extern func GameControllerName(gamecontroller: *GameController) -> *i8;
+#[link_name="SDL_GameControllerGetPlayerIndex"]
+pub extern func GameControllerGetPlayerIndex(gamecontroller: *GameController) -> i32;
+#[link_name="SDL_GameControllerGetVendor"]
+pub extern func GameControllerGetVendor(gamecontroller: *GameController) -> u16;
+#[link_name="SDL_GameControllerGetProduct"]
+pub extern func GameControllerGetProduct(gamecontroller: *GameController) -> u16;
+#[link_name="SDL_GameControllerGetProductVersion"]
+pub extern func GameControllerGetProductVersion(gamecontroller: *GameController) -> u16;
+#[link_name="SDL_GameControllerGetAttached"]
+pub extern func GameControllerGetAttached(gamecontroller: *GameController) -> Bool;
+#[link_name="SDL_GameControllerGetJoystick"]
+pub extern func GameControllerGetJoystick(gamecontroller: *GameController) -> *Joystick;
+#[link_name="SDL_GameControllerEventState"]
+pub extern func GameControllerEventState(state: i32) -> i32;
+#[link_name="SDL_GameControllerUpdate"]
+pub extern func GameControllerUpdate();
+pub const CONTROLLER_AXIS_INVALID: i32 = -1;
+pub const CONTROLLER_AXIS_LEFTX: i32 = 0;
+pub const CONTROLLER_AXIS_LEFTY: i32 = 1;
+pub const CONTROLLER_AXIS_RIGHTX: i32 = 2;
+pub const CONTROLLER_AXIS_RIGHTY: i32 = 3;
+pub const CONTROLLER_AXIS_TRIGGERLEFT: i32 = 4;
+pub const CONTROLLER_AXIS_TRIGGERRIGHT: i32 = 5;
+pub const CONTROLLER_AXIS_MAX: i32 = 6;
+pub typedef GameControllerAxis i32;
+#[link_name="SDL_GameControllerGetAxisFromString"]
+pub extern func GameControllerGetAxisFromString(pchString: *i8) -> GameControllerAxis;
+#[link_name="SDL_GameControllerGetStringForAxis"]
+pub extern func GameControllerGetStringForAxis(axis: GameControllerAxis) -> *i8;
+#[link_name="SDL_GameControllerGetBindForAxis"]
+pub extern func GameControllerGetBindForAxis(gamecontroller: *GameController, axis: GameControllerAxis) -> GameControllerButtonBind;
+#[link_name="SDL_GameControllerGetAxis"]
+pub extern func GameControllerGetAxis(gamecontroller: *GameController, axis: GameControllerAxis) -> i16;
+pub const CONTROLLER_BUTTON_INVALID: i32 = -1;
+pub const CONTROLLER_BUTTON_A: i32 = 0;
+pub const CONTROLLER_BUTTON_B: i32 = 1;
+pub const CONTROLLER_BUTTON_X: i32 = 2;
+pub const CONTROLLER_BUTTON_Y: i32 = 3;
+pub const CONTROLLER_BUTTON_BACK: i32 = 4;
+pub const CONTROLLER_BUTTON_GUIDE: i32 = 5;
+pub const CONTROLLER_BUTTON_START: i32 = 6;
+pub const CONTROLLER_BUTTON_LEFTSTICK: i32 = 7;
+pub const CONTROLLER_BUTTON_RIGHTSTICK: i32 = 8;
+pub const CONTROLLER_BUTTON_LEFTSHOULDER: i32 = 9;
+pub const CONTROLLER_BUTTON_RIGHTSHOULDER: i32 = 10;
+pub const CONTROLLER_BUTTON_DPAD_UP: i32 = 11;
+pub const CONTROLLER_BUTTON_DPAD_DOWN: i32 = 12;
+pub const CONTROLLER_BUTTON_DPAD_LEFT: i32 = 13;
+pub const CONTROLLER_BUTTON_DPAD_RIGHT: i32 = 14;
+pub const CONTROLLER_BUTTON_MAX: i32 = 15;
+pub typedef GameControllerButton i32;
+#[link_name="SDL_GameControllerGetButtonFromString"]
+pub extern func GameControllerGetButtonFromString(pchString: *i8) -> GameControllerButton;
+#[link_name="SDL_GameControllerGetStringForButton"]
+pub extern func GameControllerGetStringForButton(button: GameControllerButton) -> *i8;
+#[link_name="SDL_GameControllerGetBindForButton"]
+pub extern func GameControllerGetBindForButton(gamecontroller: *GameController, button: GameControllerButton) -> GameControllerButtonBind;
+#[link_name="SDL_GameControllerGetButton"]
+pub extern func GameControllerGetButton(gamecontroller: *GameController, button: GameControllerButton) -> u8;
+#[link_name="SDL_GameControllerRumble"]
+pub extern func GameControllerRumble(gamecontroller: *GameController, low_frequency_rumble: u16, high_frequency_rumble: u16, duration_ms: u32) -> i32;
+#[link_name="SDL_GameControllerClose"]
+pub extern func GameControllerClose(gamecontroller: *GameController);
+pub typedef TouchID i64;
+pub typedef FingerID i64;
+pub const TOUCH_DEVICE_INVALID: i32 = -1;
+pub const TOUCH_DEVICE_DIRECT: i32 = 0;
+pub const TOUCH_DEVICE_INDIRECT_ABSOLUTE: i32 = 1;
+pub const TOUCH_DEVICE_INDIRECT_RELATIVE: i32 = 2;
+pub typedef TouchDeviceType i32;
+pub typedef Finger struct {
+    id: FingerID,
+    x: float,
+    y: float,
+    pressure: float,
+};
+#[link_name="SDL_GetNumTouchDevices"]
+pub extern func GetNumTouchDevices() -> i32;
+#[link_name="SDL_GetTouchDevice"]
+pub extern func GetTouchDevice(index: i32) -> TouchID;
+#[link_name="SDL_GetTouchDeviceType"]
+pub extern func GetTouchDeviceType(touchID: TouchID) -> TouchDeviceType;
+#[link_name="SDL_GetNumTouchFingers"]
+pub extern func GetNumTouchFingers(touchID: TouchID) -> i32;
+#[link_name="SDL_GetTouchFinger"]
+pub extern func GetTouchFinger(touchID: TouchID, index: i32) -> *Finger;
+pub typedef GestureID i64;
+#[link_name="SDL_RecordGesture"]
+pub extern func RecordGesture(touchId: TouchID) -> i32;
+#[link_name="SDL_SaveAllDollarTemplates"]
+pub extern func SaveAllDollarTemplates(dst: *RWops) -> i32;
+#[link_name="SDL_SaveDollarTemplate"]
+pub extern func SaveDollarTemplate(gestureId: GestureID, dst: *RWops) -> i32;
+#[link_name="SDL_LoadDollarTemplates"]
+pub extern func LoadDollarTemplates(touchId: TouchID, src: *RWops) -> i32;
+pub const FIRSTEVENT: u32 = 0;
+pub const QUIT: u32 = 256;
+pub const APP_TERMINATING: u32 = 257;
+pub const APP_LOWMEMORY: u32 = 258;
+pub const APP_WILLENTERBACKGROUND: u32 = 259;
+pub const APP_DIDENTERBACKGROUND: u32 = 260;
+pub const APP_WILLENTERFOREGROUND: u32 = 261;
+pub const APP_DIDENTERFOREGROUND: u32 = 262;
+pub const DISPLAYEVENT: u32 = 336;
+pub const WINDOWEVENT: u32 = 512;
+pub const SYSWMEVENT: u32 = 513;
+pub const KEYDOWN: u32 = 768;
+pub const KEYUP: u32 = 769;
+pub const TEXTEDITING: u32 = 770;
+pub const TEXTINPUT: u32 = 771;
+pub const KEYMAPCHANGED: u32 = 772;
+pub const MOUSEMOTION: u32 = 1024;
+pub const MOUSEBUTTONDOWN: u32 = 1025;
+pub const MOUSEBUTTONUP: u32 = 1026;
+pub const MOUSEWHEEL: u32 = 1027;
+pub const JOYAXISMOTION: u32 = 1536;
+pub const JOYBALLMOTION: u32 = 1537;
+pub const JOYHATMOTION: u32 = 1538;
+pub const JOYBUTTONDOWN: u32 = 1539;
+pub const JOYBUTTONUP: u32 = 1540;
+pub const JOYDEVICEADDED: u32 = 1541;
+pub const JOYDEVICEREMOVED: u32 = 1542;
+pub const CONTROLLERAXISMOTION: u32 = 1616;
+pub const CONTROLLERBUTTONDOWN: u32 = 1617;
+pub const CONTROLLERBUTTONUP: u32 = 1618;
+pub const CONTROLLERDEVICEADDED: u32 = 1619;
+pub const CONTROLLERDEVICEREMOVED: u32 = 1620;
+pub const CONTROLLERDEVICEREMAPPED: u32 = 1621;
+pub const FINGERDOWN: u32 = 1792;
+pub const FINGERUP: u32 = 1793;
+pub const FINGERMOTION: u32 = 1794;
+pub const DOLLARGESTURE: u32 = 2048;
+pub const DOLLARRECORD: u32 = 2049;
+pub const MULTIGESTURE: u32 = 2050;
+pub const CLIPBOARDUPDATE: u32 = 2304;
+pub const DROPFILE: u32 = 4096;
+pub const DROPTEXT: u32 = 4097;
+pub const DROPBEGIN: u32 = 4098;
+pub const DROPCOMPLETE: u32 = 4099;
+pub const AUDIODEVICEADDED: u32 = 4352;
+pub const AUDIODEVICEREMOVED: u32 = 4353;
+pub const SENSORUPDATE: u32 = 4608;
+pub const RENDER_TARGETS_RESET: u32 = 8192;
+pub const RENDER_DEVICE_RESET: u32 = 8193;
+pub const USEREVENT: u32 = 32768;
+pub const LASTEVENT: u32 = 65535;
+pub typedef EventType u32;
+pub typedef CommonEvent struct {
+    type: u32,
+    timestamp: u32,
+};
+pub typedef DisplayEvent struct {
+    type: u32,
+    timestamp: u32,
+    display: u32,
+    event: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    data1: i32,
+};
+pub typedef WindowEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    event: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    data1: i32,
+    data2: i32,
+};
+pub typedef KeyboardEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    state: u8,
+    repeat: u8,
+    padding2: u8,
+    padding3: u8,
+    keysym: Keysym,
+};
+pub typedef TextEditingEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    text: [32]i8,
+    start: i32,
+    length: i32,
+};
+pub typedef TextInputEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    text: [32]i8,
+};
+pub typedef MouseMotionEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    which: u32,
+    state: u32,
+    x: i32,
+    y: i32,
+    xrel: i32,
+    yrel: i32,
+};
+pub typedef MouseButtonEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    which: u32,
+    button: u8,
+    state: u8,
+    clicks: u8,
+    padding1: u8,
+    x: i32,
+    y: i32,
+};
+pub typedef MouseWheelEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    which: u32,
+    x: i32,
+    y: i32,
+    direction: u32,
+};
+pub typedef JoyAxisEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    axis: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    value: i16,
+    padding4: u16,
+};
+pub typedef JoyBallEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    ball: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    xrel: i16,
+    yrel: i16,
+};
+pub typedef JoyHatEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    hat: u8,
+    value: u8,
+    padding1: u8,
+    padding2: u8,
+};
+pub typedef JoyButtonEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    button: u8,
+    state: u8,
+    padding1: u8,
+    padding2: u8,
+};
+pub typedef JoyDeviceEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: i32,
+};
+pub typedef ControllerAxisEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    axis: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+    value: i16,
+    padding4: u16,
+};
+pub typedef ControllerButtonEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: JoystickID,
+    button: u8,
+    state: u8,
+    padding1: u8,
+    padding2: u8,
+};
+pub typedef ControllerDeviceEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: i32,
+};
+pub typedef AudioDeviceEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: u32,
+    iscapture: u8,
+    padding1: u8,
+    padding2: u8,
+    padding3: u8,
+};
+pub typedef TouchFingerEvent struct {
+    type: u32,
+    timestamp: u32,
+    touchId: TouchID,
+    fingerId: FingerID,
+    x: float,
+    y: float,
+    dx: float,
+    dy: float,
+    pressure: float,
+};
+pub typedef MultiGestureEvent struct {
+    type: u32,
+    timestamp: u32,
+    touchId: TouchID,
+    dTheta: float,
+    dDist: float,
+    x: float,
+    y: float,
+    numFingers: u16,
+    padding: u16,
+};
+pub typedef DollarGestureEvent struct {
+    type: u32,
+    timestamp: u32,
+    touchId: TouchID,
+    gestureId: GestureID,
+    numFingers: u32,
+    error: float,
+    x: float,
+    y: float,
+};
+pub typedef DropEvent struct {
+    type: u32,
+    timestamp: u32,
+    file: *i8,
+    windowID: u32,
+};
+pub typedef SensorEvent struct {
+    type: u32,
+    timestamp: u32,
+    which: i32,
+    data: [6]float,
+};
+pub typedef QuitEvent struct {
+    type: u32,
+    timestamp: u32,
+};
+pub typedef OSEvent struct {
+    type: u32,
+    timestamp: u32,
+};
+pub typedef UserEvent struct {
+    type: u32,
+    timestamp: u32,
+    windowID: u32,
+    code: i32,
+    data1: *void,
+    data2: *void,
+};
+pub typedef SysWMmsg struct {
+};
+pub typedef SysWMEvent struct {
+    type: u32,
+    timestamp: u32,
+    msg: *SysWMmsg,
+};
+pub typedef Event union {
+    type: u32,
+    common: CommonEvent,
+    display: DisplayEvent,
+    window: WindowEvent,
+    key: KeyboardEvent,
+    edit: TextEditingEvent,
+    text: TextInputEvent,
+    motion: MouseMotionEvent,
+    button: MouseButtonEvent,
+    wheel: MouseWheelEvent,
+    jaxis: JoyAxisEvent,
+    jball: JoyBallEvent,
+    jhat: JoyHatEvent,
+    jbutton: JoyButtonEvent,
+    jdevice: JoyDeviceEvent,
+    caxis: ControllerAxisEvent,
+    cbutton: ControllerButtonEvent,
+    cdevice: ControllerDeviceEvent,
+    adevice: AudioDeviceEvent,
+    sensor: SensorEvent,
+    quit: QuitEvent,
+    user: UserEvent,
+    syswm: SysWMEvent,
+    tfinger: TouchFingerEvent,
+    mgesture: MultiGestureEvent,
+    dgesture: DollarGestureEvent,
+    drop: DropEvent,
+    padding: [56]u8,
+};
+pub typedef compile_time_assert_SDL_Event [1]i32;
+#[link_name="SDL_PumpEvents"]
+pub extern func PumpEvents();
+pub const ADDEVENT: u32 = 0;
+pub const PEEKEVENT: u32 = 1;
+pub const GETEVENT: u32 = 2;
+pub typedef eventaction u32;
+#[link_name="SDL_PeepEvents"]
+pub extern func PeepEvents(events: *Event, numevents: i32, action: eventaction, minType: u32, maxType: u32) -> i32;
+#[link_name="SDL_HasEvent"]
+pub extern func HasEvent(type: u32) -> Bool;
+#[link_name="SDL_HasEvents"]
+pub extern func HasEvents(minType: u32, maxType: u32) -> Bool;
+#[link_name="SDL_FlushEvent"]
+pub extern func FlushEvent(type: u32);
+#[link_name="SDL_FlushEvents"]
+pub extern func FlushEvents(minType: u32, maxType: u32);
+#[link_name="SDL_PollEvent"]
+pub extern func PollEvent(event: *Event) -> i32;
+#[link_name="SDL_WaitEvent"]
+pub extern func WaitEvent(event: *Event) -> i32;
+#[link_name="SDL_WaitEventTimeout"]
+pub extern func WaitEventTimeout(event: *Event, timeout: i32) -> i32;
+#[link_name="SDL_PushEvent"]
+pub extern func PushEvent(event: *Event) -> i32;
+pub typedef EventFilter func* (_: *void, _: *Event) -> i32;
+#[link_name="SDL_SetEventFilter"]
+pub extern func SetEventFilter(filter: EventFilter, userdata: *void);
+#[link_name="SDL_GetEventFilter"]
+pub extern func GetEventFilter(filter: *EventFilter, userdata: **void) -> Bool;
+#[link_name="SDL_AddEventWatch"]
+pub extern func AddEventWatch(filter: EventFilter, userdata: *void);
+#[link_name="SDL_DelEventWatch"]
+pub extern func DelEventWatch(filter: EventFilter, userdata: *void);
+#[link_name="SDL_FilterEvents"]
+pub extern func FilterEvents(filter: EventFilter, userdata: *void);
+#[link_name="SDL_EventState"]
+pub extern func EventState(type: u32, state: i32) -> u8;
+#[link_name="SDL_RegisterEvents"]
+pub extern func RegisterEvents(numevents: i32) -> u32;
+#[link_name="SDL_GetBasePath"]
+pub extern func GetBasePath() -> *i8;
+#[link_name="SDL_GetPrefPath"]
+pub extern func GetPrefPath(org: *i8, app: *i8) -> *i8;
+pub typedef _SDL_Haptic struct {
+};
+pub typedef Haptic _SDL_Haptic;
+pub typedef HapticDirection struct {
+    type: u8,
+    dir: [3]i32,
+};
+pub typedef HapticConstant struct {
+    type: u16,
+    direction: HapticDirection,
+    length: u32,
+    delay: u16,
+    button: u16,
+    interval: u16,
+    level: i16,
+    attack_length: u16,
+    attack_level: u16,
+    fade_length: u16,
+    fade_level: u16,
+};
+pub typedef HapticPeriodic struct {
+    type: u16,
+    direction: HapticDirection,
+    length: u32,
+    delay: u16,
+    button: u16,
+    interval: u16,
+    period: u16,
+    magnitude: i16,
+    offset: i16,
+    phase: u16,
+    attack_length: u16,
+    attack_level: u16,
+    fade_length: u16,
+    fade_level: u16,
+};
+pub typedef HapticCondition struct {
+    type: u16,
+    direction: HapticDirection,
+    length: u32,
+    delay: u16,
+    button: u16,
+    interval: u16,
+    right_sat: [3]u16,
+    left_sat: [3]u16,
+    right_coeff: [3]i16,
+    left_coeff: [3]i16,
+    deadband: [3]u16,
+    center: [3]i16,
+};
+pub typedef HapticRamp struct {
+    type: u16,
+    direction: HapticDirection,
+    length: u32,
+    delay: u16,
+    button: u16,
+    interval: u16,
+    start: i16,
+    end: i16,
+    attack_length: u16,
+    attack_level: u16,
+    fade_length: u16,
+    fade_level: u16,
+};
+pub typedef HapticLeftRight struct {
+    type: u16,
+    length: u32,
+    large_magnitude: u16,
+    small_magnitude: u16,
+};
+pub typedef HapticCustom struct {
+    type: u16,
+    direction: HapticDirection,
+    length: u32,
+    delay: u16,
+    button: u16,
+    interval: u16,
+    channels: u8,
+    period: u16,
+    samples: u16,
+    data: *u16,
+    attack_length: u16,
+    attack_level: u16,
+    fade_length: u16,
+    fade_level: u16,
+};
+pub typedef HapticEffect union {
+    type: u16,
+    constant: HapticConstant,
+    periodic: HapticPeriodic,
+    condition: HapticCondition,
+    ramp: HapticRamp,
+    leftright: HapticLeftRight,
+    custom: HapticCustom,
+};
+#[link_name="SDL_NumHaptics"]
+pub extern func NumHaptics() -> i32;
+#[link_name="SDL_HapticName"]
+pub extern func HapticName(device_index: i32) -> *i8;
+#[link_name="SDL_HapticOpen"]
+pub extern func HapticOpen(device_index: i32) -> *Haptic;
+#[link_name="SDL_HapticOpened"]
+pub extern func HapticOpened(device_index: i32) -> i32;
+#[link_name="SDL_HapticIndex"]
+pub extern func HapticIndex(haptic: *Haptic) -> i32;
+#[link_name="SDL_MouseIsHaptic"]
+pub extern func MouseIsHaptic() -> i32;
+#[link_name="SDL_HapticOpenFromMouse"]
+pub extern func HapticOpenFromMouse() -> *Haptic;
+#[link_name="SDL_JoystickIsHaptic"]
+pub extern func JoystickIsHaptic(joystick: *Joystick) -> i32;
+#[link_name="SDL_HapticOpenFromJoystick"]
+pub extern func HapticOpenFromJoystick(joystick: *Joystick) -> *Haptic;
+#[link_name="SDL_HapticClose"]
+pub extern func HapticClose(haptic: *Haptic);
+#[link_name="SDL_HapticNumEffects"]
+pub extern func HapticNumEffects(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticNumEffectsPlaying"]
+pub extern func HapticNumEffectsPlaying(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticQuery"]
+pub extern func HapticQuery(haptic: *Haptic) -> u32;
+#[link_name="SDL_HapticNumAxes"]
+pub extern func HapticNumAxes(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticEffectSupported"]
+pub extern func HapticEffectSupported(haptic: *Haptic, effect: *HapticEffect) -> i32;
+#[link_name="SDL_HapticNewEffect"]
+pub extern func HapticNewEffect(haptic: *Haptic, effect: *HapticEffect) -> i32;
+#[link_name="SDL_HapticUpdateEffect"]
+pub extern func HapticUpdateEffect(haptic: *Haptic, effect: i32, data: *HapticEffect) -> i32;
+#[link_name="SDL_HapticRunEffect"]
+pub extern func HapticRunEffect(haptic: *Haptic, effect: i32, iterations: u32) -> i32;
+#[link_name="SDL_HapticStopEffect"]
+pub extern func HapticStopEffect(haptic: *Haptic, effect: i32) -> i32;
+#[link_name="SDL_HapticDestroyEffect"]
+pub extern func HapticDestroyEffect(haptic: *Haptic, effect: i32);
+#[link_name="SDL_HapticGetEffectStatus"]
+pub extern func HapticGetEffectStatus(haptic: *Haptic, effect: i32) -> i32;
+#[link_name="SDL_HapticSetGain"]
+pub extern func HapticSetGain(haptic: *Haptic, gain: i32) -> i32;
+#[link_name="SDL_HapticSetAutocenter"]
+pub extern func HapticSetAutocenter(haptic: *Haptic, autocenter: i32) -> i32;
+#[link_name="SDL_HapticPause"]
+pub extern func HapticPause(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticUnpause"]
+pub extern func HapticUnpause(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticStopAll"]
+pub extern func HapticStopAll(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticRumbleSupported"]
+pub extern func HapticRumbleSupported(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticRumbleInit"]
+pub extern func HapticRumbleInit(haptic: *Haptic) -> i32;
+#[link_name="SDL_HapticRumblePlay"]
+pub extern func HapticRumblePlay(haptic: *Haptic, strength: float, length: u32) -> i32;
+#[link_name="SDL_HapticRumbleStop"]
+pub extern func HapticRumbleStop(haptic: *Haptic) -> i32;
+pub const HINT_DEFAULT: u32 = 0;
+pub const HINT_NORMAL: u32 = 1;
+pub const HINT_OVERRIDE: u32 = 2;
+pub typedef HintPriority u32;
+#[link_name="SDL_SetHintWithPriority"]
+pub extern func SetHintWithPriority(name: *i8, value: *i8, priority: HintPriority) -> Bool;
+#[link_name="SDL_SetHint"]
+pub extern func SetHint(name: *i8, value: *i8) -> Bool;
+#[link_name="SDL_GetHint"]
+pub extern func GetHint(name: *i8) -> *i8;
+#[link_name="SDL_GetHintBoolean"]
+pub extern func GetHintBoolean(name: *i8, default_value: Bool) -> Bool;
+pub typedef HintCallback func* (_: *void, _: *i8, _: *i8, _: *i8);
+#[link_name="SDL_AddHintCallback"]
+pub extern func AddHintCallback(name: *i8, callback: HintCallback, userdata: *void);
+#[link_name="SDL_DelHintCallback"]
+pub extern func DelHintCallback(name: *i8, callback: HintCallback, userdata: *void);
+#[link_name="SDL_ClearHints"]
+pub extern func ClearHints();
+#[link_name="SDL_LoadObject"]
+pub extern func LoadObject(sofile: *i8) -> *void;
+#[link_name="SDL_LoadFunction"]
+pub extern func LoadFunction(handle: *void, name: *i8) -> *void;
+#[link_name="SDL_UnloadObject"]
+pub extern func UnloadObject(handle: *void);
+pub const LOG_CATEGORY_APPLICATION: u32 = 0;
+pub const LOG_CATEGORY_ERROR: u32 = 1;
+pub const LOG_CATEGORY_ASSERT: u32 = 2;
+pub const LOG_CATEGORY_SYSTEM: u32 = 3;
+pub const LOG_CATEGORY_AUDIO: u32 = 4;
+pub const LOG_CATEGORY_VIDEO: u32 = 5;
+pub const LOG_CATEGORY_RENDER: u32 = 6;
+pub const LOG_CATEGORY_INPUT: u32 = 7;
+pub const LOG_CATEGORY_TEST: u32 = 8;
+pub const LOG_CATEGORY_RESERVED1: u32 = 9;
+pub const LOG_CATEGORY_RESERVED2: u32 = 10;
+pub const LOG_CATEGORY_RESERVED3: u32 = 11;
+pub const LOG_CATEGORY_RESERVED4: u32 = 12;
+pub const LOG_CATEGORY_RESERVED5: u32 = 13;
+pub const LOG_CATEGORY_RESERVED6: u32 = 14;
+pub const LOG_CATEGORY_RESERVED7: u32 = 15;
+pub const LOG_CATEGORY_RESERVED8: u32 = 16;
+pub const LOG_CATEGORY_RESERVED9: u32 = 17;
+pub const LOG_CATEGORY_RESERVED10: u32 = 18;
+pub const LOG_CATEGORY_CUSTOM: u32 = 19;
+pub const LOG_PRIORITY_VERBOSE: u32 = 1;
+pub const LOG_PRIORITY_DEBUG: u32 = 2;
+pub const LOG_PRIORITY_INFO: u32 = 3;
+pub const LOG_PRIORITY_WARN: u32 = 4;
+pub const LOG_PRIORITY_ERROR: u32 = 5;
+pub const LOG_PRIORITY_CRITICAL: u32 = 6;
+pub const NUM_LOG_PRIORITIES: u32 = 7;
+pub typedef LogPriority u32;
+#[link_name="SDL_LogSetAllPriority"]
+pub extern func LogSetAllPriority(priority: LogPriority);
+#[link_name="SDL_LogSetPriority"]
+pub extern func LogSetPriority(category: i32, priority: LogPriority);
+#[link_name="SDL_LogGetPriority"]
+pub extern func LogGetPriority(category: i32) -> LogPriority;
+#[link_name="SDL_LogResetPriorities"]
+pub extern func LogResetPriorities();
+#[link_name="SDL_Log"]
+pub extern func Log(fmt: *i8);
+#[link_name="SDL_LogVerbose"]
+pub extern func LogVerbose(category: i32, fmt: *i8);
+#[link_name="SDL_LogDebug"]
+pub extern func LogDebug(category: i32, fmt: *i8);
+#[link_name="SDL_LogInfo"]
+pub extern func LogInfo(category: i32, fmt: *i8);
+#[link_name="SDL_LogWarn"]
+pub extern func LogWarn(category: i32, fmt: *i8);
+#[link_name="SDL_LogError"]
+pub extern func LogError(category: i32, fmt: *i8);
+#[link_name="SDL_LogCritical"]
+pub extern func LogCritical(category: i32, fmt: *i8);
+#[link_name="SDL_LogMessage"]
+pub extern func LogMessage(category: i32, priority: LogPriority, fmt: *i8);
+pub typedef LogOutputFunction func* (_: *void, _: i32, _: LogPriority, _: *i8);
+#[link_name="SDL_LogGetOutputFunction"]
+pub extern func LogGetOutputFunction(callback: *LogOutputFunction, userdata: **void);
+#[link_name="SDL_LogSetOutputFunction"]
+pub extern func LogSetOutputFunction(callback: LogOutputFunction, userdata: *void);
+pub const MESSAGEBOX_ERROR: u32 = 16;
+pub const MESSAGEBOX_WARNING: u32 = 32;
+pub const MESSAGEBOX_INFORMATION: u32 = 64;
+pub typedef MessageBoxFlags u32;
+pub const MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT: u32 = 1;
+pub const MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT: u32 = 2;
+pub typedef MessageBoxButtonFlags u32;
+pub typedef MessageBoxButtonData struct {
+    flags: u32,
+    buttonid: i32,
+    text: *i8,
+};
+pub typedef MessageBoxColor struct {
+    r: u8,
+    g: u8,
+    b: u8,
+};
+pub const MESSAGEBOX_COLOR_BACKGROUND: u32 = 0;
+pub const MESSAGEBOX_COLOR_TEXT: u32 = 1;
+pub const MESSAGEBOX_COLOR_BUTTON_BORDER: u32 = 2;
+pub const MESSAGEBOX_COLOR_BUTTON_BACKGROUND: u32 = 3;
+pub const MESSAGEBOX_COLOR_BUTTON_SELECTED: u32 = 4;
+pub const MESSAGEBOX_COLOR_MAX: u32 = 5;
+pub typedef MessageBoxColorType u32;
+pub typedef MessageBoxColorScheme struct {
+    colors: [5]MessageBoxColor,
+};
+pub typedef MessageBoxData struct {
+    flags: u32,
+    window: *Window,
+    title: *i8,
+    message: *i8,
+    numbuttons: i32,
+    buttons: *MessageBoxButtonData,
+    colorScheme: *MessageBoxColorScheme,
+};
+pub extern func ShowMessageBox(messageboxdata: *MessageBoxData, buttonid: *i32) -> i32;
+#[link_name="SDL_ShowSimpleMessageBox"]
+pub extern func ShowSimpleMessageBox(flags: u32, title: *i8, message: *i8, window: *Window) -> i32;
+pub const POWERSTATE_UNKNOWN: u32 = 0;
+pub const POWERSTATE_ON_BATTERY: u32 = 1;
+pub const POWERSTATE_NO_BATTERY: u32 = 2;
+pub const POWERSTATE_CHARGING: u32 = 3;
+pub const POWERSTATE_CHARGED: u32 = 4;
+pub typedef PowerState u32;
+#[link_name="SDL_GetPowerInfo"]
+pub extern func GetPowerInfo(secs: *i32, pct: *i32) -> PowerState;
+pub const RENDERER_SOFTWARE: u32 = 1;
+pub const RENDERER_ACCELERATED: u32 = 2;
+pub const RENDERER_PRESENTVSYNC: u32 = 4;
+pub const RENDERER_TARGETTEXTURE: u32 = 8;
+pub typedef RendererFlags u32;
+pub typedef RendererInfo struct {
+    name: *i8,
+    flags: u32,
+    num_texture_formats: u32,
+    texture_formats: [16]u32,
+    max_texture_width: i32,
+    max_texture_height: i32,
+};
+pub const TEXTUREACCESS_STATIC: u32 = 0;
+pub const TEXTUREACCESS_STREAMING: u32 = 1;
+pub const TEXTUREACCESS_TARGET: u32 = 2;
+pub typedef TextureAccess u32;
+pub const TEXTUREMODULATE_NONE: u32 = 0;
+pub const TEXTUREMODULATE_COLOR: u32 = 1;
+pub const TEXTUREMODULATE_ALPHA: u32 = 2;
+pub typedef TextureModulate u32;
+pub const FLIP_NONE: u32 = 0;
+pub const FLIP_HORIZONTAL: u32 = 1;
+pub const FLIP_VERTICAL: u32 = 2;
+pub typedef RendererFlip u32;
+pub typedef Renderer struct {
+};
+pub typedef Texture struct {
+};
+#[link_name="SDL_GetNumRenderDrivers"]
+pub extern func GetNumRenderDrivers() -> i32;
+#[link_name="SDL_GetRenderDriverInfo"]
+pub extern func GetRenderDriverInfo(index: i32, info: *RendererInfo) -> i32;
+#[link_name="SDL_CreateWindowAndRenderer"]
+pub extern func CreateWindowAndRenderer(width: i32, height: i32, window_flags: u32, window: **Window, renderer: **Renderer) -> i32;
+#[link_name="SDL_CreateRenderer"]
+pub extern func CreateRenderer(window: *Window, index: i32, flags: u32) -> *Renderer;
+#[link_name="SDL_CreateSoftwareRenderer"]
+pub extern func CreateSoftwareRenderer(surface: *Surface) -> *Renderer;
+#[link_name="SDL_GetRenderer"]
+pub extern func GetRenderer(window: *Window) -> *Renderer;
+#[link_name="SDL_GetRendererInfo"]
+pub extern func GetRendererInfo(renderer: *Renderer, info: *RendererInfo) -> i32;
+#[link_name="SDL_GetRendererOutputSize"]
+pub extern func GetRendererOutputSize(renderer: *Renderer, w: *i32, h: *i32) -> i32;
+#[link_name="SDL_CreateTexture"]
+pub extern func CreateTexture(renderer: *Renderer, format: u32, access: i32, w: i32, h: i32) -> *Texture;
+#[link_name="SDL_CreateTextureFromSurface"]
+pub extern func CreateTextureFromSurface(renderer: *Renderer, surface: *Surface) -> *Texture;
+#[link_name="SDL_QueryTexture"]
+pub extern func QueryTexture(texture: *Texture, format: *u32, access: *i32, w: *i32, h: *i32) -> i32;
+#[link_name="SDL_SetTextureColorMod"]
+pub extern func SetTextureColorMod(texture: *Texture, r: u8, g: u8, b: u8) -> i32;
+#[link_name="SDL_GetTextureColorMod"]
+pub extern func GetTextureColorMod(texture: *Texture, r: *u8, g: *u8, b: *u8) -> i32;
+#[link_name="SDL_SetTextureAlphaMod"]
+pub extern func SetTextureAlphaMod(texture: *Texture, alpha: u8) -> i32;
+#[link_name="SDL_GetTextureAlphaMod"]
+pub extern func GetTextureAlphaMod(texture: *Texture, alpha: *u8) -> i32;
+#[link_name="SDL_SetTextureBlendMode"]
+pub extern func SetTextureBlendMode(texture: *Texture, blendMode: BlendMode) -> i32;
+#[link_name="SDL_GetTextureBlendMode"]
+pub extern func GetTextureBlendMode(texture: *Texture, blendMode: *BlendMode) -> i32;
+#[link_name="SDL_UpdateTexture"]
+pub extern func UpdateTexture(texture: *Texture, rect: *Rect, pixels: *void, pitch: i32) -> i32;
+#[link_name="SDL_UpdateYUVTexture"]
+pub extern func UpdateYUVTexture(texture: *Texture, rect: *Rect, Yplane: *u8, Ypitch: i32, Uplane: *u8, Upitch: i32, Vplane: *u8, Vpitch: i32) -> i32;
+#[link_name="SDL_LockTexture"]
+pub extern func LockTexture(texture: *Texture, rect: *Rect, pixels: **void, pitch: *i32) -> i32;
+#[link_name="SDL_UnlockTexture"]
+pub extern func UnlockTexture(texture: *Texture);
+#[link_name="SDL_RenderTargetSupported"]
+pub extern func RenderTargetSupported(renderer: *Renderer) -> Bool;
+#[link_name="SDL_SetRenderTarget"]
+pub extern func SetRenderTarget(renderer: *Renderer, texture: *Texture) -> i32;
+#[link_name="SDL_GetRenderTarget"]
+pub extern func GetRenderTarget(renderer: *Renderer) -> *Texture;
+#[link_name="SDL_RenderSetLogicalSize"]
+pub extern func RenderSetLogicalSize(renderer: *Renderer, w: i32, h: i32) -> i32;
+#[link_name="SDL_RenderGetLogicalSize"]
+pub extern func RenderGetLogicalSize(renderer: *Renderer, w: *i32, h: *i32);
+#[link_name="SDL_RenderSetIntegerScale"]
+pub extern func RenderSetIntegerScale(renderer: *Renderer, enable: Bool) -> i32;
+#[link_name="SDL_RenderGetIntegerScale"]
+pub extern func RenderGetIntegerScale(renderer: *Renderer) -> Bool;
+#[link_name="SDL_RenderSetViewport"]
+pub extern func RenderSetViewport(renderer: *Renderer, rect: *Rect) -> i32;
+#[link_name="SDL_RenderGetViewport"]
+pub extern func RenderGetViewport(renderer: *Renderer, rect: *Rect);
+#[link_name="SDL_RenderSetClipRect"]
+pub extern func RenderSetClipRect(renderer: *Renderer, rect: *Rect) -> i32;
+#[link_name="SDL_RenderGetClipRect"]
+pub extern func RenderGetClipRect(renderer: *Renderer, rect: *Rect);
+#[link_name="SDL_RenderIsClipEnabled"]
+pub extern func RenderIsClipEnabled(renderer: *Renderer) -> Bool;
+#[link_name="SDL_RenderSetScale"]
+pub extern func RenderSetScale(renderer: *Renderer, scaleX: float, scaleY: float) -> i32;
+#[link_name="SDL_RenderGetScale"]
+pub extern func RenderGetScale(renderer: *Renderer, scaleX: *float, scaleY: *float);
+#[link_name="SDL_SetRenderDrawColor"]
+pub extern func SetRenderDrawColor(renderer: *Renderer, r: u8, g: u8, b: u8, a: u8) -> i32;
+#[link_name="SDL_GetRenderDrawColor"]
+pub extern func GetRenderDrawColor(renderer: *Renderer, r: *u8, g: *u8, b: *u8, a: *u8) -> i32;
+#[link_name="SDL_SetRenderDrawBlendMode"]
+pub extern func SetRenderDrawBlendMode(renderer: *Renderer, blendMode: BlendMode) -> i32;
+#[link_name="SDL_GetRenderDrawBlendMode"]
+pub extern func GetRenderDrawBlendMode(renderer: *Renderer, blendMode: *BlendMode) -> i32;
+#[link_name="SDL_RenderClear"]
+pub extern func RenderClear(renderer: *Renderer) -> i32;
+#[link_name="SDL_RenderDrawPoint"]
+pub extern func RenderDrawPoint(renderer: *Renderer, x: i32, y: i32) -> i32;
+#[link_name="SDL_RenderDrawPoints"]
+pub extern func RenderDrawPoints(renderer: *Renderer, points: *Point, count: i32) -> i32;
+#[link_name="SDL_RenderDrawLine"]
+pub extern func RenderDrawLine(renderer: *Renderer, x1: i32, y1: i32, x2: i32, y2: i32) -> i32;
+#[link_name="SDL_RenderDrawLines"]
+pub extern func RenderDrawLines(renderer: *Renderer, points: *Point, count: i32) -> i32;
+#[link_name="SDL_RenderDrawRect"]
+pub extern func RenderDrawRect(renderer: *Renderer, rect: *Rect) -> i32;
+#[link_name="SDL_RenderDrawRects"]
+pub extern func RenderDrawRects(renderer: *Renderer, rects: *Rect, count: i32) -> i32;
+#[link_name="SDL_RenderFillRect"]
+pub extern func RenderFillRect(renderer: *Renderer, rect: *Rect) -> i32;
+#[link_name="SDL_RenderFillRects"]
+pub extern func RenderFillRects(renderer: *Renderer, rects: *Rect, count: i32) -> i32;
+#[link_name="SDL_RenderCopy"]
+pub extern func RenderCopy(renderer: *Renderer, texture: *Texture, srcrect: *Rect, dstrect: *Rect) -> i32;
+#[link_name="SDL_RenderCopyEx"]
+pub extern func RenderCopyEx(renderer: *Renderer, texture: *Texture, srcrect: *Rect, dstrect: *Rect, angle: double, center: *Point, flip: RendererFlip) -> i32;
+#[link_name="SDL_RenderDrawPointF"]
+pub extern func RenderDrawPointF(renderer: *Renderer, x: float, y: float) -> i32;
+#[link_name="SDL_RenderDrawPointsF"]
+pub extern func RenderDrawPointsF(renderer: *Renderer, points: *FPoint, count: i32) -> i32;
+#[link_name="SDL_RenderDrawLineF"]
+pub extern func RenderDrawLineF(renderer: *Renderer, x1: float, y1: float, x2: float, y2: float) -> i32;
+#[link_name="SDL_RenderDrawLinesF"]
+pub extern func RenderDrawLinesF(renderer: *Renderer, points: *FPoint, count: i32) -> i32;
+#[link_name="SDL_RenderDrawRectF"]
+pub extern func RenderDrawRectF(renderer: *Renderer, rect: *FRect) -> i32;
+#[link_name="SDL_RenderDrawRectsF"]
+pub extern func RenderDrawRectsF(renderer: *Renderer, rects: *FRect, count: i32) -> i32;
+#[link_name="SDL_RenderFillRectF"]
+pub extern func RenderFillRectF(renderer: *Renderer, rect: *FRect) -> i32;
+#[link_name="SDL_RenderFillRectsF"]
+pub extern func RenderFillRectsF(renderer: *Renderer, rects: *FRect, count: i32) -> i32;
+#[link_name="SDL_RenderCopyF"]
+pub extern func RenderCopyF(renderer: *Renderer, texture: *Texture, srcrect: *Rect, dstrect: *FRect) -> i32;
+#[link_name="SDL_RenderCopyExF"]
+pub extern func RenderCopyExF(renderer: *Renderer, texture: *Texture, srcrect: *Rect, dstrect: *FRect, angle: double, center: *FPoint, flip: RendererFlip) -> i32;
+#[link_name="SDL_RenderReadPixels"]
+pub extern func RenderReadPixels(renderer: *Renderer, rect: *Rect, format: u32, pixels: *void, pitch: i32) -> i32;
+#[link_name="SDL_RenderPresent"]
+pub extern func RenderPresent(renderer: *Renderer);
+#[link_name="SDL_DestroyTexture"]
+pub extern func DestroyTexture(texture: *Texture);
+#[link_name="SDL_DestroyRenderer"]
+pub extern func DestroyRenderer(renderer: *Renderer);
+#[link_name="SDL_RenderFlush"]
+pub extern func RenderFlush(renderer: *Renderer) -> i32;
+#[link_name="SDL_GL_BindTexture"]
+pub extern func GL_BindTexture(texture: *Texture, texw: *float, texh: *float) -> i32;
+#[link_name="SDL_GL_UnbindTexture"]
+pub extern func GL_UnbindTexture(texture: *Texture) -> i32;
+#[link_name="SDL_RenderGetMetalLayer"]
+pub extern func RenderGetMetalLayer(renderer: *Renderer) -> *void;
+#[link_name="SDL_RenderGetMetalCommandEncoder"]
+pub extern func RenderGetMetalCommandEncoder(renderer: *Renderer) -> *void;
+pub typedef _SDL_Sensor struct {
+};
+pub typedef Sensor _SDL_Sensor;
+pub typedef SensorID i32;
+pub const SENSOR_INVALID: i32 = -1;
+pub const SENSOR_UNKNOWN: i32 = 0;
+pub const SENSOR_ACCEL: i32 = 1;
+pub const SENSOR_GYRO: i32 = 2;
+pub typedef SensorType i32;
+#[link_name="SDL_NumSensors"]
+pub extern func NumSensors() -> i32;
+#[link_name="SDL_SensorGetDeviceName"]
+pub extern func SensorGetDeviceName(device_index: i32) -> *i8;
+#[link_name="SDL_SensorGetDeviceType"]
+pub extern func SensorGetDeviceType(device_index: i32) -> SensorType;
+#[link_name="SDL_SensorGetDeviceNonPortableType"]
+pub extern func SensorGetDeviceNonPortableType(device_index: i32) -> i32;
+#[link_name="SDL_SensorGetDeviceInstanceID"]
+pub extern func SensorGetDeviceInstanceID(device_index: i32) -> SensorID;
+#[link_name="SDL_SensorOpen"]
+pub extern func SensorOpen(device_index: i32) -> *Sensor;
+#[link_name="SDL_SensorFromInstanceID"]
+pub extern func SensorFromInstanceID(instance_id: SensorID) -> *Sensor;
+#[link_name="SDL_SensorGetName"]
+pub extern func SensorGetName(sensor: *Sensor) -> *i8;
+#[link_name="SDL_SensorGetType"]
+pub extern func SensorGetType(sensor: *Sensor) -> SensorType;
+#[link_name="SDL_SensorGetNonPortableType"]
+pub extern func SensorGetNonPortableType(sensor: *Sensor) -> i32;
+#[link_name="SDL_SensorGetInstanceID"]
+pub extern func SensorGetInstanceID(sensor: *Sensor) -> SensorID;
+#[link_name="SDL_SensorGetData"]
+pub extern func SensorGetData(sensor: *Sensor, data: *float, num_values: i32) -> i32;
+#[link_name="SDL_SensorClose"]
+pub extern func SensorClose(sensor: *Sensor);
+#[link_name="SDL_SensorUpdate"]
+pub extern func SensorUpdate();
+#[link_name="SDL_CreateShapedWindow"]
+pub extern func CreateShapedWindow(title: *i8, x: u32, y: u32, w: u32, h: u32, flags: u32) -> *Window;
+#[link_name="SDL_IsShapedWindow"]
+pub extern func IsShapedWindow(window: *Window) -> Bool;
+pub const ShapeModeDefault: u32 = 0;
+pub const ShapeModeBinarizeAlpha: u32 = 1;
+pub const ShapeModeReverseBinarizeAlpha: u32 = 2;
+pub const ShapeModeColorKey: u32 = 3;
+pub typedef WindowShapeParams union {
+    binarizationCutoff: u8,
+    colorKey: Color,
+};
+pub typedef WindowShapeMode struct {
+    mode: u32,
+    parameters: WindowShapeParams,
+};
+#[link_name="SDL_SetWindowShape"]
+pub extern func SetWindowShape(window: *Window, shape: *Surface, shape_mode: *WindowShapeMode) -> i32;
+#[link_name="SDL_GetShapedWindowMode"]
+pub extern func GetShapedWindowMode(window: *Window, shape_mode: *WindowShapeMode) -> i32;
+#[link_name="SDL_LinuxSetThreadPriority"]
+pub extern func LinuxSetThreadPriority(threadID: i64, priority: i32) -> i32;
+#[link_name="SDL_IsTablet"]
+pub extern func IsTablet() -> Bool;
+#[link_name="SDL_GetTicks"]
+pub extern func GetTicks() -> u32;
+#[link_name="SDL_GetPerformanceCounter"]
+pub extern func GetPerformanceCounter() -> u64;
+#[link_name="SDL_GetPerformanceFrequency"]
+pub extern func GetPerformanceFrequency() -> u64;
+#[link_name="SDL_Delay"]
+pub extern func Delay(ms: u32);
+pub typedef TimerCallback func* (_: u32, _: *void) -> u32;
+pub typedef TimerID i32;
+#[link_name="SDL_AddTimer"]
+pub extern func AddTimer(interval: u32, callback: TimerCallback, param: *void) -> TimerID;
+#[link_name="SDL_RemoveTimer"]
+pub extern func RemoveTimer(id: TimerID) -> Bool;
+pub typedef Version struct {
+    major: u8,
+    minor: u8,
+    patch: u8,
+};
+#[link_name="SDL_GetVersion"]
+pub extern func GetVersion(ver: *Version);
+#[link_name="SDL_GetRevision"]
+pub extern func GetRevision() -> *i8;
+#[link_name="SDL_GetRevisionNumber"]
+pub extern func GetRevisionNumber() -> i32;
+#[link_name="SDL_Init"]
+pub extern func Init(flags: u32) -> i32;
+#[link_name="SDL_InitSubSystem"]
+pub extern func InitSubSystem(flags: u32) -> i32;
+#[link_name="SDL_QuitSubSystem"]
+pub extern func QuitSubSystem(flags: u32);
+#[link_name="SDL_WasInit"]
+pub extern func WasInit(flags: u32) -> u32;
+#[link_name="SDL_Quit"]
+pub extern func Quit();
+
