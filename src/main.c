@@ -37,6 +37,8 @@ VSFindResult find_visual_studio_and_windows_sdk();
 
 #define LANG_FILE_EXTENSION ".lang"
 
+#define BUILD_FILE_NAME ("build" LANG_FILE_EXTENSION)
+
 #if defined(__unix__) || defined(__APPLE__)
 #define TMP_OBJECT_NAME "tmp.o"
 #elif defined(_WIN32)
@@ -80,7 +82,8 @@ VSFindResult find_visual_studio_and_windows_sdk();
 
 static const char *COMPILER_USAGE[] = {
     "Usage:\n",
-    "  %s <inputs>\t\tRuns compiler on inputs.\n",
+    "  %s <inputs>\t\t\tRuns compiler on inputs.\n",
+    "  %s build [project dir]\tRuns a project's build script.\n",
     "\n",
     "Options:\n",
     "  -r\t\t\t\tRuns the input files without creating executable.\n",
@@ -108,27 +111,58 @@ int main(int argc, char **argv)
     compiler_init(compiler);
     parse_args(&compiler->args, argc, argv);
 
-    if (compiler->args.in_paths.len != 1)
+    switch (compiler->args.action)
     {
+    case COMPILER_ACTION_NONE: {
         print_usage(argc, argv);
-        exit(EXIT_FAILURE);
+        break;
     }
 
-    char *in_path = compiler->args.in_paths.ptr[0];
+    case COMPILER_ACTION_COMPILE_FILE: {
+        if (compiler->args.in_paths.len != 1)
+        {
+            print_usage(argc, argv);
+            exit(EXIT_FAILURE);
+        }
 
-    char *absolute_path = get_absolute_path(in_path);
-    String filepath = CSTR(absolute_path);
+        char *in_path = compiler->args.in_paths.ptr[0];
 
-    compile_file_to_object(compiler, filepath);
+        char *absolute_path = get_absolute_path(in_path);
+        String filepath = CSTR(absolute_path);
 
-    if (!compiler->args.should_run)
-    {
-        compiler_link_module(
-            compiler, &compiler->backend->mod, CSTR(compiler->args.out_path));
+        compile_file_to_object(compiler, filepath);
+
+        if (!compiler->args.should_run)
+        {
+            compiler_link_module(
+                compiler,
+                &compiler->backend->mod,
+                CSTR(compiler->args.out_path));
+        }
+        else
+        {
+            llvm_run_module(compiler->backend);
+        }
+        break;
     }
-    else
-    {
+
+    case COMPILER_ACTION_EXECUTE_BUILD_SCRIPT: {
+        set_current_dir(compiler->args.abs_build_dir);
+
+        size_t buf_size = strlen(compiler->args.abs_build_dir) + 1 +
+                          strlen(BUILD_FILE_NAME) + 1;
+        char *in_path = bump_alloc(&compiler->bump, buf_size);
+        sprintf(
+            in_path, "%s/%s", compiler->args.abs_build_dir, BUILD_FILE_NAME);
+        in_path[buf_size - 1] = '\0';
+
+        char *absolute_path = get_absolute_path(in_path);
+        String filepath = CSTR(absolute_path);
+
+        compile_file_to_object(compiler, filepath);
         llvm_run_module(compiler->backend);
+        break;
+    }
     }
 
     compiler_destroy(compiler);

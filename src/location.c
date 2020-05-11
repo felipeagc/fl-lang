@@ -7,7 +7,7 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
     FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
     if (!f)
     {
-        fprintf(stderr, "Failed to open file: %.*s", PRINT_STR(file->path));
+        fprintf(stderr, "Failed to open file: %.*s\n", PRINT_STR(file->path));
         abort();
     }
 

@@ -65,13 +65,13 @@ void compiler_api_compile(Compiler *compiler)
         compiler, &compiler->backend->mod, CSTR(compiler->args.out_path));
 }
 
-void
-compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
+void compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
 {
     assert(count);
     *count = 0;
 
-    String first_path = CSTR(compiler->args.in_paths.ptr[0]);
+    char *c_first_path = get_absolute_path(compiler->args.in_paths.ptr[0]);
+    String first_path = CSTR(c_first_path);
 
     SourceFile *main_file = compiler_syntax_stage(compiler, first_path);
     if (buf)

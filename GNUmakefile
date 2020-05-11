@@ -25,16 +25,8 @@ clean:
 test: compiler
 	./compiler -r ./tests/run_tests.lang
 
-examples/ray: compiler bindgen examples/ray.lang $(CORE_FILES)
-	./compiler -o=$@ examples/ray.lang
-
-examples/table: compiler bindgen examples/table.lang $(CORE_FILES)
-	./compiler -o=$@ examples/table.lang
-
-examples/sdl_game: compiler bindgen examples/sdl.lang examples/sdl_game.lang $(CORE_FILES)
-	./compiler -o=$@ -l=SDL2 examples/sdl_game.lang
-
-examples: examples/ray examples/table examples/sdl_game
+examples:
+	./compiler build examples
 
 bindgen-tests: compiler bindgen
 	./bindgen examples/stb_image.h > examples/stb_image.lang

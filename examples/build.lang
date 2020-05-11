@@ -6,18 +6,18 @@ func main() {
     var builder: build.Builder;
 
     build.add_target(&builder, &build.Target{
-        input = "examples/ray.lang",
-        output = "examples/ray",
+        input = "ray.lang",
+        output = "ray",
     });
 
     build.add_target(&builder, &build.Target{
-        input = "examples/table.lang",
-        output = "examples/table",
+        input = "table.lang",
+        output = "table",
     });
 
     build.add_target(&builder, &build.Target{
-        input = "examples/sdl_game.lang",
-        output = "examples/sdl_game",
+        input = "sdl_game.lang",
+        output = "sdl_game",
         link_with = []string{"SDL2"},
     });
 

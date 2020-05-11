@@ -64,6 +64,40 @@ static const char *get_path_filename(const char *path)
     return path;
 }
 
+static char *get_current_dir(void)
+{
+#if defined(__unix__) || defined(__APPLE__)
+    return getcwd(NULL, 0);
+#elif defined(_WIN32)
+    DWORD required_size = GetCurrentDirectory(0, NULL);
+    TCHAR *buf = malloc(sizeof(TCHAR) * required_size);
+    GetCurrentDirectory(required_size, buf);
+    if (sizeof(TCHAR) == sizeof(char))
+    {
+        return buf;
+    }
+    else
+    {
+        return utf16_to_utf8(buf);
+    }
+
+    return NULL;
+#else
+#error OS not supported
+#endif
+}
+
+static void set_current_dir(const char *dir)
+{
+#if defined(__unix__) || defined(__APPLE__)
+    chdir(dir);
+#elif defined(_WIN32)
+    SetCurrentDirectory(dir);
+#else
+#error OS not supported
+#endif
+}
+
 static char *get_exe_path(void)
 {
 #if defined(__linux__)

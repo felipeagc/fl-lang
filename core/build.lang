@@ -46,7 +46,6 @@ pub func build(builder: *Builder) {
             }
         }
 
-
         if (should_recompile) {
             fmt.printf("=> Building target '%'\n", target.output);
 
