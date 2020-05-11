@@ -846,17 +846,16 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             Ast param = {0};
             param.type = AST_PROC_PARAM;
 
-            Token *ident_tok = parser_peek(p, 0);
-            param.loc = ident_tok->loc;
-
-            if (ident_tok->type == TOKEN_IDENT)
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (ident_tok)
             {
-                parser_next(p, 1);
+                param.loc = ident_tok->loc;
                 param.proc_param.name = ident_tok->str;
             }
             else
             {
                 res = false;
+                break;
             }
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
@@ -2180,17 +2179,16 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
                 param.flags |= AST_FLAG_USING;
             }
 
-            Token *ident_tok = parser_peek(p, 0);
-            param.loc = ident_tok->loc;
-
-            if (ident_tok->type == TOKEN_IDENT)
+            Token *ident_tok = parser_consume(p, TOKEN_IDENT);
+            if (ident_tok)
             {
-                parser_next(p, 1);
+                param.loc = ident_tok->loc;
                 param.proc_param.name = ident_tok->str;
             }
             else
             {
                 res = false;
+                break;
             }
 
             if (!parser_consume(p, TOKEN_COLON)) res = false;
