@@ -71,10 +71,5 @@ func main() {
         printf(c"const_struct.a = %d\n", const_struct.a);
         printf(c"const_struct.b = \"%s\"\n", const_struct.b);
     }
-
-    {
-        var a = u8{1};
-        var b: u8 = a;
-    }
 }
 

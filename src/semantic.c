@@ -4564,20 +4564,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
         }
 
         default: {
-            if (ast->compound.values.len == 1)
-            {
-                analyze_ast(a, &ast->compound.values.ptr[0], ast->type_info);
-                break;
-            }
-
-            if (ast->compound.is_named)
-            {
-                compile_error(
-                    a->compiler,
-                    ast->loc,
-                    "named compound literal only works for struct types");
-            }
-
             compile_error(
                 a->compiler,
                 ast->compound.type_expr->loc,
