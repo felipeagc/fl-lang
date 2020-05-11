@@ -1,5 +1,5 @@
 module main
 
-func some_func() {
+pub func some_func() {
 
 }

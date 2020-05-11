@@ -1,9 +1,9 @@
 module files
 
 version (posix) {
-    import posix "core:posix"
-    import c "core:c"
-    import strings "core:strings"
+    import "core:posix"
+    import "core:c"
+    import "core:strings"
 
     pub func get_cwd_alloc() -> string {
         var buf = posix.getcwd(null, 0);

@@ -1723,7 +1723,16 @@ static void register_symbol_ast_leaf(Analyzer *a, Ast *ast, Ast *came_from)
     }
 
     case AST_IMPORT: {
-        sym_name = ast->import.name;
+        SourceFile *imported_file = NULL;
+        bool found = hash_get(
+            &a->compiler->files, ast->import.abs_path, (void **)&imported_file);
+        assert(found);
+
+        if (!string_equals(imported_file->module_name, ast->loc.file->module_name))
+        {
+            sym_name = imported_file->module_name;
+        }
+
         break;
     }
 
@@ -5663,7 +5672,7 @@ static void use_imported_scope(Analyzer *a, Ast *ast)
             &a->compiler->files, ast->import.abs_path, (void **)&imported_file);
         assert(found);
 
-        if (ast->import.name.ptr == NULL)
+        if (string_equals(imported_file->module_name, ast->loc.file->module_name))
         {
             Scope *scope = *array_last(&a->scope_stack);
             assert(scope);

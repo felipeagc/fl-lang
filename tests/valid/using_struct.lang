@@ -1,6 +1,6 @@
 module main
 
-import c "core:c"
+import "core:c"
 
 typedef Hello struct { 
     a: i32,

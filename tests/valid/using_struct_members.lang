@@ -18,6 +18,8 @@ typedef Struct struct {
 };
 
 func main() {
+    using c;
+
     var str: Struct;
     str.hello = 123;
     printf(c"str.hello = %d\n", str.hello);

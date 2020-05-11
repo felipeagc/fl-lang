@@ -1,7 +1,7 @@
 module main
 
-import runtime "core:runtime"
-import fmt "core:fmt"
+import "core:runtime"
+import "core:fmt"
 import "core:c"
 
 typedef MyStruct struct {
@@ -10,6 +10,8 @@ typedef MyStruct struct {
 };
 
 func main() {
+    using c;
+
     // Integer
     {
         var t: runtime.TypeInfo = @type_info_of(i32);

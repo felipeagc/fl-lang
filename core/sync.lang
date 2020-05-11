@@ -1,12 +1,12 @@
-module thread
+module sync
 
-typedef ThreadStart func* (arg: *void) -> *void;
+pub typedef ThreadStart func* (arg: *void) -> *void;
 
 version (posix) {
     import "core:posix"
-    pub typedef Thread pthread_t;
-    pub typedef Mutex pthread_mutex_t;
-    pub typedef Cond pthread_cond_t;
+    pub typedef Thread posix.pthread_t;
+    pub typedef Mutex posix.pthread_mutex_t;
+    pub typedef Cond posix.pthread_cond_t;
 }
 
 //
@@ -17,28 +17,28 @@ version (posix) {
     #[inline]
     pub func thread_create(start: ThreadStart, arg: *void) -> Thread {
         var thread: Thread;
-        pthread_create(&thread, null, start, arg);
+        posix.pthread_create(&thread, null, start, arg);
         return thread;
     }
 
     #[inline]
     pub func thread_wait(thread: Thread) {
-        pthread_join(thread, null);
+        posix.pthread_join(thread, null);
     }
 
     #[inline]
     pub func thread_sleep(milliseconds: u32) {
-        usleep(1000 * milliseconds);
+        posix.usleep(1000 * milliseconds);
     }
 
     #[inline]
     pub func thread_detach(thread: Thread) {
-        pthread_detach(thread);
+        posix.pthread_detach(thread);
     }
 
     #[inline]
     pub func thread_exit() {
-        pthread_exit(cast(*void)0);
+        posix.pthread_exit(cast(*void)0);
     }
 }
 
@@ -49,27 +49,27 @@ version (posix) {
 version (posix) {
     #[inline]
     pub func mutex_init(mtx: *Mutex) {
-        pthread_mutex_init(mtx, null);
+        posix.pthread_mutex_init(mtx, null);
     }
 
     #[inline]
     pub func mutex_destroy(mtx: *Mutex) {
-        pthread_mutex_destroy(mtx);
+        posix.pthread_mutex_destroy(mtx);
     }
 
     #[inline]
     pub func mutex_lock(mtx: *Mutex) {
-        pthread_mutex_lock(mtx);
+        posix.pthread_mutex_lock(mtx);
     }
 
     #[inline]
     pub func mutex_trylock(mtx: *Mutex) {
-        pthread_mutex_trylock(mtx);
+        posix.pthread_mutex_trylock(mtx);
     }
 
     #[inline]
     pub func mutex_unlock(mtx: *Mutex) {
-        pthread_mutex_unlock(mtx);
+        posix.pthread_mutex_unlock(mtx);
     }
 }
 
@@ -80,26 +80,26 @@ version (posix) {
 version (posix) {
     #[inline]
     pub func cond_init(cond: *Cond) {
-        pthread_cond_init(cond, null);
+        posix.pthread_cond_init(cond, null);
     }
 
     #[inline]
     pub func cond_destroy(cond: *Cond) {
-        pthread_cond_destroy(cond);
+        posix.pthread_cond_destroy(cond);
     }
 
     #[inline]
     pub func cond_wake_one(cond: *Cond) {
-        pthread_cond_signal(cond);
+        posix.pthread_cond_signal(cond);
     }
 
     #[inline]
     pub func cond_wake_all(cond: *Cond) {
-        pthread_cond_broadcast(cond);
+        posix.pthread_cond_broadcast(cond);
     }
 
     #[inline]
     pub func cond_wait(cond: *Cond, mtx: *Mutex) {
-        pthread_cond_wait(cond, mtx);
+        posix.pthread_cond_wait(cond, mtx);
     }
 }

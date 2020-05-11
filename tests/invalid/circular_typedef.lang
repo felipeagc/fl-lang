@@ -1,4 +1,9 @@
-typedef MyType MyType;
+module main
+
+// TODO: need to fix
+// typedef MyType MyType;
+
+typedef A 123;
 
 func main() {
 

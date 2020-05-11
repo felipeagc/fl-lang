@@ -4,10 +4,10 @@ import "core:c"
 
 func main() {
     version (linux) {
-        printf(c"I'm on linux\n");
+        c.printf(c"I'm on linux\n");
     }
 
     version (win32) {
-        printf(c"I'm on windows\n");
+        c.printf(c"I'm on windows\n");
     }
 }

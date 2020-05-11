@@ -11,6 +11,8 @@ const const_struct = Struct{321, c"Yo"};
 const const_array = []i32{3, 4};
 
 func main() {
+    using c;
+
     var my_array = [2]i32{1, 2};
     for (var i: uint = 0; i < my_array.len; i += 1) {
         printf(c"my_array[%lu] = %d\n", i, my_array[i]);

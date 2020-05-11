@@ -3,22 +3,22 @@ module main
 import "core:fmt"
 
 func main() {
-    defer print("Yo\n");
+    defer fmt.print("Yo\n");
 
     {
-        defer print("later!\n");
+        defer fmt.print("later!\n");
 
         defer {
-            print("world!\n");
+            fmt.print("world!\n");
         }
 
-        print("hello ");
+        fmt.print("hello ");
     }
 
     for (var i = 0; i < 10; i += 1) {
-        defer print("Goodbye!\n");
+        defer fmt.print("Goodbye!\n");
         return;
         continue;
-        print("Hello!\n");
+        fmt.print("Hello!\n");
     }
 }

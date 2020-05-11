@@ -3,7 +3,7 @@ module main
 func main() {
     puts_func(c"Hello");
 
-    printf(c"other_int: %d\n", other_int);
+    c.printf(c"other_int: %d\n", other_int);
 
     const other_int = some_int;
 }
@@ -11,4 +11,4 @@ func main() {
 import "core:c"
 
 const some_int: i32 = 123;
-const puts_func = puts;
+const puts_func = c.puts;

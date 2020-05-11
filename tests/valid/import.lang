@@ -1,8 +1,8 @@
 module main
 
-import hello "imported.lang"
-import same_module "same_module.lang"
-import fmt "core:fmt"
+import "imported.lang"
+import "same_module.lang"
+import "core:fmt"
 
 func main() {
     hello.say_hello();
@@ -19,8 +19,6 @@ func main() {
 
     fmt.print("Hello\n");
 
-    hello.fmt.print("yo\n");
-
     // Use a function that is private to this module
-    same_module.some_func();
+    some_func();
 }

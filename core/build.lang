@@ -1,10 +1,10 @@
 module build
 
-import os "core:os"
-import fmt "core:fmt"
-import compiler "core:compiler"
+import "core:os"
+import "core:fmt"
+import "core:compiler"
 
-pub typedef Builder struct {
+pub typedef Workspace struct {
     targets: [dyn]Target,
 };
 
@@ -16,11 +16,11 @@ pub typedef Target struct {
     opt_level: u32,
 };
 
-pub func add_target(builder: *Builder, target: *Target) {
+pub func add_target(builder: *Workspace, target: *Target) {
     @append(&builder.targets, target.*);
 }
 
-pub func build(builder: *Builder) {
+pub func build(builder: *Workspace) {
     for (*target in builder.targets) {
         var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
             input = target.input,

@@ -19,5 +19,5 @@ func main() {
     var a = add(i32)(&h, 123);
     add(i32)(&h, 123);
     other(i32)(&h, 123);
-    printf(c"%d\n", a);
+    c.printf(c"%d\n", a);
 }

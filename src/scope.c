@@ -149,7 +149,8 @@ struct Ast *get_symbol(Scope *scope, String name, SourceFile *from_file)
          ++sibling)
     {
         sym = get_symbol(*sibling, name, from_file);
-        if (sym && (sym->loc.file == from_file ||
+        if (sym && (string_equals(
+                        sym->loc.file->module_name, from_file->module_name) ||
                     ((sym->flags & AST_FLAG_PUBLIC) == AST_FLAG_PUBLIC)))
             return sym;
     }

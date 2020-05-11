@@ -1,6 +1,6 @@
 module main
 
-import fmt "core:fmt"
+import "core:fmt"
 
 func variadic3(numbers: ...i32) {
     var my_slice: []i32 = numbers;

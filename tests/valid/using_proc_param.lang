@@ -10,8 +10,8 @@ typedef Struct struct {
 };
 
 func my_func(using str: Struct) {
-    printf(c"%d\n", a);
-    printf(c"%d\n", b.c);
+    c.printf(c"%d\n", a);
+    c.printf(c"%d\n", b.c);
 }
 
 func main() {

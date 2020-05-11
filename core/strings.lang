@@ -1,6 +1,6 @@
 module strings
 
-import c "c.lang"
+import "core:c"
 
 pub func to_c_str_alloc(str: string) -> *char {
     var cstr: *char = @alloc(str.len + 1);

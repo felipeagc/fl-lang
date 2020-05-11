@@ -1,10 +1,10 @@
 module main
 
-import c "core:c"
-import os "core:os"
-import fmt "core:fmt"
-import files "core:files"
-import strings "core:strings"
+import "core:c"
+import "core:os"
+import "core:fmt"
+import "core:files"
+import "core:strings"
 
 typedef TestRun struct
 {

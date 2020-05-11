@@ -16,6 +16,8 @@ typedef NestedStruct struct {
 };
 
 func print_nested(n: *NestedStruct) {
+    using c;
+
     printf(c"n = %p\n", n);
     printf(c"n.name = %s\n", n.name);
     printf(c"n.name[0] = %c\n", n.name[0]);
@@ -28,6 +30,8 @@ func print_nested(n: *NestedStruct) {
 }
 
 func main() {
+    using c;
+
     var a_struct: MyStruct;
     a_struct.a = 32;
     var b_struct: *MyStruct = &a_struct;

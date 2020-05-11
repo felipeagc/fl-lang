@@ -3,6 +3,8 @@ module main
 import "core:c"
 
 func main() {
+    using c;
+
     printf(c"u64.max = %lu\n", u64.max);
     printf(c"u64.min = %lu\n", u64.min);
 

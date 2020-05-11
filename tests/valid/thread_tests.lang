@@ -1,33 +1,33 @@
 module main
 
 import "core:c"
-import "core:thread"
+import "core:sync"
 
 var my_val: i32 = 123;
-var mtx: Mutex;
+var mtx: sync.Mutex;
 
 func thread_start(arg: *void) -> *void {
-    mutex_lock(&mtx);
+    sync.mutex_lock(&mtx);
     my_val = 321;
-    mutex_unlock(&mtx);
+    sync.mutex_unlock(&mtx);
 
-    thread_exit();
+    sync.thread_exit();
 
-    printf(c"Hello!\n");
+    c.printf(c"Hello!\n");
 
     return null;
 }
 
 func main() {
-    mutex_init(&mtx);
+    sync.mutex_init(&mtx);
 
-    var thread = thread_create(thread_start, null);
+    var thread = sync.thread_create(thread_start, null);
 
-    thread_sleep(10);
-    mutex_lock(&mtx);
-    printf(c"my_val = %d\n", my_val);
-    mutex_unlock(&mtx);
+    sync.thread_sleep(10);
+    sync.mutex_lock(&mtx);
+    c.printf(c"my_val = %d\n", my_val);
+    sync.mutex_unlock(&mtx);
 
-    thread_wait(thread);
-    mutex_destroy(&mtx);
+    sync.thread_wait(thread);
+    sync.mutex_destroy(&mtx);
 }

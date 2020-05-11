@@ -1,6 +1,6 @@
 module main
 
-import c "core:c"
+import "core:c"
 
 func main() {
     if (@size_of(int) != @size_of(*void)) c.abort();

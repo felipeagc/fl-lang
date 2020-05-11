@@ -1,25 +1,25 @@
 module main
 
-import build "core:build"
+import "core:build"
 
 func main() {
-    var builder: build.Builder;
+    var workspace: build.Workspace;
 
-    build.add_target(&builder, &build.Target{
+    build.add_target(&workspace, &build.Target{
         input = "ray.lang",
         output = "ray",
     });
 
-    build.add_target(&builder, &build.Target{
+    build.add_target(&workspace, &build.Target{
         input = "table.lang",
         output = "table",
     });
 
-    build.add_target(&builder, &build.Target{
+    build.add_target(&workspace, &build.Target{
         input = "sdl_game.lang",
         output = "sdl_game",
         link_with = []string{"SDL2"},
     });
 
-    build.build(&builder);
+    build.build(&workspace);
 }

@@ -1,6 +1,6 @@
 module main
 
-import fmt "core:fmt"
+import "core:fmt"
 import "core:c"
 
 typedef MyEnum enum u32 {
@@ -9,6 +9,8 @@ typedef MyEnum enum u32 {
 };
 
 func main() {
+    using c;
+
     switch (4) {
     case 1: abort();
     case 2: abort();

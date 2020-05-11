@@ -26,6 +26,7 @@ test: compiler
 	./compiler -r ./tests/run_tests.lang
 
 examples:
+	rm -f examples/ray examples/table examples/sdl_game
 	./compiler build examples
 
 bindgen-tests: compiler bindgen

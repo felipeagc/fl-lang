@@ -7,6 +7,8 @@ const const2: i32 = (123 + 321) * 2;
 const const3: bool = !(-(123 + 321) > 2.2);
 
 func main() {
+    using c;
+
     printf(c"const1 = %f\n", const1);
     printf(c"const2 = %d\n", const2);
     printf(c"const3 = %hhu\n", const3);

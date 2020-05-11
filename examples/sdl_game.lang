@@ -1,10 +1,12 @@
 module main
 
 import "sdl.lang"
-import c "core:c"
-import fmt "core:fmt"
+import "core:c"
+import "core:fmt"
 
 func main() {
+    using sdl;
+
     SDL_Init(SDL_INIT_EVERYTHING);
     defer SDL_Quit();
 

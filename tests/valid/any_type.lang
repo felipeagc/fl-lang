@@ -1,8 +1,8 @@
 module main
 
-import c "core:c"
-import fmt "core:fmt"
-import runtime "core:runtime"
+import "core:c"
+import "core:fmt"
+import "core:runtime"
 
 func main() {
     {

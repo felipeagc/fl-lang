@@ -1,9 +1,9 @@
 module os
 
 version(posix) {
-    import posix "core:posix"
-    import strings "core:strings"
-    import c "core:c"
+    import "core:posix"
+    import "core:strings"
+    import "core:c"
 
     extern var environ: **char;
 

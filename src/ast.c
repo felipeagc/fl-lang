@@ -167,7 +167,6 @@ struct Ast
         } primary;
         struct
         {
-            String name;
             String path;
             String abs_path;
         } import;

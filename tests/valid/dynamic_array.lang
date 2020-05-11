@@ -1,9 +1,11 @@
 module main
 
 import "core:c"
-import fmt "core:fmt"
+import "core:fmt"
 
 func main() {
+    using c;
+
     {
         var arr: [dyn]i32;
         defer @delete(&arr);

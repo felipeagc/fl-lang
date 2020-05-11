@@ -20,12 +20,12 @@ func main() {
     v = v + f; 
 
     var v2: Vec3 = Vec3{123};
-    if (v2.x != 123 || v2.y != 123 || v2.z != 123) abort();
-    printf(c"%f %f %f\n", v2.r, v2.g, v2.b);
+    if (v2.x != 123 || v2.y != 123 || v2.z != 123) c.abort();
+    c.printf(c"%f %f %f\n", v2.r, v2.g, v2.b);
 
-    if (v.len != 3) abort();
+    if (v.len != 3) c.abort();
 
-    printf(c"%f %f %f\n", v[0], v[1], v[2]);
-    printf(c"%f %f %f\n", v.x, v.y, v.z);
-    printf(c"%f %f %f\n", v.r, v.g, v.b);
+    c.printf(c"%f %f %f\n", v[0], v[1], v[2]);
+    c.printf(c"%f %f %f\n", v.x, v.y, v.z);
+    c.printf(c"%f %f %f\n", v.r, v.g, v.b);
 }

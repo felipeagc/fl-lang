@@ -16,6 +16,8 @@ typedef MyEnum2 enum u32 {
 };
 
 func main() {
+    using c;
+
     var enum1: MyEnum = MyEnum.two;
     var enum2 = MyEnum.two_again;
     var my_uint: u32 = MyEnum.one;

@@ -2305,13 +2305,6 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
     case TOKEN_IMPORT: {
         parser_next(p, 1);
         ast->type = AST_IMPORT;
-        memset(&ast->import.name, 0, sizeof(ast->import.name));
-
-        if (parser_peek(p, 0)->type == TOKEN_IDENT)
-        {
-            Token *name_tok = parser_next(p, 1);
-            ast->import.name = name_tok->str;
-        }
 
         Token *path_tok = parser_consume(p, TOKEN_STRING_LIT);
         if (path_tok)

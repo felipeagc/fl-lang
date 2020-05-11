@@ -3,6 +3,8 @@ module main
 import "core:c"
 
 func main() {
+    using c;
+
     var test: i32 = 321;
 
     if (test) printf(c"Hello!\n");
