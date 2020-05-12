@@ -55,9 +55,9 @@ VSFindResult find_visual_studio_and_windows_sdk();
 #error OS not supported
 #endif
 
-#include "filesystem.c"
 #include "array.c"
 #include "string.c"
+#include "filesystem.c"
 #include "hashmap.c"
 #include "bump_alloc.c"
 #include "string_builder.c"

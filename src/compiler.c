@@ -74,7 +74,7 @@ static void compiler_init(Compiler *compiler)
     hash_set(&compiler->versions, STR("darwin"), NULL);
     hash_set(&compiler->versions, STR("posix"), NULL);
 #elif defined(_WIN32)
-    hash_set(&compiler->versions, STR("windows"), NULL);
+    hash_set(&compiler->versions, STR("win32"), NULL);
 #else
 #error OS not supported
 #endif
@@ -493,30 +493,48 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     sb_append(&compiler->sb, out_file_path);
     sb_append(&compiler->sb, STR("\" "));
     sb_append(&compiler->sb, STR(TMP_OBJECT_NAME));
-    for (size_t i = 0; i < array_size(compiler->args.library_paths); ++i)
+    for (size_t i = 0; i < compiler->args.library_paths.len; ++i)
     {
         sb_sprintf(
             &compiler->sb,
             " /LIBPATH:\"%s\"",
-            compiler->args.link_libraries[i]);
+            compiler->args.link_libraries.ptr[i]);
     }
-    for (size_t i = 0; i < array_size(compiler->args.link_libraries); ++i)
+    for (size_t i = 0; i < compiler->args.link_libraries.len; ++i)
     {
-        sb_sprintf(&compiler->sb, " \"%s\"", compiler->args.link_libraries[i]);
+        sb_sprintf(&compiler->sb, " \"%s\"", compiler->args.link_libraries.ptr[i]);
     }
 
     String cmd_line = sb_build(&compiler->sb, &compiler->bump);
     char *cmd_line_c = bump_c_str(&compiler->bump, cmd_line);
 
-    STARTUPINFO si;
+    STARTUPINFOA si;
     PROCESS_INFORMATION pi;
 
     ZeroMemory(&si, sizeof(si));
     si.cb = sizeof(si);
     ZeroMemory(&pi, sizeof(pi));
 
+    HANDLE stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetHandleInformation(stdout_handle, HANDLE_FLAG_INHERIT, 0);
+
+    HANDLE stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+    SetHandleInformation(stderr_handle, HANDLE_FLAG_INHERIT, 0);
+
+    si.hStdOutput = stdout_handle;
+    si.hStdError = stderr_handle;
+
     BOOL result = CreateProcessA(
-        NULL, cmd_line_c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
+        NULL,
+        cmd_line_c,
+        NULL,
+        NULL,
+        FALSE,
+        0,
+        NULL,
+        NULL,
+        &si,
+        &pi);
     if (!result)
     {
         fprintf(stderr, "Failed to start linker!\n");

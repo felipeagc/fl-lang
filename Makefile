@@ -1,16 +1,27 @@
 CC=cl
 LLVM_PATH=C:\llvm
-CFLAGS=/nologo /I$(LLVM_PATH)\include
+CFLAGS=/nologo /I$(LLVM_PATH)\include /DEBUG /Zi
 
 all: compiler.exe
 
 LLVM-C.dll:
 	copy $(LLVM_PATH)\bin\LLVM-C.dll .
 
-compiler.exe: LLVM-C.dll src/*.c
-	$(CC) $(CFLAGS) -Fecompiler src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib advapi32.lib ole32.lib oleaut32.lib
+compiler.exe: LLVM-C.dll src/*.c src/*.h
+	$(CC) $(CFLAGS) -Fecompiler src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib
 	del *.obj
 
+test: .phony
+	.\compiler.exe -r tests/run_tests.lang
+
+examples: .phony
+	.\compiler.exe build examples
+
 clean:
-	del compiler.exe
-	del LLVM-C.dll
+	del examples\*.exe
+	del *.exe
+	del *.pdb
+	del *.ilk
+	del *.dll
+
+.phony:

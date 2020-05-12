@@ -1,5 +1,19 @@
 module os
 
+pub typedef TimeSpec struct {
+    sec: u64,
+    nsec: u64,
+};
+
+pub typedef Error enum u32 {
+    Success = 0,
+    WriteError = 1,
+    SpawnError = 2,
+    InvalidSpawnArgs = 3,
+    WaitError = 4,
+    StatError = 5,
+};
+
 version "posix" {
     import "core:posix"
     import "core:strings"
@@ -10,19 +24,7 @@ version "posix" {
     pub typedef Handle i32;
     pub const NULL_HANDLE: Handle = 0;
 
-    pub typedef TimeSpec struct {
-        sec: i64,
-        nsec: i64,
-    };
-
-    pub typedef Error enum u32 {
-        Success = 0,
-        WriteError = 1,
-        SpawnError = 2,
-        InvalidSpawnArgs = 3,
-        WaitError = 4,
-        StatError = 5,
-    };
+    pub typedef Pid Handle;
 
     #[inline] pub func get_stdin() -> Handle { return 0; }
     #[inline] pub func get_stdout() -> Handle { return 1; }
@@ -37,7 +39,7 @@ version "posix" {
         return bytes_written, Error.Success;
     }
 
-    pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Handle, Error) {
+    pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, Error) {
         if (args.len < 1) {
             return NULL_HANDLE, Error.InvalidSpawnArgs;
         }
@@ -88,7 +90,7 @@ version "posix" {
         return pid, Error.Success;
     }
 
-    pub func wait_process(process: Handle) -> (i32, Error) {
+    pub func wait_process(process: Pid) -> (i32, Error) {
         var status: i32;
         var success = posix.waitpid(process, &status, 0) != -1;
 
@@ -115,6 +117,150 @@ version "posix" {
             return TimeSpec{}, Error.StatError;
         }
 
-        return TimeSpec{stat.st_ctim.tv_sec, stat.st_ctim.tv_nsec}, Error.Success;
+        return TimeSpec{
+            cast(u64)stat.st_ctim.tv_sec,
+            cast(u64)stat.st_ctim.tv_nsec
+        }, Error.Success;
+    }
+}
+
+version "win32" {
+    import "core:win32"
+    import "core:strings"
+    import "core:c"
+
+    pub typedef Handle win32.HANDLE;
+    pub const NULL_HANDLE: Handle = null;
+
+    pub typedef Pid struct {
+        hProcess: win32.HANDLE,
+        hThread: win32.HANDLE,
+    };
+
+    func get_stream_handle(type: win32.DWORD) -> Handle {
+        var fd = win32.GetStdHandle(type);
+        win32.SetHandleInformation(fd, win32.HANDLE_FLAG_INHERIT, 0);
+        return fd; 
+    }
+
+    pub func get_stdin() -> Handle {
+        return get_stream_handle(win32.STD_INPUT_HANDLE);
+    }
+
+    pub func get_stdout() -> Handle {
+        return get_stream_handle(win32.STD_OUTPUT_HANDLE);
+    }
+
+    pub func get_stderr() -> Handle {
+        return get_stream_handle(win32.STD_ERROR_HANDLE);
+    }
+
+    pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
+        var tmp_buf = buf;
+        var single_bytes_written: win32.DWORD;
+        var total_bytes_written: win32.DWORD;
+
+        while (cast(uint)total_bytes_written < buf.len) {
+            var success = win32.WriteFile(
+                stream,
+                cast(win32.LPCVOID)tmp_buf.ptr,
+                cast(win32.DWORD)tmp_buf.len,
+                &single_bytes_written,
+                null);
+
+            total_bytes_written += single_bytes_written;
+            tmp_buf = tmp_buf[cast(uint)single_bytes_written:tmp_buf.len];
+
+            if (!success) {
+                return 0, Error.WriteError;
+            }
+        }
+
+
+        return cast(int)total_bytes_written, Error.Success;
+    }
+
+    pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, Error) {
+        var si: win32.STARTUPINFOA;
+        si.cb = cast(u32)size_of(win32.STARTUPINFOA);
+        if (stdout != NULL_HANDLE) si.hStdOutput = stdout;
+        if (stderr != NULL_HANDLE) si.hStdError = stderr;
+        si.dwFlags |= win32.STARTF_USESTDHANDLES;
+
+        var pi: win32.PROCESS_INFORMATION;
+
+        var total_length: uint;
+        for (*arg in args) {
+            total_length += (arg.len + 1);
+        }
+
+        var pos: uint = 0;
+        var c_cmd_line: *char = alloc(total_length);
+        defer dealloc(c_cmd_line);
+
+        for (*arg in args) {
+            for (c in arg.*) {
+                c_cmd_line[pos] = c;
+                pos += 1;
+            }
+            c_cmd_line[pos] = ' ';
+            pos += 1;
+        }
+        c_cmd_line[pos-1] = 0;
+
+        var result = win32.CreateProcessA(
+            null, // application name
+            c_cmd_line,  // command line
+            null, // process attributes
+            null, // thread attributes
+            true, // inherit handles
+            0, // creation flags
+            null, // environment
+            null, // current dir
+            &si, &pi);
+
+        if (!result) {
+            return Pid{}, Error.SpawnError;
+        }
+
+        return Pid{
+            hProcess = pi.hProcess,
+            hThread = pi.hThread,
+        }, Error.Success;
+    }
+
+    pub func wait_process(process: Pid) -> (i32, Error) {
+        var exit_code: win32.DWORD;
+        win32.WaitForSingleObject(process.hProcess, win32.INFINITE);
+        win32.GetExitCodeProcess(process.hProcess, &exit_code);
+
+        win32.CloseHandle(process.hProcess);
+        win32.CloseHandle(process.hThread);
+
+        return cast(i32)exit_code, Error.Success;
+    }
+
+    pub func last_write_time(path: string) -> (TimeSpec, Error) {
+        var wpath = win32.to_cwstr_alloc(path);
+        defer dealloc(wpath);
+
+        var data: win32.WIN32_FILE_ATTRIBUTE_DATA;
+        var success = win32.GetFileAttributesExW(
+            wpath,
+            win32.GetFileExInfoStandard,
+            cast(win32.LPVOID)&data);
+        if (!success) {
+            c.printf(c"%d\n", win32.GetLastError());
+            return TimeSpec{}, Error.StatError;
+        }
+
+        var low = cast(u64)data.ftLastWriteTime.dwLowDateTime;
+        var high = cast(u64)data.ftLastWriteTime.dwHighDateTime;
+        var nano100: u64 = low | (high << 32);
+
+        var seconds = nano100 / 10000000;
+        var nanos = (nano100 - (seconds * 10000000)) * 100;
+
+        return TimeSpec{sec = seconds, nsec = nanos}, Error.Success;
     }
 }

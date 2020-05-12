@@ -2,6 +2,7 @@ module build
 
 import "core:os"
 import "core:fmt"
+import "core:strings"
 import "core:compiler"
 
 pub typedef Workspace struct {
@@ -22,16 +23,23 @@ pub func add_target(builder: *Workspace, target: *Target) {
 
 pub func build(builder: *Workspace) {
     for (*target in builder.targets) {
+        var output_path = target.output;
+
+        version "win32" {
+            output_path = strings.concat_alloc(output_path, ".exe");
+            defer delete(&output_path);
+        }
+
         var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
             input = target.input,
-            output = target.output,
+            output = output_path,
             link_with = target.link_with,
             library_paths  = target.library_paths,
             opt_level = target.opt_level,
         });
         defer compiler.destroy(comp);
 
-        var output_time, _ = os.last_write_time(target.output);
+        var output_time, _ = os.last_write_time(output_path);
 
         var deps = compiler.get_deps_alloc(comp);
         defer delete(&deps);

@@ -1,0 +1,229 @@
+module win32
+
+version "win32" {
+    import "core:strings"
+
+    pub const MAX_PATH: DWORD = 260;
+
+    pub typedef HANDLE *void;
+    pub typedef CHAR i8;
+    pub typedef WCHAR i16;
+    pub typedef TCHAR WCHAR;
+    pub typedef BYTE u8;
+    pub typedef BOOL bool;
+    pub typedef FLOAT float;
+    pub typedef HINSTANCE HANDLE;
+    pub typedef HMODULE HINSTANCE;
+    pub typedef HWND HANDLE;
+    pub typedef INT i32;
+    pub typedef UINT u32;
+    pub typedef WORD u16;
+    pub typedef DWORD u32;
+    pub typedef OVERLAPPED struct{};
+    pub typedef SECURITY_ATTRIBUTES struct{};
+    pub typedef STARTUPINFOA struct{
+        cb: DWORD,
+        lpReserved: LPSTR,
+        lpDesktop: LPSTR,
+        lpTitle: LPSTR,
+        dwX: DWORD,
+        dwY: DWORD,
+        dwXSize: DWORD,
+        dwYSize: DWORD,
+        dwXCountChars: DWORD,
+        dwYCountChars: DWORD,
+        dwFillAttribute: DWORD,
+        dwFlags: DWORD,
+        wShowWindow: WORD,
+        cbReserved2: WORD,
+        lpReserved2: LPBYTE,
+        hStdInput: HANDLE,
+        hStdOutput: HANDLE,
+        hStdError: HANDLE,
+    };
+    pub typedef PROCESS_INFORMATION struct{
+        hProcess: HANDLE,
+        hThread: HANDLE,
+        dwProcessId: DWORD,
+        dwThreadId: DWORD,
+    };
+    pub typedef FILETIME struct{
+        dwLowDateTime: DWORD,
+        dwHighDateTime: DWORD,
+    };
+    pub typedef WIN32_FILE_ATTRIBUTE_DATA struct {
+        dwFileAttributes: DWORD,
+        ftCreationTime: FILETIME,
+        ftLastAccessTime: FILETIME,
+        ftLastWriteTime: FILETIME,
+        nFileSizeHigh: DWORD,
+        nFileSizeLow: DWORD,
+    };
+    pub typedef WIN32_FIND_DATAA struct {
+        dwFileAttributes: DWORD,
+        ftCreationTime: FILETIME,
+        ftLastAccessTime: FILETIME,
+        ftLastWriteTime: FILETIME,
+        nFileSizeHigh: DWORD,
+        nFileSizeLow: DWORD,
+        dwReserved0: DWORD,
+        dwReserved1: DWORD,
+        cFileName: [MAX_PATH]CHAR,
+        cAlternateFileName: [14]CHAR,
+        dwFileType: DWORD,
+        dwCreatorType: DWORD,
+        wFinderFlags: WORD,
+    };
+
+    pub typedef LPDWORD *DWORD;
+    pub typedef LPCSTR *CHAR;
+    pub typedef LPSTR *CHAR;
+    pub typedef LPWSTR *WCHAR;
+    pub typedef LPTSTR LPWSTR;
+    pub typedef LPCWSTR *WCHAR;
+    pub typedef LPCTSTR LPCWSTR;
+    pub typedef LPBYTE *BYTE;
+    pub typedef LPVOID *void;
+    pub typedef LPCVOID *void;
+    pub typedef LPBOOL *BOOL;
+    pub typedef LPCCH *CHAR;
+    pub typedef LPCWCH *WCHAR;
+    pub typedef LPOVERLAPPED *OVERLAPPED;
+    pub typedef LPSECURITY_ATTRIBUTES *SECURITY_ATTRIBUTES;
+    pub typedef LPSTARTUPINFOA *STARTUPINFOA;
+    pub typedef LPPROCESS_INFORMATION *PROCESS_INFORMATION;
+    pub typedef LPFILETIME *FILETIME;
+    pub typedef LPWIN32_FIND_DATAA *WIN32_FIND_DATAA;
+
+    pub typedef GET_FILEEX_INFO_LEVELS DWORD;
+    pub const GetFileExInfoStandard: DWORD = 0;
+    pub const GetFileExMaxInfoLevel: DWORD = 1;
+
+    pub const STD_INPUT_HANDLE: DWORD = -10;
+    pub const STD_OUTPUT_HANDLE: DWORD = -11;
+    pub const STD_ERROR_HANDLE: DWORD = -12;
+
+    pub const HANDLE_FLAG_INHERIT: DWORD = 0x00000001;
+
+    pub const INFINITE: DWORD = 0xFFFFFFFF;
+
+    pub const CP_UTF8: UINT = 65001;
+
+    pub const STARTF_USESTDHANDLES: DWORD = 0x00000100;
+
+    pub extern func "std" WideCharToMultiByte(
+        CodePage: UINT,
+        dwFlags: DWORD,
+        lpWideCharStr: LPCWCH,
+        cchWideChar: i32,
+        lpMultiByteStr: LPSTR,
+        cbMultiByte: i32,
+        lpDefaultChar: LPCCH,
+        lpUsedDefaultChar: LPBOOL
+    ) -> i32;
+
+    pub extern func "std" MultiByteToWideChar(
+        CodePage: UINT,
+        dwFlags: DWORD,
+        lpMultiByteStr: LPCCH,
+        cbMultiByte: i32,
+        lpWideCharStr: LPWSTR,
+        cchWideChar: i32
+    ) -> i32;
+
+    pub extern func "std" GetStdHandle(nStdHandle: DWORD) -> HANDLE;
+    pub extern func "std" SetHandleInformation(
+        hObject: HANDLE,
+        dwMask: DWORD,
+        dwFlags: DWORD) -> BOOL;
+
+    pub extern func "std" WriteFile(
+        hFile: HANDLE,
+        lpBuffer: LPCVOID,
+        nNumberOfBytesToWrite: DWORD,
+        lpNumberOfBytesWritten: LPDWORD,
+        lpOverlapped: LPOVERLAPPED) -> BOOL;
+
+    pub extern func "std" GetFileTime(
+        hFile: HANDLE,
+        lpCreationTime: LPFILETIME,
+        lpLastAccessTime: LPFILETIME,
+        lpLastWriteTime: LPFILETIME
+    ) -> BOOL;
+
+    pub extern func "std" GetFileAttributesExW(
+        lpFileName: LPCWSTR,
+        fInfoLevelId: GET_FILEEX_INFO_LEVELS,
+        lpFileInformation: LPVOID
+    ) -> BOOL;
+
+    pub extern func "std" CreateProcessA(
+        lpApplicationName: LPCSTR,
+        lpCommandLine: LPSTR,
+        lpProcessAttributes: LPSECURITY_ATTRIBUTES,
+        lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+        bInheritHandles: BOOL,
+        dwCreationFlags: DWORD,
+        lpEnvironment: LPVOID,
+        lpCurrentDirectory: LPCSTR,
+        lpStartupInfo: LPSTARTUPINFOA,
+        lpProcessInformation: LPPROCESS_INFORMATION 
+    ) -> BOOL;
+
+    pub extern func "std" GetExitCodeProcess(
+        hProcess: HANDLE,
+        lpExitCode: LPDWORD
+    ) -> BOOL;
+
+    pub extern func "std" WaitForSingleObject(
+        hHandle: HANDLE,
+        dwMilliseconds: DWORD
+    ) -> DWORD;
+
+    pub extern func "std" CloseHandle(
+        hHandle: HANDLE
+    ) -> BOOL;
+
+    pub extern func "std" GetLastError() -> DWORD;
+
+    #[link_name="GetCurrentDirectoryW"]
+    pub extern func "std" GetCurrentDirectory(
+        nBufferLength: DWORD,
+        lpBuffer: LPTSTR) -> DWORD;
+
+    #[link_name="SetCurrentDirectoryW"]
+    pub extern func "std" SetCurrentDirectory(lpBuffer: LPCTSTR) -> DWORD;
+
+    pub extern func "std" FindFirstFileA(
+        lpFileName: LPCSTR,
+        lpFindFileData: LPWIN32_FIND_DATAA) -> HANDLE;
+
+    pub extern func "std" FindNextFileA(
+        hFindFile: HANDLE,
+        lpFindFileData: LPWIN32_FIND_DATAA) -> BOOL;
+
+    pub extern func "std" FindClose(hFindFile: HANDLE) -> BOOL;
+
+    // Utility function
+    pub func to_cwstr_alloc(str: string) -> LPCWSTR {
+        var c_str = strings.to_c_str_alloc(str);
+        defer dealloc(c_str);
+
+        var wpath_len = MultiByteToWideChar(CP_UTF8, 0,
+            c_str, cast(i32)str.len + 1, null, 0);
+
+        var wpath: LPCWSTR = alloc(cast(uint)wpath_len);
+
+        MultiByteToWideChar(CP_UTF8, 0, 
+            c_str, cast(i32)str.len + 1, wpath, wpath_len);
+
+        return wpath;
+    }
+
+    pub func wstr_to_string_alloc(buf: LPWSTR, size: DWORD) -> string {
+        var required_size = WideCharToMultiByte(CP_UTF8, 0, buf, cast(i32)size, null, 0, null, null);
+        var str: string = make(string, cast(uint)required_size);
+        WideCharToMultiByte(CP_UTF8, 0, buf, cast(i32)size, str.ptr, required_size, null, null);
+        return str;
+    }
+}

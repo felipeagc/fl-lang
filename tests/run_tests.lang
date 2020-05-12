@@ -8,12 +8,18 @@ import "core:strings"
 
 typedef TestRun struct
 {
-    pid: os.Handle,
+    pid: os.Pid,
     path: string,
     status: i32,
 };
 
 var failures: uint = 0;
+
+version "win32" {
+    const compiler_exe = ".\\compiler.exe";
+} else {
+    const compiler_exe = "./compiler";
+}
 
 func run_tests(batch_name: string, tests_path: string, expected_status: i32)
 {
@@ -30,7 +36,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
             var path = strings.concat_alloc(tests_path, entry);
 
             var pid, err = os.spawn_process(
-                []string{"./compiler", "-r", path},
+                []string{compiler_exe, "-r", path},
                 os.NULL_HANDLE,
                 os.NULL_HANDLE);
 

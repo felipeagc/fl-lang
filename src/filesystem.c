@@ -78,7 +78,8 @@ static char *get_current_dir(void)
     }
     else
     {
-        return utf16_to_utf8(buf);
+        assert(sizeof(TCHAR) == sizeof(wchar_t));
+        return utf16_to_utf8((wchar_t*)buf);
     }
 
     return NULL;

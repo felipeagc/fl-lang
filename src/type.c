@@ -188,7 +188,17 @@ static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
 
 static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
-    if (a->kind == b->kind) return a;
+    if (a->kind == b->kind) {
+        if (a->kind == TYPE_INT) {
+            if (a->integer.num_bits != b->integer.num_bits) return NULL;
+        }
+
+        if (a->kind == TYPE_FLOAT) {
+            if (a->floating.num_bits != b->floating.num_bits) return NULL;
+        }
+
+        return a;
+    }
 
     if (a->kind == TYPE_POINTER && b->kind == TYPE_RAW_POINTER)
     {
@@ -231,19 +241,15 @@ static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
     }
     else if (a->kind == TYPE_INT)
     {
-        if (b->kind == TYPE_INT || b->kind == TYPE_UNTYPED_INT) return a;
+        if (b->kind == TYPE_UNTYPED_INT) return a;
     }
     else if (b->kind == TYPE_INT)
     {
-        if (a->kind == TYPE_INT || a->kind == TYPE_UNTYPED_INT) return b;
+        if (a->kind == TYPE_UNTYPED_INT) return b;
     }
-    else if (a->kind == TYPE_UNTYPED_INT)
+    else if (a->kind == TYPE_UNTYPED_INT && b->kind == TYPE_UNTYPED_INT)
     {
         return a;
-    }
-    else if (b->kind == TYPE_UNTYPED_INT)
-    {
-        return b;
     }
 
     return NULL;

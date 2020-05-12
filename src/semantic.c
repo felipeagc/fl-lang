@@ -4639,7 +4639,10 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
         if (!ast->subscript.right->type_info)
         {
-            assert(a->compiler->errors.len > 0);
+            compile_error(
+                a->compiler,
+                ast->subscript.right->loc,
+                "could not resolve type for right of subscript");
             break;
         }
 
@@ -4848,8 +4851,14 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
     case AST_DYNAMIC_ARRAY_TYPE:
     case AST_SLICE_TYPE: {
-        ast->type_info = a->compiler->type_type;
         analyze_ast(a, ast->array_type.sub, a->compiler->type_type);
+        if (!ast->array_type.sub->as_type)
+        {
+            assert(a->compiler->errors.len > 0);
+            break;
+        }
+
+        ast->type_info = a->compiler->type_type;
 
         break;
     }

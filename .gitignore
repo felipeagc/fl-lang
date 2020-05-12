@@ -9,3 +9,6 @@ tags
 *.obj
 *.o
 *.exe
+*.pdb
+*.ilk
+.vs
