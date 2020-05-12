@@ -11,4 +11,6 @@ tags
 *.exe
 *.pdb
 *.ilk
+*.lib
+*.exp
 .vs

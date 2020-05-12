@@ -11,10 +11,10 @@ compiler.exe: LLVM-C.dll src/*.c src/*.h
 	$(CC) $(CFLAGS) -Fecompiler src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib
 	del *.obj
 
-test: .phony
+test: .phony compiler.exe
 	.\compiler.exe -r tests/run_tests.lang
 
-examples: .phony
+examples: .phony compiler.exe
 	.\compiler.exe build examples
 
 clean:

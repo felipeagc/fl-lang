@@ -13,11 +13,17 @@ static char *get_absolute_path(const char *relative_path)
 #if defined(__unix__) || defined(__APPLE__)
     return realpath(relative_path, NULL);
 #elif defined(_WIN32)
-    DWORD length = GetFullPathNameA(relative_path, 0, NULL, NULL);
-    char *buf = malloc(length);
-    GetFullPathNameA(relative_path, length, buf, NULL);
-    replace_slashes(buf);
-    return buf;
+    wchar_t *wide_relative_path = utf8_to_utf16(relative_path);
+
+    DWORD length = GetFullPathNameW(wide_relative_path, 0, NULL, NULL);
+    wchar_t* buf = malloc((4 + length) * sizeof(WCHAR));
+    GetFullPathNameW(wide_relative_path, length, buf, NULL);
+    buf[length] = 0;
+
+    char* c_str = utf16_to_utf8(buf);
+    replace_slashes(c_str);
+
+    return c_str;
 #else
 #error OS not supported
 #endif

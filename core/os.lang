@@ -250,7 +250,6 @@ version "win32" {
             win32.GetFileExInfoStandard,
             cast(win32.LPVOID)&data);
         if (!success) {
-            c.printf(c"%d\n", win32.GetLastError());
             return TimeSpec{}, Error.StatError;
         }
 

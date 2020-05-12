@@ -280,16 +280,15 @@ version "win32" {
 
     // Utility function
     pub func to_cwstr_alloc(str: string) -> LPCWSTR {
-        var c_str = strings.to_c_str_alloc(str);
-        defer dealloc(c_str);
-
         var wpath_len = MultiByteToWideChar(CP_UTF8, 0,
-            c_str, cast(i32)str.len + 1, null, 0);
+            str.ptr, cast(i32)str.len, null, 0);
 
-        var wpath: LPCWSTR = alloc(cast(uint)wpath_len);
+        var wpath: LPCWSTR = alloc(cast(uint)(wpath_len + 1) * size_of(WCHAR));
 
         MultiByteToWideChar(CP_UTF8, 0, 
-            c_str, cast(i32)str.len + 1, wpath, wpath_len);
+            str.ptr, cast(i32)str.len, wpath, wpath_len);
+
+        wpath[cast(uint)wpath_len] = 0;
 
         return wpath;
     }
