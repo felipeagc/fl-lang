@@ -2650,6 +2650,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             proc_flags |= TYPE_FLAG_C_VARARGS;
         }
 
+        if ((ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS) &&
+            !(ast->proc.conv & CALL_CONV_C))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "functions with c-varargs require \"c\" calling "
+                "convention");
+        }
+
         if (ast->flags & AST_FLAG_FUNCTION_IS_VARARGS)
         {
             proc_flags |= TYPE_FLAG_VARARGS;
@@ -4043,6 +4053,16 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                     break;
                 }
             }
+        }
+
+        if ((ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS) &&
+            !(ast->proc.conv & CALL_CONV_C))
+        {
+            compile_error(
+                a->compiler,
+                ast->loc,
+                "functions with c-varargs require \"c\" calling "
+                "convention");
         }
 
         if (!ast->as_type)

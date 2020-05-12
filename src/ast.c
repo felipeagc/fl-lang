@@ -131,6 +131,13 @@ typedef enum AstFlags {
     AST_FLAG_IS_TOP_LEVEL = 1 << 12,
 } AstFlags;
 
+typedef enum CallConv {
+    CALL_CONV_INTERNAL,
+    CALL_CONV_C,
+    CALL_CONV_STDCALL,
+    CALL_CONV_FASTCALL,
+} CallConv;
+
 typedef struct AstAttribute
 {
     String name;
@@ -185,6 +192,7 @@ struct Ast
 
             ArrayOfString template_params;
             HashMap *template_cache;
+            CallConv conv;
         } proc;
         struct
         {

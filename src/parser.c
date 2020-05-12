@@ -888,6 +888,31 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
 
         if (!parser_consume(p, TOKEN_ASTERISK)) res = false;
 
+        ast->proc.conv = CALL_CONV_INTERNAL;
+        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
+        {
+            Token *conv_tok = parser_next(p, 1);
+            String conv_str = conv_tok->str;
+            if (string_equals(conv_str, STR("c")))
+            {
+                ast->proc.conv = CALL_CONV_C;
+            }
+            else if (string_equals(conv_str, STR("std")))
+            {
+                ast->proc.conv = CALL_CONV_STDCALL;
+            }
+            else if (string_equals(conv_str, STR("fast")))
+            {
+                ast->proc.conv = CALL_CONV_STDCALL;
+            }
+            else
+            {
+                compile_error(
+                    p->compiler, conv_tok->loc, "invalid calling convention");
+                res = false;
+            }
+        }
+
         if (!parser_consume(p, TOKEN_LPAREN))
         {
             res = false;
@@ -2148,6 +2173,31 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
         parser_next(p, 1);
 
         ast->type = AST_PROC_DECL;
+
+        ast->proc.conv = CALL_CONV_INTERNAL;
+        if (parser_peek(p, 0)->type == TOKEN_STRING_LIT)
+        {
+            Token *conv_tok = parser_next(p, 1);
+            String conv_str = conv_tok->str;
+            if (string_equals(conv_str, STR("c")))
+            {
+                ast->proc.conv = CALL_CONV_C;
+            }
+            else if (string_equals(conv_str, STR("std")))
+            {
+                ast->proc.conv = CALL_CONV_STDCALL;
+            }
+            else if (string_equals(conv_str, STR("fast")))
+            {
+                ast->proc.conv = CALL_CONV_STDCALL;
+            }
+            else
+            {
+                compile_error(
+                    p->compiler, conv_tok->loc, "invalid calling convention");
+                res = false;
+            }
+        }
 
         Token *proc_name_tok = parser_consume(p, TOKEN_IDENT);
         if (!proc_name_tok)

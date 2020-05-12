@@ -40,12 +40,6 @@ Safety:
 - null pointer dereference checking
 - bounds checking
 
-Syntax changes:
-- paren-less if, while, for, version
-- version takes a string
-- function calling convention
-- no semicolon needed after typedef?
-
 Bugs:
 - Duplicate switch case values
 - Circular imports

@@ -4,31 +4,31 @@ pub typedef Int i32;
 pub typedef Size uint;
 pub typedef File struct {};
 
-pub extern func printf(fmt: *char, ...) -> Int;
-pub extern func sprintf(str: *char, fmt: *char, ...) -> Int;
-pub extern func snprintf(str: *char, size: Size, fmt: *char, ...) -> Int;
+pub extern func "c" printf(fmt: *char, ...) -> Int;
+pub extern func "c" sprintf(str: *char, fmt: *char, ...) -> Int;
+pub extern func "c" snprintf(str: *char, size: Size, fmt: *char, ...) -> Int;
 
-pub extern func puts(_: *char) -> Int;
+pub extern func "c" puts(_: *char) -> Int;
 
-pub extern func fopen(pathname: *char, mode: *char) -> *File;
-pub extern func fread(ptr: *void, size: Size, nmemb: Size, stream: *File) -> Size;
-pub extern func fwrite(ptr: *void, size: Size, nmemb: Size, stream: *File) -> Size;
+pub extern func "c" fopen(pathname: *char, mode: *char) -> *File;
+pub extern func "c" fread(ptr: *void, size: Size, nmemb: Size, stream: *File) -> Size;
+pub extern func "c" fwrite(ptr: *void, size: Size, nmemb: Size, stream: *File) -> Size;
 
-pub extern func exit(code: Int);
-pub extern func abort();
+pub extern func "c" exit(code: Int);
+pub extern func "c" abort();
 
-pub extern func malloc(size: Size) -> *void;
-pub extern func calloc(nmemb: Size, size: Size) -> *void;
-pub extern func realloc(ptr: *void, size: Size) -> *void;
-pub extern func free(ptr: *void);
+pub extern func "c" malloc(size: Size) -> *void;
+pub extern func "c" calloc(nmemb: Size, size: Size) -> *void;
+pub extern func "c" realloc(ptr: *void, size: Size) -> *void;
+pub extern func "c" free(ptr: *void);
 
-pub extern func strlen(_: *char) -> Size;
-pub extern func strdup(_: *char) -> *char;
-pub extern func strcmp(_: *char, _: *char) -> Int;
-pub extern func strncmp(_: *char, _: *char, n: Size) -> Int;
-pub extern func strcpy(dest: *char, src: *char) -> *char;
-pub extern func strncpy(dest: *char, src: *char, n: Size) -> *char;
+pub extern func "c" strlen(_: *char) -> Size;
+pub extern func "c" strdup(_: *char) -> *char;
+pub extern func "c" strcmp(_: *char, _: *char) -> Int;
+pub extern func "c" strncmp(_: *char, _: *char, n: Size) -> Int;
+pub extern func "c" strcpy(dest: *char, src: *char) -> *char;
+pub extern func "c" strncpy(dest: *char, src: *char, n: Size) -> *char;
 
-pub extern func memcpy(dest: *void, src: *void, n: Size) -> *void;
-pub extern func memcmp(s1: *char, s2: *char, n: Size) -> Int;
-pub extern func memset(s: *char, c: Int, n: Size) -> *void;
+pub extern func "c" memcpy(dest: *void, src: *void, n: Size) -> *void;
+pub extern func "c" memcmp(s1: *char, s2: *char, n: Size) -> Int;
+pub extern func "c" memset(s: *char, c: Int, n: Size) -> *void;

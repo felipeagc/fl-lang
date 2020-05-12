@@ -9,7 +9,7 @@ var global_array2: [ARRAY_SIZE]*char;
 var global_array3: [2]i32;
 var global_array4: [2][3]i32;
 
-extern func printf(fmt: *char, ...);
+extern func "c" printf(fmt: *char, ...);
 
 func main() {
     global_array1[1] = 321;

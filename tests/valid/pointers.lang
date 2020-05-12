@@ -1,6 +1,6 @@
 module main
 
-extern func printf(fmt: *char, ...);
+extern func "c" printf(fmt: *char, ...);
 
 func some_func(a: *void) {
     printf(c"Ptr: %p\n", a);

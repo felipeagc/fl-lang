@@ -15,8 +15,8 @@ typedef MyStruct struct {
     b: *u8,
 };
 
-extern func puts(str: *char);
-extern func printf(fmt: *char, ...);
+extern func "c" puts(str: *char);
+extern func "c" printf(fmt: *char, ...);
 
 func add(a: i32, b: i32) -> i32 {
     return 0;

@@ -478,6 +478,8 @@ static LLVMValueRef llvm_get_malloc_fn(LLContext *l, LLModule *mod)
             param_count,
             false);
         malloc_fn = LLVMAddFunction(mod->mod, "malloc", fn_ty);
+        LLVMSetFunctionCallConv(malloc_fn, LLVMCCallConv);
+        LLVMSetLinkage(malloc_fn, LLVMExternalLinkage);
     }
     return malloc_fn;
 }
@@ -499,6 +501,8 @@ static LLVMValueRef llvm_get_realloc_fn(LLContext *l, LLModule *mod)
             param_count,
             false);
         realloc_fn = LLVMAddFunction(mod->mod, "realloc", fn_ty);
+        LLVMSetFunctionCallConv(realloc_fn, LLVMCCallConv);
+        LLVMSetLinkage(realloc_fn, LLVMExternalLinkage);
     }
     return realloc_fn;
 }
@@ -516,6 +520,8 @@ static LLVMValueRef llvm_get_free_fn(LLContext *l, LLModule *mod)
         LLVMTypeRef fn_ty =
             LLVMFunctionType(LLVMVoidType(), param_types, param_count, false);
         free_fn = LLVMAddFunction(mod->mod, "free", fn_ty);
+        LLVMSetFunctionCallConv(free_fn, LLVMCCallConv);
+        LLVMSetLinkage(free_fn, LLVMExternalLinkage);
     }
     return free_fn;
 }
@@ -1131,6 +1137,22 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
             if ((ast->flags & AST_FLAG_EXTERN) == AST_FLAG_EXTERN)
             {
                 LLVMSetLinkage(ast->value, LLVMExternalLinkage);
+            }
+
+            switch (ast->proc.conv)
+            {
+            case CALL_CONV_INTERNAL:
+                LLVMSetFunctionCallConv(ast->value, LLVMFastCallConv);
+                break;
+            case CALL_CONV_C:
+                LLVMSetFunctionCallConv(ast->value, LLVMCCallConv);
+                break;
+            case CALL_CONV_STDCALL:
+                LLVMSetFunctionCallConv(ast->value, LLVMX86StdcallCallConv);
+                break;
+            case CALL_CONV_FASTCALL:
+                LLVMSetFunctionCallConv(ast->value, LLVMFastCallConv);
+                break;
             }
 
             bool is_inline = false;
