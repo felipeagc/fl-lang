@@ -1065,6 +1065,7 @@ static bool parse_multiplication(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
@@ -1105,6 +1106,7 @@ static bool parse_addition(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
@@ -1144,6 +1146,7 @@ static bool parse_bitshift(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
@@ -1184,6 +1187,7 @@ static bool parse_bitwise(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
@@ -1228,6 +1232,7 @@ static bool parse_comparison(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
@@ -1271,6 +1276,7 @@ static bool parse_logical(Parser *p, Ast *ast, bool parsing_type)
         ast->type = AST_BINARY_EXPR;
         ast->binop.left = left;
         ast->binop.right = right;
+        ast->binop.assign = false;
 
         switch (op_tok->type)
         {
