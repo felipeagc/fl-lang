@@ -16,11 +16,11 @@ static char *get_absolute_path(const char *relative_path)
     wchar_t *wide_relative_path = utf8_to_utf16(relative_path);
 
     DWORD length = GetFullPathNameW(wide_relative_path, 0, NULL, NULL);
-    wchar_t* buf = malloc((4 + length) * sizeof(WCHAR));
+    wchar_t *buf = malloc((4 + length) * sizeof(WCHAR));
     GetFullPathNameW(wide_relative_path, length, buf, NULL);
     buf[length] = 0;
 
-    char* c_str = utf16_to_utf8(buf);
+    char *c_str = utf16_to_utf8(buf);
     replace_slashes(c_str);
 
     return c_str;
@@ -85,7 +85,7 @@ static char *get_current_dir(void)
     else
     {
         assert(sizeof(TCHAR) == sizeof(wchar_t));
-        return utf16_to_utf8((wchar_t*)buf);
+        return utf16_to_utf8((wchar_t *)buf);
     }
 
     return NULL;

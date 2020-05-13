@@ -39,7 +39,12 @@ typedef struct LLContext
 static void llvm_codegen_ast(
     LLContext *l, LLModule *mod, Ast *ast, bool is_const, AstValue *out_value);
 static void llvm_codegen_ast_children(
-    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const, bool is_unscoped);
+    LLContext *l,
+    LLModule *mod,
+    Ast *asts,
+    size_t ast_count,
+    bool is_const,
+    bool is_unscoped);
 
 static String mangle_function_name(LLContext *l, Ast *ast)
 {
@@ -90,14 +95,12 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
     switch (type->kind)
     {
-    case TYPE_INT:
-    {
+    case TYPE_INT: {
         type->ref = LLVMIntType(type->integer.num_bits);
         break;
     }
 
-    case TYPE_FLOAT:
-    {
+    case TYPE_FLOAT: {
         switch (type->floating.num_bits)
         {
         case 32: type->ref = LLVMFloatType(); break;
@@ -110,34 +113,29 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
     case TYPE_BOOL: type->ref = llvm_type(l, l->compiler->bool_int_type); break;
     case TYPE_VOID: type->ref = LLVMVoidType(); break;
 
-    case TYPE_POINTER:
-    {
+    case TYPE_POINTER: {
         type->ref = LLVMPointerType(llvm_type(l, type->ptr.sub), 0);
         break;
     }
 
-    case TYPE_RAW_POINTER:
-    {
+    case TYPE_RAW_POINTER: {
         type->ref = LLVMPointerType(LLVMVoidType(), 0);
         break;
     }
 
-    case TYPE_ARRAY:
-    {
+    case TYPE_ARRAY: {
         type->ref =
             LLVMArrayType(llvm_type(l, type->array.sub), type->array.size);
         break;
     }
 
-    case TYPE_VECTOR:
-    {
+    case TYPE_VECTOR: {
         type->ref =
             LLVMVectorType(llvm_type(l, type->array.sub), type->array.size);
         break;
     }
 
-    case TYPE_ANY:
-    {
+    case TYPE_ANY: {
         LLVMTypeRef field_types[2] = {
             LLVMPointerType(LLVMVoidType(), 0), // ptr
             LLVMPointerType(
@@ -148,8 +146,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_SLICE:
-    {
+    case TYPE_SLICE: {
         LLVMTypeRef field_types[2] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
             llvm_type(l, l->compiler->uint_type),              // len
@@ -159,8 +156,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_DYNAMIC_ARRAY:
-    {
+    case TYPE_DYNAMIC_ARRAY: {
         LLVMTypeRef field_types[3] = {
             LLVMPointerType(llvm_type(l, type->array.sub), 0), // ptr
             llvm_type(l, l->compiler->uint_type),              // len
@@ -171,8 +167,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_PROC:
-    {
+    case TYPE_PROC: {
         size_t param_count = type->proc.params.len;
         LLVMTypeRef *param_types =
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
@@ -196,8 +191,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_STRUCT:
-    {
+    case TYPE_STRUCT: {
         if (!type->structure.is_union)
         {
             char *struct_name = "";
@@ -224,8 +218,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_TUPLE:
-    {
+    case TYPE_TUPLE: {
         size_t field_count = type->tuple.fields.len;
         LLVMTypeRef *field_types =
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * field_count);
@@ -238,8 +231,7 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_ENUM:
-    {
+    case TYPE_ENUM: {
         type->ref = llvm_type(l, type->enumeration.underlying_type);
         break;
     }
@@ -262,8 +254,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
 
     switch (type->kind)
     {
-    case TYPE_INT:
-    {
+    case TYPE_INT: {
         const char *name = "";
         LLVMDWARFTypeEncoding encoding = 0;
         if (type->integer.is_signed)
@@ -300,8 +291,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_FLOAT:
-    {
+    case TYPE_FLOAT: {
         const char *name = "";
         LLVMDWARFTypeEncoding encoding = DW_ATE_float;
 
@@ -323,8 +313,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_BOOL:
-    {
+    case TYPE_BOOL: {
         const char *name = "bool";
         type->debug_ref = LLVMDIBuilderCreateBasicType(
             l->mod.di_builder,
@@ -336,20 +325,17 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_VOID:
-    {
+    case TYPE_VOID: {
         assert(0);
         break;
     }
 
-    case TYPE_RAW_POINTER:
-    {
+    case TYPE_RAW_POINTER: {
         type->debug_ref = LLVMDIBuilderCreateNullPtrType(l->mod.di_builder);
         break;
     }
 
-    case TYPE_POINTER:
-    {
+    case TYPE_POINTER: {
         if (type->ptr.sub->kind == TYPE_VOID)
         {
             type->debug_ref = LLVMDIBuilderCreateNullPtrType(l->mod.di_builder);
@@ -368,8 +354,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_ARRAY:
-    {
+    case TYPE_ARRAY: {
         type->debug_ref = LLVMDIBuilderCreateArrayType(
             l->mod.di_builder,
             type->array.size,
@@ -380,40 +365,35 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_VECTOR:
-    {
+    case TYPE_VECTOR: {
         const char *type_name = "@Vector";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_ANY:
-    {
+    case TYPE_ANY: {
         const char *type_name = "@Any";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_SLICE:
-    {
+    case TYPE_SLICE: {
         const char *type_name = "@Slice";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_DYNAMIC_ARRAY:
-    {
+    case TYPE_DYNAMIC_ARRAY: {
         const char *type_name = "@DynamicArray";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_PROC:
-    {
+    case TYPE_PROC: {
         size_t param_count = type->proc.params.len;
         LLVMMetadataRef *param_types =
             bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
@@ -447,24 +427,21 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         break;
     }
 
-    case TYPE_STRUCT:
-    {
+    case TYPE_STRUCT: {
         const char *type_name = "@Struct";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_TUPLE:
-    {
+    case TYPE_TUPLE: {
         const char *type_name = "@Tuple";
         type->debug_ref = LLVMDIBuilderCreateUnspecifiedType(
             l->mod.di_builder, type_name, strlen(type_name));
         break;
     }
 
-    case TYPE_ENUM:
-    {
+    case TYPE_ENUM: {
         type->debug_ref = llvm_debug_type(l, type->enumeration.underlying_type);
         break;
     }
@@ -655,8 +632,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
 
     switch (type_info->kind)
     {
-    case TYPE_INT:
-    {
+    case TYPE_INT: {
         field = info_union->structure.fields.ptr[0];
         assert(field->structure.fields.len == 2);
 
@@ -689,8 +665,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         break;
     }
 
-    case TYPE_FLOAT:
-    {
+    case TYPE_FLOAT: {
         field = info_union->structure.fields.ptr[1];
         assert(field->structure.fields.len == 1);
 
@@ -712,8 +687,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         break;
     }
 
-    case TYPE_POINTER:
-    {
+    case TYPE_POINTER: {
         field = info_union->structure.fields.ptr[2];
         assert(field->structure.fields.len == 1);
 
@@ -738,8 +712,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
 
     case TYPE_SLICE:
     case TYPE_DYNAMIC_ARRAY:
-    case TYPE_ARRAY:
-    {
+    case TYPE_ARRAY: {
         field = info_union->structure.fields.ptr[3];
         assert(field->structure.fields.len == 2);
 
@@ -773,8 +746,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         break;
     }
 
-    case TYPE_PROC:
-    {
+    case TYPE_PROC: {
         field = info_union->structure.fields.ptr[4];
         assert(field->structure.fields.len == 2);
 
@@ -852,8 +824,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         break;
     }
 
-    case TYPE_STRUCT:
-    {
+    case TYPE_STRUCT: {
         field = info_union->structure.fields.ptr[5];
 
         assert(field->structure.fields.len == 2);
@@ -931,8 +902,7 @@ generate_type_info_value(LLContext *l, LLModule *mod, size_t rtti_index)
         break;
     }
 
-    case TYPE_ENUM:
-    {
+    case TYPE_ENUM: {
         field = info_union->structure.fields.ptr[6];
         assert(field->structure.fields.len == 1);
 
@@ -1087,8 +1057,7 @@ llvm_add_proc(LLContext *l, LLModule *mod, Ast *asts, size_t ast_count)
     {
         switch (ast->type)
         {
-        case AST_PROC_DECL:
-        {
+        case AST_PROC_DECL: {
             if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
             {
                 // Generate instantiations
@@ -1274,19 +1243,22 @@ static void llvm_codegen_ast(
     switch (ast->type)
     {
     case AST_BLOCK:
-    case AST_ROOT:
-    {
+    case AST_ROOT: {
         array_push(&l->scope_stack, ast->scope);
         array_push(&l->operand_scope_stack, ast->scope);
         llvm_codegen_ast_children(
-            l, mod, ast->block.stmts.ptr, ast->block.stmts.len, is_const, false);
+            l,
+            mod,
+            ast->block.stmts.ptr,
+            ast->block.stmts.len,
+            is_const,
+            false);
         array_pop(&l->operand_scope_stack);
         array_pop(&l->scope_stack);
         break;
     }
 
-    case AST_VERSION_BLOCK:
-    {
+    case AST_VERSION_BLOCK: {
         if (compiler_has_version(l->compiler, ast->version_block.version))
         {
             llvm_codegen_ast_children(
@@ -1294,7 +1266,8 @@ static void llvm_codegen_ast(
                 mod,
                 ast->version_block.stmts.ptr,
                 ast->version_block.stmts.len,
-                is_const, true);
+                is_const,
+                true);
         }
         else
         {
@@ -1303,14 +1276,14 @@ static void llvm_codegen_ast(
                 mod,
                 ast->version_block.else_stmts.ptr,
                 ast->version_block.else_stmts.len,
-                is_const, true);
+                is_const,
+                true);
         }
 
         break;
     }
 
-    case AST_PROC_DECL:
-    {
+    case AST_PROC_DECL: {
         if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
         {
             // Generate instantiations
@@ -1372,43 +1345,37 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_PRIMARY:
-    {
+    case AST_PRIMARY: {
         TypeInfo *inner_type = get_inner_primitive_type(ast->type_info);
         assert(is_type_runtime(inner_type));
 
         switch (ast->primary.tok->type)
         {
-        case TOKEN_TRUE:
-        {
+        case TOKEN_TRUE: {
             AstValue value = {0};
             value.value = LLVMConstInt(llvm_type(l, inner_type), 1, false);
             if (out_value) *out_value = value;
             break;
         }
 
-        case TOKEN_FALSE:
-        {
+        case TOKEN_FALSE: {
             AstValue value = {0};
             value.value = LLVMConstInt(llvm_type(l, inner_type), 0, false);
             if (out_value) *out_value = value;
             break;
         }
 
-        case TOKEN_NULL:
-        {
+        case TOKEN_NULL: {
             AstValue value = {0};
             value.value = LLVMConstPointerNull(llvm_type(l, inner_type));
             if (out_value) *out_value = value;
             break;
         }
 
-        case TOKEN_INT_LIT:
-        {
+        case TOKEN_INT_LIT: {
             switch (inner_type->kind)
             {
-            case TYPE_INT:
-            {
+            case TYPE_INT: {
                 AstValue value = {0};
                 value.value = LLVMConstInt(
                     llvm_type(l, inner_type),
@@ -1418,8 +1385,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            case TYPE_FLOAT:
-            {
+            case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
                     llvm_type(l, inner_type), (double)ast->primary.tok->i64);
@@ -1433,12 +1399,10 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TOKEN_FLOAT_LIT:
-        {
+        case TOKEN_FLOAT_LIT: {
             switch (inner_type->kind)
             {
-            case TYPE_FLOAT:
-            {
+            case TYPE_FLOAT: {
                 AstValue value = {0};
                 value.value = LLVMConstReal(
                     llvm_type(l, inner_type), (double)ast->primary.tok->f64);
@@ -1451,8 +1415,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TOKEN_STRING_LIT:
-        {
+        case TOKEN_STRING_LIT: {
             LLVMValueRef const_string = LLVMConstString(
                 ast->primary.tok->str.ptr, ast->primary.tok->str.len, true);
 
@@ -1485,8 +1448,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TOKEN_CSTRING_LIT:
-        {
+        case TOKEN_CSTRING_LIT: {
             LLVMValueRef glob = LLVMAddGlobal(
                 mod->mod,
                 LLVMArrayType(LLVMInt8Type(), ast->primary.tok->str.len),
@@ -1515,8 +1477,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TOKEN_CHAR_LIT:
-        {
+        case TOKEN_CHAR_LIT: {
             AstValue value = {0};
             value.value = LLVMConstInt(
                 llvm_type(l, inner_type),
@@ -1526,8 +1487,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TOKEN_IDENT:
-        {
+        case TOKEN_IDENT: {
             Ast *sym = get_symbol(
                 *array_last(&l->scope_stack),
                 ast->primary.tok->str,
@@ -1536,8 +1496,7 @@ static void llvm_codegen_ast(
 
             switch (sym->type)
             {
-            case AST_PROC_DECL:
-            {
+            case AST_PROC_DECL: {
                 // TODO: shouldn't this be sym->flags? Is this bit even useful
                 // past semantic analysis?
                 if ((ast->flags & AST_FLAG_IS_TEMPLATE) == AST_FLAG_IS_TEMPLATE)
@@ -1555,41 +1514,35 @@ static void llvm_codegen_ast(
             }
 
             case AST_VAR_DECL:
-            case AST_CONST_DECL:
-            {
+            case AST_CONST_DECL: {
                 assert(sym->decl.value.value);
                 if (out_value) *out_value = sym->decl.value;
                 break;
             }
 
-            case AST_FOREACH:
-            {
+            case AST_FOREACH: {
                 assert(sym->foreach_stmt.value.value);
                 if (out_value) *out_value = sym->foreach_stmt.value;
                 break;
             }
 
-            case AST_PROC_PARAM:
-            {
+            case AST_PROC_PARAM: {
                 assert(sym->proc_param.value.value);
                 if (out_value) *out_value = sym->proc_param.value;
                 break;
             }
 
-            case AST_STRUCT_FIELD:
-            {
+            case AST_STRUCT_FIELD: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
                 break;
             }
 
-            case AST_TUPLE_BINDING:
-            {
+            case AST_TUPLE_BINDING: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
                 break;
             }
 
-            case AST_ENUM_FIELD:
-            {
+            case AST_ENUM_FIELD: {
                 llvm_codegen_ast(l, mod, sym, true, out_value);
                 break;
             }
@@ -1600,8 +1553,7 @@ static void llvm_codegen_ast(
             case AST_BUILTIN_PTR:
             case AST_BUILTIN_TYPE_INFO:
             case AST_BUILTIN_LEN:
-            case AST_BUILTIN_VEC_ACCESS:
-            {
+            case AST_BUILTIN_VEC_ACCESS: {
                 llvm_codegen_ast(l, mod, sym, is_const, out_value);
                 break;
             }
@@ -1618,8 +1570,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_PROC_CALL:
-    {
+    case AST_PROC_CALL: {
         if (ast->proc_call.is_template_inst)
         {
             assert(ast->proc_call.resolves_to);
@@ -1728,12 +1679,10 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_INTRINSIC_CALL:
-    {
+    case AST_INTRINSIC_CALL: {
         switch (ast->intrinsic_call.type)
         {
-        case INTRINSIC_SIZE_OF:
-        {
+        case INTRINSIC_SIZE_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
             TypeInfo *type = NULL;
 
@@ -1754,8 +1703,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_ALIGN_OF:
-        {
+        case INTRINSIC_ALIGN_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             TypeInfo *type = NULL;
@@ -1777,8 +1725,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_TYPE_INFO_OF:
-        {
+        case INTRINSIC_TYPE_INFO_OF: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             AstValue type_info_value = {0};
@@ -1798,8 +1745,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_ALLOC:
-        {
+        case INTRINSIC_ALLOC: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             LLVMValueRef malloc_fn = llvm_get_malloc_fn(l, mod);
@@ -1817,8 +1763,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_REALLOC:
-        {
+        case INTRINSIC_REALLOC: {
             Ast *ptr = &ast->intrinsic_call.params.ptr[0];
             Ast *size = &ast->intrinsic_call.params.ptr[1];
 
@@ -1847,8 +1792,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_DEALLOC:
-        {
+        case INTRINSIC_DEALLOC: {
             Ast *param = &ast->intrinsic_call.params.ptr[0];
 
             LLVMValueRef free_fn = llvm_get_free_fn(l, mod);
@@ -1869,8 +1813,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_NEW:
-        {
+        case INTRINSIC_NEW: {
             Ast *type = &ast->intrinsic_call.params.ptr[0];
 
             LLVMValueRef malloc_fn = llvm_get_malloc_fn(l, mod);
@@ -1895,8 +1838,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_MAKE:
-        {
+        case INTRINSIC_MAKE: {
             Ast *type = &ast->intrinsic_call.params.ptr[0];
             Ast *length = &ast->intrinsic_call.params.ptr[1];
             Ast *cap = length;
@@ -1977,8 +1919,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_DELETE:
-        {
+        case INTRINSIC_DELETE: {
             Ast *value = &ast->intrinsic_call.params.ptr[0];
 
             LLVMValueRef free_fn = llvm_get_free_fn(l, mod);
@@ -2033,8 +1974,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case INTRINSIC_APPEND:
-        {
+        case INTRINSIC_APPEND: {
             Ast *array_ptr = &ast->intrinsic_call.params.ptr[0];
             Ast *value = &ast->intrinsic_call.params.ptr[1];
 
@@ -2191,8 +2131,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_EMBED:
-    {
+    case AST_EMBED: {
         char *c_path = bump_c_str(&l->compiler->bump, ast->embed.abs_path);
         FILE *f = fopen(c_path, "rb");
         assert(f);
@@ -2266,14 +2205,12 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_EXPR_STMT:
-    {
+    case AST_EXPR_STMT: {
         llvm_codegen_ast(l, mod, ast->expr, false, NULL);
         break;
     }
 
-    case AST_CONST_DECL:
-    {
+    case AST_CONST_DECL: {
         if (ast->decl.value.value)
         {
             if (out_value) *out_value = ast->decl.value;
@@ -2287,8 +2224,7 @@ static void llvm_codegen_ast(
         case TYPE_SLICE:
         case TYPE_STRUCT:
         case TYPE_ARRAY:
-        case TYPE_VECTOR:
-        {
+        case TYPE_VECTOR: {
             LLVMValueRef glob =
                 LLVMAddGlobal(mod->mod, llvm_type(l, const_type), "");
             LLVMSetLinkage(glob, LLVMInternalLinkage);
@@ -2308,8 +2244,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        default:
-        {
+        default: {
             llvm_codegen_ast(
                 l, mod, ast->decl.value_expr, true, &ast->decl.value);
             break;
@@ -2320,8 +2255,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_VAR_DECL:
-    {
+    case AST_VAR_DECL: {
         if (ast->decl.value.value)
         {
             if (out_value) *out_value = ast->decl.value;
@@ -2475,8 +2409,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_TUPLE_DECL:
-    {
+    case AST_TUPLE_DECL: {
         ast->tuple_decl.value.is_lvalue = true;
         ast->tuple_decl.value.value = build_alloca(l, mod, ast->type_info);
 
@@ -2522,8 +2455,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_VAR_ASSIGN:
-    {
+    case AST_VAR_ASSIGN: {
         AstValue assigned_value = {0};
         llvm_codegen_ast(
             l, mod, ast->assign.assigned_expr, false, &assigned_value);
@@ -2541,8 +2473,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_RETURN:
-    {
+    case AST_RETURN: {
 
         Ast *proc = get_scope_procedure(*array_last(&l->scope_stack));
         assert(proc);
@@ -2572,8 +2503,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_CAST:
-    {
+    case AST_CAST: {
         // Check if type is castable
         TypeInfo *dest_ty = ast->cast.type_expr->as_type;
         TypeInfo *src_ty = ast->cast.value_expr->type_info;
@@ -2651,8 +2581,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_UNARY_EXPR:
-    {
+    case AST_UNARY_EXPR: {
         AstValue sub_value = {0};
         llvm_codegen_ast(l, mod, ast->unop.sub, is_const, &sub_value);
 
@@ -2662,8 +2591,7 @@ static void llvm_codegen_ast(
 
         switch (ast->unop.type)
         {
-        case UNOP_ADDRESS:
-        {
+        case UNOP_ADDRESS: {
             if (!sub_value.is_lvalue)
             {
                 result_value.value =
@@ -2680,14 +2608,12 @@ static void llvm_codegen_ast(
             }
             break;
         }
-        case UNOP_DEREFERENCE:
-        {
+        case UNOP_DEREFERENCE: {
             result_value.is_lvalue = true;
             result_value.value = load_val(mod, &sub_value);
             break;
         }
-        case UNOP_NEG:
-        {
+        case UNOP_NEG: {
             LLVMValueRef sub = load_val(mod, &sub_value);
             if (!is_const)
             {
@@ -2724,8 +2650,7 @@ static void llvm_codegen_ast(
 
             break;
         }
-        case UNOP_NOT:
-        {
+        case UNOP_NOT: {
             LLVMValueRef sub = load_val(mod, &sub_value);
             LLVMValueRef bool_val = bool_value(l, mod, sub, op_type, is_const);
 
@@ -2755,8 +2680,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_SUBSCRIPT:
-    {
+    case AST_SUBSCRIPT: {
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript.left, false, &left_value);
 
@@ -2770,8 +2694,7 @@ static void llvm_codegen_ast(
 
         switch (ast->subscript.left->type_info->kind)
         {
-        case TYPE_POINTER:
-        {
+        case TYPE_POINTER: {
             LLVMValueRef indices[1] = {
                 load_val(mod, &right_value),
             };
@@ -2785,8 +2708,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_VECTOR:
-        case TYPE_ARRAY:
-        {
+        case TYPE_ARRAY: {
             AstValue subscript_value = {0};
 
             LLVMValueRef indices[2] = {
@@ -2803,8 +2725,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_DYNAMIC_ARRAY:
-        case TYPE_SLICE:
-        {
+        case TYPE_SLICE: {
             LLVMValueRef field_ptr = NULL;
             uint32_t field_index = 0; // Index for pointer field
 
@@ -2851,8 +2772,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_SUBSCRIPT_SLICE:
-    {
+    case AST_SUBSCRIPT_SLICE: {
         AstValue left_value = {0};
         llvm_codegen_ast(l, mod, ast->subscript_slice.left, false, &left_value);
 
@@ -2873,8 +2793,7 @@ static void llvm_codegen_ast(
         LLVMValueRef left = NULL;
         switch (ast->subscript_slice.left->type_info->kind)
         {
-        case TYPE_ARRAY:
-        {
+        case TYPE_ARRAY: {
             assert(left_value.is_lvalue);
 
             LLVMValueRef indices[2] = {
@@ -2898,8 +2817,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_DYNAMIC_ARRAY:
-        case TYPE_SLICE:
-        {
+        case TYPE_SLICE: {
             assert(left_value.is_lvalue);
 
             LLVMValueRef indices[2] = {
@@ -2929,8 +2847,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TYPE_POINTER:
-        {
+        case TYPE_POINTER: {
             left = load_val(mod, &left_value);
 
             if (!lower_value.value && !upper_value.value)
@@ -3000,8 +2917,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_TO_ANY:
-    {
+    case AST_TO_ANY: {
         AstValue result_value = {0};
         assert(!is_const);
         assert(ast->expr->type_info->rtti_index > 0);
@@ -3061,8 +2977,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_TUPLE_LIT:
-    {
+    case AST_TUPLE_LIT: {
         AstValue result_value = {0};
         result_value.is_lvalue = true;
         if (out_value && out_value->value)
@@ -3102,8 +3017,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_COMPOUND_LIT:
-    {
+    case AST_COMPOUND_LIT: {
         AstValue result_value = {0};
 
         if (!is_const)
@@ -3121,8 +3035,7 @@ static void llvm_codegen_ast(
             switch (ast->type_info->kind)
             {
             case TYPE_VECTOR:
-            case TYPE_ARRAY:
-            {
+            case TYPE_ARRAY: {
                 if (ast->compound.values.len != ast->type_info->array.size &&
                     ast->compound.values.len == 1)
                 {
@@ -3179,8 +3092,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            case TYPE_STRUCT:
-            {
+            case TYPE_STRUCT: {
                 if (ast->compound.values.len == 0)
                 {
                     LLVMBuildStore(
@@ -3272,8 +3184,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            default:
-            {
+            default: {
                 assert(ast->compound.values.len == 1);
                 llvm_codegen_ast(
                     l,
@@ -3289,8 +3200,7 @@ static void llvm_codegen_ast(
         {
             switch (ast->type_info->kind)
             {
-            case TYPE_VECTOR:
-            {
+            case TYPE_VECTOR: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * ast->compound.values.len);
@@ -3329,8 +3239,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            case TYPE_ARRAY:
-            {
+            case TYPE_ARRAY: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * ast->compound.values.len);
@@ -3371,8 +3280,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            case TYPE_STRUCT:
-            {
+            case TYPE_STRUCT: {
                 LLVMValueRef *values = bump_alloc(
                     &l->compiler->bump,
                     sizeof(LLVMValueRef) * ast->compound.values.len);
@@ -3396,8 +3304,7 @@ static void llvm_codegen_ast(
                 break;
             }
 
-            default:
-            {
+            default: {
                 assert(ast->compound.values.len == 1);
                 llvm_codegen_ast(
                     l,
@@ -3417,8 +3324,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_STRUCT_FIELD:
-    {
+    case AST_STRUCT_FIELD: {
         Ast *left_expr = ast->sym_scope->ast;
         assert(left_expr);
         assert(left_expr->type_info);
@@ -3450,8 +3356,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_ENUM_FIELD:
-    {
+    case AST_ENUM_FIELD: {
         AstValue field_val = {0};
         llvm_codegen_ast(l, mod, ast->enum_field.value_expr, true, &field_val);
 
@@ -3460,8 +3365,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_VEC_ACCESS:
-    {
+    case AST_BUILTIN_VEC_ACCESS: {
         Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
@@ -3483,8 +3387,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_PTR:
-    {
+    case AST_BUILTIN_PTR: {
         Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
@@ -3493,8 +3396,7 @@ static void llvm_codegen_ast(
         switch (type->kind)
         {
         case TYPE_DYNAMIC_ARRAY:
-        case TYPE_SLICE:
-        {
+        case TYPE_SLICE: {
             AstValue slice_value = (*array_last(&l->scope_stack))->value;
             assert(slice_value.value);
 
@@ -3530,8 +3432,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TYPE_ARRAY:
-        {
+        case TYPE_ARRAY: {
             AstValue array_value = (*array_last(&l->scope_stack))->value;
             assert(array_value.value);
             assert(array_value.is_lvalue);
@@ -3550,8 +3451,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TYPE_ANY:
-        {
+        case TYPE_ANY: {
             AstValue any_value = (*array_last(&l->scope_stack))->value;
             assert(any_value.value);
 
@@ -3593,8 +3493,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_TYPE_INFO:
-    {
+    case AST_BUILTIN_TYPE_INFO: {
         Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
@@ -3602,8 +3501,7 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
-        case TYPE_ANY:
-        {
+        case TYPE_ANY: {
             AstValue any_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
@@ -3644,8 +3542,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_LEN:
-    {
+    case AST_BUILTIN_LEN: {
         Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
@@ -3654,8 +3551,7 @@ static void llvm_codegen_ast(
         switch (type->kind)
         {
         case TYPE_DYNAMIC_ARRAY:
-        case TYPE_SLICE:
-        {
+        case TYPE_SLICE: {
             AstValue slice_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
@@ -3691,8 +3587,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_VECTOR:
-        case TYPE_ARRAY:
-        {
+        case TYPE_ARRAY: {
             AstValue result_value = {0};
             result_value.is_lvalue = false;
             result_value.value = LLVMConstInt(
@@ -3708,8 +3603,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_CAP:
-    {
+    case AST_BUILTIN_CAP: {
         Scope *scope = *array_last(&l->scope_stack);
         assert(scope->type_info);
 
@@ -3717,8 +3611,7 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
-        case TYPE_DYNAMIC_ARRAY:
-        {
+        case TYPE_DYNAMIC_ARRAY: {
             AstValue arr_value = (*array_last(&l->scope_stack))->value;
 
             LLVMValueRef field_ptr = NULL;
@@ -3759,8 +3652,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_MAX:
-    {
+    case AST_BUILTIN_MAX: {
         Scope *scope = *array_last(&l->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
@@ -3769,8 +3661,7 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
-        case TYPE_INT:
-        {
+        case TYPE_INT: {
             uint64_t max_val;
 
             if (type->integer.is_signed)
@@ -3802,8 +3693,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TYPE_FLOAT:
-        {
+        case TYPE_FLOAT: {
             double max_val;
 
             switch (type->floating.num_bits)
@@ -3826,8 +3716,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BUILTIN_MIN:
-    {
+    case AST_BUILTIN_MIN: {
         Scope *scope = *array_last(&l->scope_stack);
         TypeInfo *type = scope->type_info;
         assert(type);
@@ -3836,8 +3725,7 @@ static void llvm_codegen_ast(
 
         switch (type->kind)
         {
-        case TYPE_INT:
-        {
+        case TYPE_INT: {
             uint64_t min_val;
 
             if (type->integer.is_signed)
@@ -3862,8 +3750,7 @@ static void llvm_codegen_ast(
             break;
         }
 
-        case TYPE_FLOAT:
-        {
+        case TYPE_FLOAT: {
             double min_val;
 
             switch (type->floating.num_bits)
@@ -3886,8 +3773,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_USING:
-    {
+    case AST_USING: {
         if (ast->expr->type_info->kind != TYPE_NAMESPACE)
         {
             AstValue value = {0};
@@ -3902,8 +3788,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_ACCESS:
-    {
+    case AST_ACCESS: {
         assert(l->scope_stack.len > 0);
 
         Scope *accessed_scope = get_expr_scope(
@@ -3931,8 +3816,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BINARY_EXPR:
-    {
+    case AST_BINARY_EXPR: {
         AstValue left_val = {0};
         AstValue right_val = {0};
         llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
@@ -4039,12 +3923,10 @@ static void llvm_codegen_ast(
         {
             switch (ast->binop.type)
             {
-            case BINOP_ADD:
-            {
+            case BINOP_ADD: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWAdd(mod->builder, lhs, rhs, "");
@@ -4053,8 +3935,7 @@ static void llvm_codegen_ast(
                             LLVMBuildAdd(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_FLOAT:
-                {
+                case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFAdd(mod->builder, lhs, rhs, "");
                     break;
@@ -4063,12 +3944,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_SUB:
-            {
+            case BINOP_SUB: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWSub(mod->builder, lhs, rhs, "");
@@ -4077,8 +3956,7 @@ static void llvm_codegen_ast(
                             LLVMBuildSub(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_FLOAT:
-                {
+                case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFSub(mod->builder, lhs, rhs, "");
                     break;
@@ -4087,12 +3965,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_MUL:
-            {
+            case BINOP_MUL: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildNSWMul(mod->builder, lhs, rhs, "");
@@ -4101,8 +3977,7 @@ static void llvm_codegen_ast(
                             LLVMBuildMul(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_FLOAT:
-                {
+                case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFMul(mod->builder, lhs, rhs, "");
                     break;
@@ -4111,12 +3986,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_DIV:
-            {
+            case BINOP_DIV: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildSDiv(mod->builder, lhs, rhs, "");
@@ -4125,8 +3998,7 @@ static void llvm_codegen_ast(
                             LLVMBuildUDiv(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_FLOAT:
-                {
+                case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFDiv(mod->builder, lhs, rhs, "");
                     break;
@@ -4135,12 +4007,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_MOD:
-            {
+            case BINOP_MOD: {
                 switch (op_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildSRem(mod->builder, lhs, rhs, "");
@@ -4149,8 +4019,7 @@ static void llvm_codegen_ast(
                             LLVMBuildURem(mod->builder, lhs, rhs, "");
                     break;
                 }
-                case TYPE_FLOAT:
-                {
+                case TYPE_FLOAT: {
                     result_value.value =
                         LLVMBuildFRem(mod->builder, lhs, rhs, "");
                     break;
@@ -4160,13 +4029,11 @@ static void llvm_codegen_ast(
 
                 break;
             }
-            case BINOP_BITAND:
-            {
+            case BINOP_BITAND: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value =
                         LLVMBuildAnd(mod->builder, lhs, rhs, "");
                     break;
@@ -4175,13 +4042,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_BITOR:
-            {
+            case BINOP_BITOR: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value =
                         LLVMBuildOr(mod->builder, lhs, rhs, "");
                     break;
@@ -4190,13 +4055,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_BITXOR:
-            {
+            case BINOP_BITXOR: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value =
                         LLVMBuildXor(mod->builder, lhs, rhs, "");
                     break;
@@ -4205,13 +4068,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_LSHIFT:
-            {
+            case BINOP_LSHIFT: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value =
                         LLVMBuildShl(mod->builder, lhs, rhs, "");
                     break;
@@ -4220,12 +4081,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_RSHIFT:
-            {
+            case BINOP_RSHIFT: {
                 switch (lhs_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (op_type->integer.is_signed)
                         result_value.value =
                             LLVMBuildAShr(mod->builder, lhs, rhs, "");
@@ -4242,8 +4101,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_EQ:
-            {
+            case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4266,8 +4124,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
-            case BINOP_NOTEQ:
-            {
+            case BINOP_NOTEQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4290,8 +4147,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
-            case BINOP_GREATER:
-            {
+            case BINOP_GREATER: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4318,8 +4174,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
-            case BINOP_GREATEREQ:
-            {
+            case BINOP_GREATEREQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4346,8 +4201,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
-            case BINOP_LESS:
-            {
+            case BINOP_LESS: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4374,8 +4228,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
-            case BINOP_LESSEQ:
-            {
+            case BINOP_LESSEQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4403,8 +4256,7 @@ static void llvm_codegen_ast(
                 break;
             }
             case BINOP_OR:
-            case BINOP_AND:
-            {
+            case BINOP_AND: {
                 lhs = load_val(mod, &left_val);
                 LLVMValueRef lhs_bool =
                     bool_value(l, mod, lhs, lhs_type, is_const);
@@ -4481,8 +4333,7 @@ static void llvm_codegen_ast(
         {
             switch (ast->binop.type)
             {
-            case BINOP_ADD:
-            {
+            case BINOP_ADD: {
                 switch (op_type->kind)
                 {
                 case TYPE_INT:
@@ -4498,8 +4349,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_SUB:
-            {
+            case BINOP_SUB: {
                 switch (op_type->kind)
                 {
                 case TYPE_INT:
@@ -4516,8 +4366,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_MUL:
-            {
+            case BINOP_MUL: {
                 switch (op_type->kind)
                 {
                 case TYPE_INT:
@@ -4533,8 +4382,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_DIV:
-            {
+            case BINOP_DIV: {
                 switch (op_type->kind)
                 {
                 case TYPE_INT:
@@ -4550,8 +4398,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_MOD:
-            {
+            case BINOP_MOD: {
                 switch (op_type->kind)
                 {
                 case TYPE_INT:
@@ -4567,13 +4414,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_BITAND:
-            {
+            case BINOP_BITAND: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value = LLVMConstAnd(lhs, rhs);
                     break;
                 }
@@ -4581,13 +4426,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_BITOR:
-            {
+            case BINOP_BITOR: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value = LLVMConstOr(lhs, rhs);
                     break;
                 }
@@ -4595,13 +4438,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_BITXOR:
-            {
+            case BINOP_BITXOR: {
                 switch (op_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value = LLVMConstXor(lhs, rhs);
                     break;
                 }
@@ -4609,13 +4450,11 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_LSHIFT:
-            {
+            case BINOP_LSHIFT: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_BOOL:
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     result_value.value = LLVMConstShl(lhs, rhs);
                     break;
                 }
@@ -4623,12 +4462,10 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_RSHIFT:
-            {
+            case BINOP_RSHIFT: {
                 switch (lhs_type->kind)
                 {
-                case TYPE_INT:
-                {
+                case TYPE_INT: {
                     if (lhs_type->integer.is_signed)
                         result_value.value = LLVMConstAShr(lhs, rhs);
                     else
@@ -4642,8 +4479,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
-            case BINOP_EQ:
-            {
+            case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4662,8 +4498,7 @@ static void llvm_codegen_ast(
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
-            case BINOP_NOTEQ:
-            {
+            case BINOP_NOTEQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4682,8 +4517,7 @@ static void llvm_codegen_ast(
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
-            case BINOP_GREATER:
-            {
+            case BINOP_GREATER: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4707,8 +4541,7 @@ static void llvm_codegen_ast(
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
-            case BINOP_GREATEREQ:
-            {
+            case BINOP_GREATEREQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4732,8 +4565,7 @@ static void llvm_codegen_ast(
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
-            case BINOP_LESS:
-            {
+            case BINOP_LESS: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4757,8 +4589,7 @@ static void llvm_codegen_ast(
                     LLVMConstZExt(result_value.value, LLVMInt8Type());
                 break;
             }
-            case BINOP_LESSEQ:
-            {
+            case BINOP_LESSEQ: {
                 switch (lhs_type->kind)
                 {
                 case TYPE_INT:
@@ -4790,8 +4621,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_IF:
-    {
+    case AST_IF: {
         AstValue cond_val = {0};
         llvm_codegen_ast(l, mod, ast->if_stmt.cond_expr, false, &cond_val);
 
@@ -4843,8 +4673,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_SWITCH:
-    {
+    case AST_SWITCH: {
         AstValue expr_val = {0};
         llvm_codegen_ast(l, mod, ast->switch_stmt.expr, false, &expr_val);
 
@@ -4910,8 +4739,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_WHILE:
-    {
+    case AST_WHILE: {
         LLVMValueRef fun =
             LLVMGetBasicBlockParent(LLVMGetInsertBlock(mod->builder));
         assert(fun);
@@ -4957,8 +4785,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_FOR:
-    {
+    case AST_FOR: {
         array_push(&l->scope_stack, ast->scope);
         array_push(&l->operand_scope_stack, ast->scope);
 
@@ -5034,8 +4861,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_FOREACH:
-    {
+    case AST_FOREACH: {
         array_push(&l->scope_stack, ast->scope);
         array_push(&l->operand_scope_stack, ast->scope);
 
@@ -5073,8 +4899,7 @@ static void llvm_codegen_ast(
 
         switch (iterator->type_info->kind)
         {
-        case TYPE_ARRAY:
-        {
+        case TYPE_ARRAY: {
             unsigned index_count = 0;
             if (iterator_value.is_lvalue)
             {
@@ -5101,8 +4926,7 @@ static void llvm_codegen_ast(
         }
 
         case TYPE_DYNAMIC_ARRAY:
-        case TYPE_SLICE:
-        {
+        case TYPE_SLICE: {
             indices[0] = LLVMConstInt(LLVMInt32Type(), 0, false);
             indices[1] = LLVMConstInt(LLVMInt32Type(), 0, false);
             first = LLVMBuildLoad(
@@ -5199,8 +5023,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_BREAK:
-    {
+    case AST_BREAK: {
         llvm_codegen_deferred_stmts(l, mod, false);
 
         LLVMBasicBlockRef *break_block = array_last(&l->break_block_stack);
@@ -5209,8 +5032,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_CONTINUE:
-    {
+    case AST_CONTINUE: {
         llvm_codegen_deferred_stmts(l, mod, false);
 
         LLVMBasicBlockRef *continue_block =
@@ -5220,8 +5042,7 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_IMPORT:
-    {
+    case AST_IMPORT: {
         SourceFile *file = NULL;
         if (!hash_get(
                 &l->compiler->files, ast->import.abs_path, (void **)&file))
@@ -5239,15 +5060,13 @@ static void llvm_codegen_ast(
         break;
     }
 
-    case AST_DEFER:
-    {
+    case AST_DEFER: {
         Scope *last_scope = *array_last(&l->scope_stack);
         array_push(&last_scope->deferred_stmts, ast->stmt);
         break;
     }
 
-    case AST_TUPLE_BINDING:
-    {
+    case AST_TUPLE_BINDING: {
         Ast *tuple_decl = ast->tuple_binding.decl;
         assert(tuple_decl);
         assert(tuple_decl->type_info);
@@ -5348,14 +5167,18 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
 }
 
 static void llvm_codegen_ast_children(
-    LLContext *l, LLModule *mod, Ast *asts, size_t ast_count, bool is_const, bool is_unscoped)
+    LLContext *l,
+    LLModule *mod,
+    Ast *asts,
+    size_t ast_count,
+    bool is_const,
+    bool is_unscoped)
 {
     for (Ast *ast = asts; ast != asts + ast_count; ++ast)
     {
         switch (ast->type)
         {
-        case AST_IMPORT:
-        {
+        case AST_IMPORT: {
             llvm_codegen_ast(l, mod, ast, is_const, NULL);
             break;
         }
@@ -5372,8 +5195,7 @@ static void llvm_codegen_ast_children(
         {
         case AST_CONST_DECL:
         case AST_PROC_DECL:
-        case AST_TYPEDEF:
-        {
+        case AST_TYPEDEF: {
             llvm_codegen_ast(l, mod, ast, is_const, NULL);
             break;
         }
@@ -5393,8 +5215,7 @@ static void llvm_codegen_ast_children(
         case AST_PROC_DECL:
         case AST_TYPEDEF: break;
 
-        default:
-        {
+        default: {
             llvm_codegen_ast(l, mod, ast, is_const, NULL);
             break;
         }
@@ -5418,8 +5239,7 @@ static void llvm_codegen_ast_children(
     {
         switch (ast->type)
         {
-        case AST_PROC_DECL:
-        {
+        case AST_PROC_DECL: {
             llvm_codegen_proc_stmts(l, mod, ast);
             break;
         }
@@ -5622,8 +5442,7 @@ static void llvm_optimize_module(LLContext *l)
 
         switch (l->compiler->args.opt_level)
         {
-        case 3:
-        {
+        case 3: {
             LLVMPassManagerBuilderUseInlinerWithThreshold(pmb, 250);
             break;
         }

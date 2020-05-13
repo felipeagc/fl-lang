@@ -502,7 +502,8 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     }
     for (size_t i = 0; i < compiler->args.link_libraries.len; ++i)
     {
-        sb_sprintf(&compiler->sb, " \"%s\"", compiler->args.link_libraries.ptr[i]);
+        sb_sprintf(
+            &compiler->sb, " \"%s\"", compiler->args.link_libraries.ptr[i]);
     }
 
     String cmd_line = sb_build(&compiler->sb, &compiler->bump);
@@ -525,16 +526,7 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path)
     si.hStdError = stderr_handle;
 
     BOOL result = CreateProcessA(
-        NULL,
-        cmd_line_c,
-        NULL,
-        NULL,
-        FALSE,
-        0,
-        NULL,
-        NULL,
-        &si,
-        &pi);
+        NULL, cmd_line_c, NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi);
     if (!result)
     {
         fprintf(stderr, "Failed to start linker!\n");

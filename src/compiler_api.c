@@ -121,4 +121,3 @@ void compiler_api_get_file_deps(Compiler *compiler, size_t *count, String *buf)
 
     hash_destroy(&set);
 }
-

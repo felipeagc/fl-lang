@@ -188,12 +188,15 @@ static bool is_type_castable(TypeInfo *src_ty, TypeInfo *dest_ty)
 
 static TypeInfo *common_numeric_type(TypeInfo *a, TypeInfo *b)
 {
-    if (a->kind == b->kind) {
-        if (a->kind == TYPE_INT) {
+    if (a->kind == b->kind)
+    {
+        if (a->kind == TYPE_INT)
+        {
             if (a->integer.num_bits != b->integer.num_bits) return NULL;
         }
 
-        if (a->kind == TYPE_FLOAT) {
+        if (a->kind == TYPE_FLOAT)
+        {
             if (a->floating.num_bits != b->floating.num_bits) return NULL;
         }
 

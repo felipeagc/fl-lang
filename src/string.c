@@ -37,13 +37,12 @@ static char *utf16_to_utf8(wchar_t *source)
 
 static wchar_t *utf8_to_utf16(char *source)
 {
-    DWORD wpath_len = MultiByteToWideChar(CP_UTF8, 0,
-        source, strlen(source), NULL, 0);
+    DWORD wpath_len =
+        MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), NULL, 0);
 
-    wchar_t* wpath = malloc(sizeof(wchar_t) * (wpath_len + 1));
+    wchar_t *wpath = malloc(sizeof(wchar_t) * (wpath_len + 1));
 
-    MultiByteToWideChar(CP_UTF8, 0, 
-        source, strlen(source), wpath, wpath_len);
+    MultiByteToWideChar(CP_UTF8, 0, source, strlen(source), wpath, wpath_len);
 
     wpath[wpath_len] = 0;
 

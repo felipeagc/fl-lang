@@ -4,7 +4,7 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
 
     file->path = bump_strdup(&compiler->bump, path);
 
-	assert(file->path.ptr);
+    assert(file->path.ptr);
 
     FILE *f = fopen(bump_c_str(&compiler->bump, file->path), "rb");
     if (!f)
@@ -21,4 +21,3 @@ static void source_file_init(SourceFile *file, Compiler *compiler, String path)
     fread(file->content.ptr, 1, file->content.len, f);
     fclose(f);
 }
-
