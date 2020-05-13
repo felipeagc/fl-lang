@@ -15,3 +15,27 @@ jobs:
       run: make CC=clang-9 LLVM_CFLAGS="`llvm-config-9 --cflags`" LLVM_LDFLAGS="`llvm-config-9 --ldflags`"
     - name: Test
       run: make test
+  windows:
+    runs-on: windows-latest
+    env:
+      VCVARSALL: '"C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\VC\Auxiliary\Build\vcvarsall.bat"'
+      VCARCH: 'x64'
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install LLVM
+      shell: cmd
+      run: |
+        curl -o C:\llvm.tar.xz https://ziglang.org/deps/llvm%2bclang%2blld-10.0.0-x86_64-windows-msvc-release-mt.tar.xz
+        7z e -y C:\llvm.tar.xz -oC:\
+        7z x -y C:\llvm.tar -oC:\
+        mv llvm+clang+lld-10.0.0-x86_64-windows-msvc-release-mt C:\llvm
+    - name: Build
+      shell: cmd
+      run: |
+        call %VCVARSALL% %VCARCH%
+        nmake
+    - name: Test
+      shell: cmd
+      run: |
+        call %VCVARSALL% %VCARCH%
+        nmake test
