@@ -1,0 +1,15 @@
+module os
+
+pub typedef TimeSpec struct {
+    sec: u64,
+    nsec: u64,
+};
+
+pub typedef Error enum u32 {
+    Success = 0,
+    WriteError = 1,
+    SpawnError = 2,
+    InvalidSpawnArgs = 3,
+    WaitError = 4,
+    StatError = 5,
+};

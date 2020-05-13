@@ -17,10 +17,8 @@ Explicit overloading
 TODO:
 - compiler API
 - build scripts
-- windows support in core library
 
 - aligned type
-- @memset, @memcmp
 
 Small things:
 - multiline string literal

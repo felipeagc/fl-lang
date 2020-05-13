@@ -1,0 +1,110 @@
+module os
+
+import "core:os/os_types"
+import "core:sys/posix"
+import "core:strings"
+import "core:c"
+
+extern var environ: **char;
+
+pub typedef Handle i32;
+pub const NULL_HANDLE: Handle = 0;
+
+pub typedef Pid Handle;
+
+#[inline] pub func get_stdin() -> Handle { return 0; }
+#[inline] pub func get_stdout() -> Handle { return 1; }
+#[inline] pub func get_stderr() -> Handle { return 2; }
+
+pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
+    var bytes_written: int = cast(int)posix.write(stream, buf.ptr, buf.len);
+    if (bytes_written == -1) {
+        return 0, Error.WriteError;
+    }
+
+    return bytes_written, Error.Success;
+}
+
+pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, Error) {
+    if (args.len < 1) {
+        return NULL_HANDLE, Error.InvalidSpawnArgs;
+    }
+
+    var actual_args: **char = alloc(size_of(*char) * (args.len + 1));
+    defer dealloc(actual_args);
+
+    for (var i: uint = 0; i < args.len; i += 1) {
+        actual_args[i] = strings.to_c_str_alloc(args[i]);
+    }
+    defer for (var i: uint = 0; i < args.len; i += 1) {
+        dealloc(actual_args[i]);
+    }
+
+    actual_args[args.len] = null; // null terminate the list
+
+    var spawn_actions: posix.posix_spawn_file_actions_t;
+    posix.posix_spawn_file_actions_init(&spawn_actions);
+    defer posix.posix_spawn_file_actions_destroy(&spawn_actions);
+
+    if (stdout != NULL_HANDLE) {
+        posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+    } else {
+        posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stdout(),
+            c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
+    }
+
+    if (stderr != NULL_HANDLE) {
+        posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+    } else {
+        posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stderr(),
+            c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
+    }
+
+    var pid: Handle;
+    var result = posix.posix_spawnp(
+        &pid,
+        actual_args[0],
+        &spawn_actions,
+        null,
+        actual_args,
+        environ);
+
+    if (result != 0) {
+        return NULL_HANDLE, Error.SpawnError;
+    }
+
+    return pid, Error.Success;
+}
+
+pub func wait_process(process: Pid) -> (i32, Error) {
+    var status: i32;
+    var success = posix.waitpid(process, &status, 0) != -1;
+
+    if (success) {
+        if (posix.WIFEXITED(status)) {
+            status = posix.WEXITSTATUS(status);
+        } else if (posix.WIFSIGNALED(status)) {
+            status = -posix.WTERMSIG(status);
+        } else {
+            return 1, Error.WaitError;
+        }
+    }
+
+    return status, Error.Success;
+}
+
+pub func last_write_time(path: string) -> (TimeSpec, Error) {
+    var stat: posix.stat_t;
+    c_path := strings.to_c_str_alloc(path);
+    defer dealloc(c_path);
+
+    var result = posix.stat(c_path, &stat);
+    if (result == -1) {
+        return TimeSpec{}, Error.StatError;
+    }
+
+    return TimeSpec{
+        cast(u64)stat.st_ctim.tv_sec,
+        cast(u64)stat.st_ctim.tv_nsec
+    }, Error.Success;
+}

@@ -1,0 +1,11 @@
+module fs
+
+version "posix" pub import "core:fs/fs_posix"
+version "win32" pub import "core:fs/fs_win32"
+
+pub func dir_entries_free(entries: []string) {
+    for (*entry in entries) {
+        dealloc(entry.*.ptr);
+    }
+    dealloc(entries.ptr);
+}

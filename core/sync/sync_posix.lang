@@ -1,0 +1,97 @@
+module sync
+
+import "core:sys/posix"
+import "core:sync/sync_types"
+
+pub typedef Thread posix.pthread_t;
+pub typedef Mutex posix.pthread_mutex_t;
+pub typedef Cond posix.pthread_cond_t;
+
+//
+// Threads
+//
+
+#[inline]
+pub func thread_create(start: ThreadStart, arg: *void) -> Thread {
+    var thread: Thread;
+    posix.pthread_create(&thread, null, start, arg);
+    return thread;
+}
+
+#[inline]
+pub func thread_wait(thread: Thread) {
+    posix.pthread_join(thread, null);
+}
+
+#[inline]
+pub func thread_sleep(milliseconds: u32) {
+    posix.usleep(1000 * milliseconds);
+}
+
+#[inline]
+pub func thread_detach(thread: Thread) {
+    posix.pthread_detach(thread);
+}
+
+#[inline]
+pub func thread_exit() {
+    posix.pthread_exit(cast(*void)0);
+}
+
+//
+// Mutex
+//
+
+#[inline]
+pub func mutex_init(mtx: *Mutex) {
+    posix.pthread_mutex_init(mtx, null);
+}
+
+#[inline]
+pub func mutex_destroy(mtx: *Mutex) {
+    posix.pthread_mutex_destroy(mtx);
+}
+
+#[inline]
+pub func mutex_lock(mtx: *Mutex) {
+    posix.pthread_mutex_lock(mtx);
+}
+
+#[inline]
+pub func mutex_trylock(mtx: *Mutex) {
+    posix.pthread_mutex_trylock(mtx);
+}
+
+#[inline]
+pub func mutex_unlock(mtx: *Mutex) {
+    posix.pthread_mutex_unlock(mtx);
+}
+
+//
+// Condition variable
+//
+
+#[inline]
+pub func cond_init(cond: *Cond) {
+    posix.pthread_cond_init(cond, null);
+}
+
+#[inline]
+pub func cond_destroy(cond: *Cond) {
+    posix.pthread_cond_destroy(cond);
+}
+
+#[inline]
+pub func cond_wake_one(cond: *Cond) {
+    posix.pthread_cond_signal(cond);
+}
+
+#[inline]
+pub func cond_wake_all(cond: *Cond) {
+    posix.pthread_cond_broadcast(cond);
+}
+
+#[inline]
+pub func cond_wait(cond: *Cond, mtx: *Mutex) {
+    posix.pthread_cond_wait(cond, mtx);
+}
