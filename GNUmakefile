@@ -9,12 +9,12 @@ CORE_FILES=$(wildcard core/*.lang)
 all: compiler bindgen examples
 
 compiler: $(wildcard src/*.c) $(wildcard src/*.h)
-	$(CC) $(LLVM_LDFLAGS) $(CFLAGS) $(LLVM_CFLAGS) -lLLVM -o $@ src/main.c
+	$(CC) $(CFLAGS) $(LLVM_CFLAGS) $(LLVM_LDFLAGS) -lLLVM -o $@ src/main.c
 
 bindgen: $(wildcard src/*.c) $(wildcard src/*.h) $(wildcard src/bindgen/*.c)
-	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -L/usr/local/opt/llvm/lib -Wno-unused-function -lclang -o $@ src/bindgen/main.c
+	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -Wno-unused-function -lclang -o $@ src/bindgen/main.c
 
-.PHONY: clean test examples
+.PHONY: clean test examples game
 
 clean:
 	rm compiler
@@ -28,6 +28,8 @@ test: compiler
 examples:
 	rm -f examples/ray examples/table
 	./compiler build examples
+
+game:
 	rm -f examples/game
 	./compiler build game
 
