@@ -1,5 +1,24 @@
 module os
 
+version "posix" {
+    pub typedef Handle i32;
+    pub typedef Pid Handle;
+
+    pub const NULL_HANDLE: Handle = 0;
+}
+
+version "win32" {
+    import "core:sys/win32"
+
+    pub typedef Handle win32.HANDLE;
+    pub typedef Pid struct {
+        hProcess: win32.HANDLE,
+        hThread: win32.HANDLE,
+    };
+
+    pub const NULL_HANDLE: Handle = null;
+}
+
 pub typedef TimeSpec struct {
     sec: u64,
     nsec: u64,
@@ -12,4 +31,10 @@ pub typedef Error enum u32 {
     InvalidSpawnArgs = 3,
     WaitError = 4,
     StatError = 5,
+};
+
+pub typedef ProcAttr struct {
+    dir: string,
+    stdout: Handle,
+    stderr: Handle,
 };

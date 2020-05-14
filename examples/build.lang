@@ -5,12 +5,12 @@ import "core:build"
 func main() {
     var workspace: build.Workspace;
 
-    build.add_target(&workspace, &build.Target{
+    build.add_executable_target(&workspace, &build.CompilerTarget{
         input = "ray.lang",
         output = "ray",
     });
 
-    build.add_target(&workspace, &build.Target{
+    build.add_executable_target(&workspace, &build.CompilerTarget{
         input = "table.lang",
         output = "table",
     });

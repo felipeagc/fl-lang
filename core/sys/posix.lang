@@ -110,6 +110,11 @@ version "glibc" {
             align: i64,
         };
 
+        pub const F_OK: i32 = 0;
+        pub const R_OK: i32 = 4;
+        pub const W_OK: i32 = 2;
+        pub const X_OK: i32 = 1;
+
         pub const FD_CLOEXEC: i32 = 1;
 
         pub const F_RDLCK: i32 = 0;
@@ -157,6 +162,11 @@ version "glibc" {
     }
 } else version "darwin" {
     pub const FD_CLOEXEC: i32 = 1;
+
+    pub const F_OK: i32 = 0;
+    pub const R_OK: i32 = 4;
+    pub const W_OK: i32 = 2;
+    pub const X_OK: i32 = 1;
 
     pub const F_RDLCK: i32 = 1;
     pub const F_UNLCK: i32 = 2;

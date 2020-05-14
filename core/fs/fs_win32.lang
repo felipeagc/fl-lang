@@ -1,22 +1,8 @@
 module fs
 
-import "core:win32"
+import "core:sys/win32"
 import "core:c"
 import "core:strings"
-
-pub func get_cwd_alloc() -> string {
-    var required_size = win32.GetCurrentDirectory(0, null);
-    var buf: *win32.TCHAR = alloc(size_of(win32.TCHAR) * cast(uint)required_size);
-    defer dealloc(buf);
-    win32.GetCurrentDirectory(required_size, buf);
-    return win32.wstr_to_string_alloc(buf, required_size);
-}
-
-pub func chdir(path: string) -> bool {
-    var wpath = win32.to_cwstr_alloc(path);
-    defer dealloc(wpath);
-    return win32.SetCurrentDirectory(wpath) != 0;
-}
 
 pub func dir_entries_alloc(path: string) -> []string {
     var search_str = strings.concat_alloc(path, "\\*");

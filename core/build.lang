@@ -5,11 +5,26 @@ import "core:fmt"
 import "core:strings"
 import "core:compiler"
 
+pub const BUILD_FILE_NAME = "build.lang";
+
 pub typedef Workspace struct {
     targets: [dyn]Target,
 };
 
+pub typedef TargetType enum u32 {
+    Compiler = 0,
+    Script = 1,
+};
+
 pub typedef Target struct {
+    type: TargetType,
+    using target: union {
+        compiler_target: CompilerTarget,
+        script_target: ScriptTarget,
+    },
+};
+
+pub typedef CompilerTarget struct {
     input: string,
     output: string,
     link_with: []string,
@@ -17,49 +32,104 @@ pub typedef Target struct {
     opt_level: u32,
 };
 
-pub func add_target(builder: *Workspace, target: *Target) {
-    append(&builder.targets, target.*);
+pub typedef ScriptTarget struct {
+    name: string,
+    output: string,
+    working_dir: string,
+    commands: [][]string,
+};
+
+pub func add_script_target(builder: *Workspace, target: *ScriptTarget) {
+    append(&builder.targets, Target{
+        type = TargetType.Script,
+        script_target = target.*,
+    });
+}
+
+pub func add_executable_target(builder: *Workspace, target: *CompilerTarget) {
+    append(&builder.targets, Target{
+        type = TargetType.Compiler,
+        compiler_target = target.*,
+    });
 }
 
 pub func build(builder: *Workspace) {
     for (*target in builder.targets) {
-        var output_path = target.output;
+        switch (target.type) {
+        case TargetType.Compiler:
+            var output_path = target.compiler_target.output;
 
-        version "win32" {
-            output_path = strings.concat_alloc(output_path, ".exe");
-            defer delete(&output_path);
-        }
-
-        var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
-            input = target.input,
-            output = output_path,
-            link_with = target.link_with,
-            library_paths  = target.library_paths,
-            opt_level = target.opt_level,
-        });
-        defer compiler.destroy(comp);
-
-        var output_time, _ = os.last_write_time(output_path);
-
-        var deps = compiler.get_deps_alloc(comp);
-        defer delete(&deps);
-
-        var should_recompile = false;
-
-        for (dep_path in deps) {
-            var input_time, _ = os.last_write_time(dep_path);
-            if (input_time.sec >= output_time.sec) {
-                should_recompile = true;
-                break;
+            version "win32" {
+                output_path = strings.concat_alloc(output_path, ".exe");
+                defer delete(&output_path);
             }
-        }
 
-        if (should_recompile) {
-            fmt.printf("=> Building target '%'\n", target.output);
+            var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
+                input = target.compiler_target.input,
+                output = output_path,
+                link_with = target.compiler_target.link_with,
+                library_paths  = target.compiler_target.library_paths,
+                opt_level = target.compiler_target.opt_level,
+            });
+            defer compiler.destroy(comp);
 
-            compiler.compile(comp);
-        } else {
-            fmt.printf("=> '%' is up to date\n", target.output);
+            var output_time, _ = os.last_write_time(output_path);
+
+            var deps = compiler.get_deps_alloc(comp);
+            defer delete(&deps);
+
+            var should_recompile = false;
+
+            for (dep_path in deps) {
+                var build_file_time, _ = os.last_write_time(BUILD_FILE_NAME);
+                if (build_file_time.sec >= output_time.sec) {
+                    should_recompile = true;
+                    break;
+                }
+
+                var input_time, _ = os.last_write_time(dep_path);
+                if (input_time.sec >= output_time.sec) {
+                    should_recompile = true;
+                    break;
+                }
+            }
+
+            if (should_recompile) {
+                fmt.printf("=> Building executable '%'\n", target.compiler_target.output);
+
+                compiler.compile(comp);
+            } else {
+                fmt.printf("=> '%' is up to date\n", target.compiler_target.output);
+            }
+
+        case TargetType.Script:
+            if (target.script_target.output.len > 0) {
+                if (os.file_exists(target.script_target.output)) {
+                    fmt.printf("=> Skipping '%', output already exists\n", target.script_target.name);
+                    break;
+                }
+            }
+
+            fmt.printf("=> Running script '%'\n", target.script_target.name);
+            for (cmd in target.script_target.commands) {
+                var pid, err = os.spawn_process(cmd[0], cmd, &os.ProcAttr{
+                    dir = target.script_target.working_dir,
+                    stdout = os.get_stdout(),
+                    stderr = os.get_stderr()
+                });
+
+                if (err) {
+                    fmt.printf("Error spawning script target: %", target.script_target.name);
+                    break;
+                }
+
+                var status, err = os.wait_process(pid);
+
+                if (err) {
+                    fmt.printf("Error waiting for script target: %", target.script_target.name);
+                    break;
+                }
+            }
         }
     }
 }

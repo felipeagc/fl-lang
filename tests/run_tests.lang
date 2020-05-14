@@ -16,9 +16,9 @@ typedef TestRun struct
 var failures: uint = 0;
 
 version "win32" {
-    const compiler_exe = ".\\compiler.exe";
+    const compiler_exe = ".\\flc.exe";
 } else {
-    const compiler_exe = "./compiler";
+    const compiler_exe = "./flc";
 }
 
 func run_tests(batch_name: string, tests_path: string, expected_status: i32)
@@ -36,9 +36,9 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
             var path = strings.concat_alloc(tests_path, entry);
 
             var pid, err = os.spawn_process(
+                compiler_exe,
                 []string{compiler_exe, "-r", path},
-                os.NULL_HANDLE,
-                os.NULL_HANDLE);
+                null);
 
             if (err)
             {

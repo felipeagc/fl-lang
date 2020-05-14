@@ -3116,11 +3116,91 @@ static void llvm_codegen_ast(
                             ast->compound.names.len);
                         for (size_t i = 0; i < ast->compound.values.len; ++i)
                         {
+                            LLVMValueRef ptr = NULL;
                             Ast *field = get_symbol(
                                 ast->type_info->scope,
                                 ast->compound.names.ptr[i],
                                 ast->loc.file);
-                            assert(field->type == AST_STRUCT_FIELD);
+
+                            LLVMValueRef indices[2];
+
+                            if (field->type == AST_STRUCT_FIELD)
+                            {
+                                indices[0] =
+                                    LLVMConstInt(LLVMInt32Type(), 0, false);
+                                indices[1] = LLVMConstInt(
+                                    LLVMInt32Type(),
+                                    field->struct_field.index,
+                                    false);
+
+                                ptr = LLVMBuildGEP(
+                                    mod->builder,
+                                    result_value.value,
+                                    indices,
+                                    2,
+                                    "");
+                            }
+                            else if (field->type == AST_STRUCT_FIELD_ALIAS)
+                            {
+                                Ast *left_field = get_symbol(
+                                    ast->type_info->scope,
+                                    field->struct_field_alias.left_name,
+                                    ast->loc.file);
+
+                                Ast *right_field = get_symbol(
+                                    left_field->type_info->scope,
+                                    field->struct_field_alias.right_name,
+                                    ast->loc.file);
+
+                                indices[0] =
+                                    LLVMConstInt(LLVMInt32Type(), 0, false);
+                                indices[1] = LLVMConstInt(
+                                    LLVMInt32Type(),
+                                    left_field->struct_field.index,
+                                    false);
+
+                                ptr = LLVMBuildGEP(
+                                    mod->builder,
+                                    result_value.value,
+                                    indices,
+                                    2,
+                                    "");
+
+                                assert(
+                                    left_field->type_info->kind == TYPE_STRUCT);
+
+                                if (!left_field->type_info->structure.is_union)
+                                {
+                                    indices[0] =
+                                        LLVMConstInt(LLVMInt32Type(), 0, false);
+                                    indices[1] = LLVMConstInt(
+                                        LLVMInt32Type(),
+                                        right_field->struct_field.index,
+                                        false);
+
+                                    ptr = LLVMBuildGEP(
+                                        mod->builder, ptr, indices, 2, "");
+                                }
+                                else
+                                {
+                                    indices[0] =
+                                        LLVMConstInt(LLVMInt32Type(), 0, false);
+
+                                    ptr = LLVMBuildPointerCast(
+                                        mod->builder,
+                                        LLVMBuildGEP(
+                                            mod->builder, ptr, indices, 1, ""),
+                                        LLVMPointerType(
+                                            llvm_type(
+                                                l, right_field->type_info),
+                                            0),
+                                        "");
+                                }
+                            }
+                            else
+                            {
+                                assert(0);
+                            }
 
                             AstValue val = {0};
                             llvm_codegen_ast(
@@ -3130,20 +3210,6 @@ static void llvm_codegen_ast(
                                 is_const,
                                 &val);
 
-                            LLVMValueRef indices[2] = {
-                                LLVMConstInt(LLVMInt32Type(), 0, false),
-                                LLVMConstInt(
-                                    LLVMInt32Type(),
-                                    field->struct_field.index,
-                                    false),
-                            };
-
-                            LLVMValueRef ptr = LLVMBuildGEP(
-                                mod->builder,
-                                result_value.value,
-                                indices,
-                                2,
-                                "");
                             LLVMBuildStore(
                                 mod->builder, load_val(mod, &val), ptr);
                         }
@@ -3819,8 +3885,6 @@ static void llvm_codegen_ast(
     case AST_BINARY_EXPR: {
         AstValue left_val = {0};
         AstValue right_val = {0};
-        llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
-        llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
 
         TypeInfo *lhs_type =
             get_inner_primitive_type(ast->binop.left->type_info);
@@ -3828,8 +3892,6 @@ static void llvm_codegen_ast(
             get_inner_primitive_type(ast->binop.right->type_info);
 
         AstValue result_value = {0};
-
-        LLVMValueRef lhs_ptr = left_val.value;
 
         LLVMValueRef lhs = NULL;
         LLVMValueRef rhs = NULL;
@@ -3844,12 +3906,16 @@ static void llvm_codegen_ast(
             op_type = rhs_type->array.sub;
         }
 
+        llvm_codegen_ast(l, mod, ast->binop.left, is_const, &left_val);
+        lhs = load_val(mod, &left_val);
+        LLVMValueRef lhs_ptr = left_val.value;
+
         switch (ast->binop.type)
         {
         case BINOP_AND:
         case BINOP_OR: break;
         default:
-            lhs = load_val(mod, &left_val);
+            llvm_codegen_ast(l, mod, ast->binop.right, is_const, &right_val);
             rhs = load_val(mod, &right_val);
             break;
         }
@@ -3944,6 +4010,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_SUB: {
                 switch (op_type->kind)
                 {
@@ -3965,6 +4032,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_MUL: {
                 switch (op_type->kind)
                 {
@@ -3986,6 +4054,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_DIV: {
                 switch (op_type->kind)
                 {
@@ -4007,6 +4076,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_MOD: {
                 switch (op_type->kind)
                 {
@@ -4029,6 +4099,7 @@ static void llvm_codegen_ast(
 
                 break;
             }
+
             case BINOP_BITAND: {
                 switch (op_type->kind)
                 {
@@ -4042,6 +4113,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_BITOR: {
                 switch (op_type->kind)
                 {
@@ -4055,6 +4127,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_BITXOR: {
                 switch (op_type->kind)
                 {
@@ -4068,6 +4141,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_LSHIFT: {
                 switch (lhs_type->kind)
                 {
@@ -4081,6 +4155,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_RSHIFT: {
                 switch (lhs_type->kind)
                 {
@@ -4101,6 +4176,7 @@ static void llvm_codegen_ast(
                 }
                 break;
             }
+
             case BINOP_EQ: {
                 switch (lhs_type->kind)
                 {
@@ -4124,6 +4200,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_NOTEQ: {
                 switch (lhs_type->kind)
                 {
@@ -4147,6 +4224,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_GREATER: {
                 switch (lhs_type->kind)
                 {
@@ -4174,6 +4252,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_GREATEREQ: {
                 switch (lhs_type->kind)
                 {
@@ -4201,6 +4280,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_LESS: {
                 switch (lhs_type->kind)
                 {
@@ -4228,6 +4308,7 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_LESSEQ: {
                 switch (lhs_type->kind)
                 {
@@ -4255,9 +4336,10 @@ static void llvm_codegen_ast(
                     mod->builder, result_value.value, LLVMInt8Type(), "");
                 break;
             }
+
             case BINOP_OR:
             case BINOP_AND: {
-                lhs = load_val(mod, &left_val);
+                assert(lhs);
                 LLVMValueRef lhs_bool =
                     bool_value(l, mod, lhs, lhs_type, is_const);
 
@@ -4283,6 +4365,10 @@ static void llvm_codegen_ast(
                 // Then
                 LLVMPositionBuilderAtEnd(mod->builder, then_bb);
 
+                assert(!rhs);
+                assert(!right_val.value);
+                llvm_codegen_ast(
+                    l, mod, ast->binop.right, is_const, &right_val);
                 rhs = load_val(mod, &right_val);
                 LLVMValueRef rhs_bool =
                     bool_value(l, mod, rhs, rhs_type, is_const);
@@ -4326,6 +4412,8 @@ static void llvm_codegen_ast(
             // For the assignment operators
             if (ast->binop.assign && left_val.is_lvalue)
             {
+                assert(result_value.value);
+                assert(lhs_ptr);
                 LLVMBuildStore(mod->builder, result_value.value, lhs_ptr);
             }
         }

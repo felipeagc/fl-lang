@@ -217,6 +217,8 @@ version "win32" {
     #[link_name="SetCurrentDirectoryW"]
     pub extern func "std" SetCurrentDirectory(lpBuffer: LPCTSTR) -> DWORD;
 
+    pub extern func "std" PathFileExistsW(pszPath: LPCWSTR) -> BOOL;
+
     pub extern func "std" FindFirstFileA(
         lpFileName: LPCSTR,
         lpFindFileData: LPWIN32_FIND_DATAA) -> HANDLE;

@@ -25,15 +25,13 @@ jobs:
     - name: Install LLVM
       shell: cmd
       run: |
-        curl -o C:\llvm.tar.xz https://ziglang.org/deps/llvm%2bclang%2blld-10.0.0-x86_64-windows-msvc-release-mt.tar.xz
-        7z e -y C:\llvm.tar.xz -oC:\
-        7z x -y C:\llvm.tar -oC:\
-        mv llvm+clang+lld-10.0.0-x86_64-windows-msvc-release-mt C:\llvm
+        curl -o llvm.zip "https://f002.backblazeb2.com/file/felipeagc-llvm/llvm.zip"
+        7z x -y llvm.zip
     - name: Build
       shell: cmd
       run: |
         call %VCVARSALL% %VCARCH%
-        nmake
+        nmake LLVM_PATH=.\llvm
     - name: Test
       shell: cmd
       run: |

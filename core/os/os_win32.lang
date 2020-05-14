@@ -5,14 +5,6 @@ import "core:sys/win32"
 import "core:strings"
 import "core:c"
 
-pub typedef Handle win32.HANDLE;
-pub const NULL_HANDLE: Handle = null;
-
-pub typedef Pid struct {
-    hProcess: win32.HANDLE,
-    hThread: win32.HANDLE,
-};
-
 func get_stream_handle(type: win32.DWORD) -> Handle {
     var fd = win32.GetStdHandle(type);
     win32.SetHandleInformation(fd, win32.HANDLE_FLAG_INHERIT, 0);
@@ -56,11 +48,31 @@ pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
     return cast(int)total_bytes_written, Error.Success;
 }
 
-pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, Error) {
+pub func get_cwd_alloc() -> string {
+    var required_size = win32.GetCurrentDirectory(0, null);
+    var buf: *win32.TCHAR = alloc(size_of(win32.TCHAR) * cast(uint)required_size);
+    defer dealloc(buf);
+    win32.GetCurrentDirectory(required_size, buf);
+    return win32.wstr_to_string_alloc(buf, required_size);
+}
+
+pub func chdir(path: string) -> bool {
+    var wpath = win32.to_cwstr_alloc(path);
+    defer dealloc(wpath);
+    return win32.SetCurrentDirectory(wpath) != 0;
+}
+
+pub func file_exists(path: string) -> bool {
+    var wpath = win32.to_cwstr_alloc(path);
+    defer dealloc(wpath);
+    return win32.PathFileExistsW(wpath);
+}
+
+pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, Error) {
     var si: win32.STARTUPINFOA;
     si.cb = cast(u32)size_of(win32.STARTUPINFOA);
-    if (stdout != NULL_HANDLE) si.hStdOutput = stdout;
-    if (stderr != NULL_HANDLE) si.hStdError = stderr;
+    if (attr && attr.stdout != NULL_HANDLE) si.hStdOutput = attr.stdout;
+    if (attr && attr.stderr != NULL_HANDLE) si.hStdError = attr.stderr;
     si.dwFlags |= win32.STARTF_USESTDHANDLES;
 
     var pi: win32.PROCESS_INFORMATION;
@@ -84,6 +96,14 @@ pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, 
     }
     c_cmd_line[pos-1] = 0;
 
+    var dir: win32.LPCSTR;
+    if (attr && attr.dir.len > 0) {
+        dir = strings.to_c_str_alloc(attr.dir);
+    }
+    defer if (attr && attr.dir.len > 0) {
+        dealloc(dir);
+    }
+
     var result = win32.CreateProcessA(
         null, // application name
         c_cmd_line,  // command line
@@ -92,8 +112,9 @@ pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, 
         true, // inherit handles
         0, // creation flags
         null, // environment
-        null, // current dir
-        &si, &pi);
+        dir, // current dir
+        &si,
+        &pi);
 
     if (!result) {
         return Pid{}, Error.SpawnError;

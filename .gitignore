@@ -1,5 +1,5 @@
-/compiler
-/bindgen
+/flc
+/flbindgen
 /examples/ray
 /examples/table
 /game/game

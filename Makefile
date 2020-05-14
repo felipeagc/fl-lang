@@ -2,20 +2,20 @@ CC=cl
 LLVM_PATH=C:\llvm
 CFLAGS=/nologo /I$(LLVM_PATH)\include /DEBUG /Zi
 
-all: compiler.exe
+all: flc.exe
 
 LLVM-C.dll:
 	copy $(LLVM_PATH)\bin\LLVM-C.dll .
 
-compiler.exe: LLVM-C.dll src/*.c src/*.h
-	$(CC) $(CFLAGS) -Fecompiler src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib
+flc.exe: LLVM-C.dll src/*.c src/*.h
+	$(CC) $(CFLAGS) -Feflc src/main.c src/microsoft_craziness.cpp $(LLVM_PATH)/lib/LLVM-C.lib
 	del *.obj
 
-test: .phony compiler.exe
-	.\compiler.exe -r tests/run_tests.lang
+test: .phony flc.exe
+	.\flc.exe -r tests/run_tests.lang
 
-examples: .phony compiler.exe
-	.\compiler.exe build examples
+examples: .phony flc.exe
+	.\flc.exe build examples
 
 clean:
 	del examples\*.exe

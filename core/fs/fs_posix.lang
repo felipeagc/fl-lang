@@ -4,17 +4,6 @@ import "core:sys/posix"
 import "core:c"
 import "core:strings"
 
-pub func get_cwd_alloc() -> string {
-    var buf = posix.getcwd(null, 0);
-    return buf[0:c.strlen(buf)];
-}
-
-pub func chdir(path: string) -> bool {
-    var c_path = strings.to_c_str_alloc(path);
-    defer dealloc(c_path);
-    return posix.chdir(c_path) == 0;
-}
-
 pub func dir_entries_alloc(path: string) -> []string {
     var c_path = strings.to_c_str_alloc(path);
     defer dealloc(c_path);

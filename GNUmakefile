@@ -6,36 +6,32 @@ CC=clang
 
 CORE_FILES=$(wildcard core/*.lang)
 
-all: compiler bindgen examples
+all: flc flbindgen examples
 
-compiler: $(wildcard src/*.c) $(wildcard src/*.h)
+flc: $(wildcard src/*.c) $(wildcard src/*.h)
 	$(CC) $(CFLAGS) $(LLVM_CFLAGS) $(LLVM_LDFLAGS) -lLLVM -o $@ src/main.c
 
-bindgen: $(wildcard src/*.c) $(wildcard src/*.h) $(wildcard src/bindgen/*.c)
+flbindgen: $(wildcard src/*.c) $(wildcard src/*.h) $(wildcard src/bindgen/*.c)
 	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -Wno-unused-function -lclang -o $@ src/bindgen/main.c
 
-.PHONY: clean test examples game
+.PHONY: clean test examples
 
 clean:
-	rm compiler
-	rm bindgen
+	rm flc
+	rm flbindgen
 	rm examples/ray
 	rm examples/table
 
-test: compiler
-	./compiler -r ./tests/run_tests.lang
+test: flc
+	./flc -r ./tests/run_tests.lang
 
 examples:
 	rm -f examples/ray examples/table
-	./compiler build examples
+	./flc build examples
 
-game:
-	rm -f examples/game
-	./compiler build game
-
-bindgen-tests: compiler bindgen
-	./bindgen examples/stb_image.h > examples/stb_image.lang
-	./compiler -r examples/stb_image.lang
-	./bindgen examples/glfw3.h > examples/glfw3.lang
-	./compiler -r examples/glfw3.lang
+bindgen-tests: flc flbindgen
+	./flbindgen examples/stb_image.h > examples/stb_image.lang
+	./flc -r examples/stb_image.lang
+	./flbindgen examples/glfw3.h > examples/glfw3.lang
+	./flc -r examples/glfw3.lang
 

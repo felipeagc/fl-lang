@@ -4565,7 +4565,8 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                         break;
                     }
 
-                    if (field->type != AST_STRUCT_FIELD)
+                    if (field->type != AST_STRUCT_FIELD &&
+                        field->type != AST_STRUCT_FIELD_ALIAS)
                     {
                         compile_error(
                             a->compiler,
@@ -4575,11 +4576,35 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                         continue;
                     }
 
-                    analyze_ast(
-                        a,
-                        &ast->compound.values.ptr[i],
-                        ast->type_info->structure.fields
-                            .ptr[field->struct_field.index]);
+                    if (field->type == AST_STRUCT_FIELD)
+                    {
+                        analyze_ast(
+                            a,
+                            &ast->compound.values.ptr[i],
+                            ast->type_info->structure.fields
+                                .ptr[field->struct_field.index]);
+                    }
+                    else if (field->type == AST_STRUCT_FIELD_ALIAS)
+                    {
+                        Ast *left_field = get_symbol(
+                            ast->type_info->scope,
+                            field->struct_field_alias.left_name,
+                            ast->loc.file);
+
+                        Ast *right_field = get_symbol(
+                            left_field->type_info->scope,
+                            field->struct_field_alias.right_name,
+                            ast->loc.file);
+
+                        analyze_ast(
+                            a,
+                            &ast->compound.values.ptr[i],
+                            right_field->type_info);
+                    }
+                    else
+                    {
+                        assert(0);
+                    }
                 }
             }
             else

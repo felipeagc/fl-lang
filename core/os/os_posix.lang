@@ -7,11 +7,6 @@ import "core:c"
 
 extern var environ: **char;
 
-pub typedef Handle i32;
-pub const NULL_HANDLE: Handle = 0;
-
-pub typedef Pid Handle;
-
 #[inline] pub func get_stdin() -> Handle { return 0; }
 #[inline] pub func get_stdout() -> Handle { return 1; }
 #[inline] pub func get_stderr() -> Handle { return 2; }
@@ -25,10 +20,40 @@ pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
     return bytes_written, Error.Success;
 }
 
-pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, Error) {
+pub func get_cwd_alloc() -> string {
+    var buf = posix.getcwd(null, 0);
+    return buf[0:c.strlen(buf)];
+}
+
+pub func chdir(path: string) -> bool {
+    var c_path = strings.to_c_str_alloc(path);
+    defer dealloc(c_path);
+    return posix.chdir(c_path) == 0;
+}
+
+pub func file_exists(path: string) -> bool {
+    var c_path = strings.to_c_str_alloc(path);
+    defer dealloc(c_path);
+    return (posix.access(c_path, posix.F_OK) != -1);
+}
+
+pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, Error) {
     if (args.len < 1) {
         return NULL_HANDLE, Error.InvalidSpawnArgs;
     }
+
+    var old_dir = get_cwd_alloc();
+    defer delete(&old_dir);
+
+    if (attr && attr.dir.len > 0) {
+        chdir(attr.dir);
+    }
+    defer if (attr && attr.dir.len > 0) {
+        chdir(old_dir);
+    }
+
+    var actual_name = strings.to_c_str_alloc(name);
+    defer dealloc(actual_name);
 
     var actual_args: **char = alloc(size_of(*char) * (args.len + 1));
     defer dealloc(actual_args);
@@ -46,15 +71,15 @@ pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, 
     posix.posix_spawn_file_actions_init(&spawn_actions);
     defer posix.posix_spawn_file_actions_destroy(&spawn_actions);
 
-    if (stdout != NULL_HANDLE) {
-        posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+    if (attr && attr.stdout != NULL_HANDLE) {
+        posix.posix_spawn_file_actions_adddup2(&spawn_actions, attr.stdout, get_stdout());
     } else {
         posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stdout(),
             c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
     }
 
-    if (stderr != NULL_HANDLE) {
-        posix.posix_spawn_file_actions_adddup2(&spawn_actions, stdout, get_stdout());
+    if (attr && attr.stderr != NULL_HANDLE) {
+        posix.posix_spawn_file_actions_adddup2(&spawn_actions, attr.stderr, get_stderr());
     } else {
         posix.posix_spawn_file_actions_addopen(&spawn_actions, get_stderr(),
             c"/dev/null", posix.O_WRONLY | posix.O_CREAT | posix.O_TRUNC, 0644);
@@ -63,7 +88,7 @@ pub func spawn_process(args: []string, stdout: Handle, stderr: Handle) -> (Pid, 
     var pid: Handle;
     var result = posix.posix_spawnp(
         &pid,
-        actual_args[0],
+        actual_name,
         &spawn_actions,
         null,
         actual_args,
