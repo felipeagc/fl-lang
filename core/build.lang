@@ -40,6 +40,11 @@ pub typedef ScriptTarget struct {
 };
 
 pub func add_script_target(builder: *Workspace, target: *ScriptTarget) {
+    var new_commands = make([][]string, target.commands.len);
+    for (var i: uint = 0; i < new_commands.len; i += 1) {
+        new_commands[i] = target.commands[i];
+    }
+    target.commands = new_commands;
     append(&builder.targets, Target{
         type = TargetType.Script,
         script_target = target.*,
