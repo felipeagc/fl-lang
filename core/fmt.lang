@@ -21,14 +21,14 @@ pub func eprint(str: string) {
 pub func printf(fmt: string, args: ...any) {
     var buf: [4096]char = void;
     var str = buf[0:0];
-    sprintf(fmt, &str, ...args);
+    sprintf(&str, fmt, ...args);
     print(str);
 }
 
 pub func eprintf(fmt: string, args: ...any) {
     var buf: [4096]char = void;
     var str = buf[0:0];
-    sprintf(fmt, &str, ...args);
+    sprintf(&str, fmt, ...args);
     eprint(str);
 }
 
@@ -104,7 +104,7 @@ func unsigned_itoa(into: *string, num: u64, base: u64) {
     }
 }
 
-pub func sprintf(fmt: string, into: *string, args: ...any) {
+pub func sprintf(into: *string, fmt: string, args: ...any) {
     var argi: uint = 0;
 
     for (ch in fmt) {

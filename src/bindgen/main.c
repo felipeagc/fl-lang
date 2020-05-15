@@ -17,10 +17,21 @@
 #include "../string_builder.c"
 #include "../filesystem.c"
 
+typedef struct CliArgs
+{
+    ArrayOfCharPtr prefixes;
+    char *module_name;
+} CliArgs;
+
 static size_t g_indent = 0;
 static HashMap g_symbol_map = {0};
 static ArrayOfCharPtr g_to_parse = {0};
 static char *g_dir;
+static size_t g_struct_member_index;
+static CliArgs g_args = {0};
+static StringBuilder types_sb;
+static StringBuilder consts_sb;
+static StringBuilder functions_sb;
 
 #define PRINT_INDENT(sb)                                                       \
     for (size_t i = 0; i < g_indent; ++i)                                      \
@@ -44,6 +55,36 @@ static void print_usage(int argc, char **argv)
     }
 }
 
+static char *get_prefix(String name)
+{
+    for (char **prefix = g_args.prefixes.ptr;
+         prefix != g_args.prefixes.ptr + g_args.prefixes.len;
+         ++prefix)
+    {
+        if (strncmp(*prefix, name.ptr, strlen(*prefix)) == 0)
+        {
+            return *prefix;
+        }
+    }
+
+    return NULL;
+}
+
+static void print_name(StringBuilder *sb, String name)
+{
+    char *prefix = get_prefix(name);
+    if (!prefix)
+    {
+        sb_append(sb, name);
+        return;
+    }
+
+    size_t prefix_len = strlen(prefix);
+    sb_append(
+        sb,
+        (String){.ptr = name.ptr + prefix_len, .len = name.len - prefix_len});
+}
+
 static void print_ident(StringBuilder *sb, String ident)
 {
     sb_append(sb, ident);
@@ -58,7 +99,9 @@ static void print_ident(StringBuilder *sb, String ident)
         sb_append(sb, STR("_"));
     else if (string_equals(ident, STR("var")))
         sb_append(sb, STR("_"));
-    else if (string_equals(ident, STR("dynamic")))
+    else if (string_equals(ident, STR("dyn")))
+        sb_append(sb, STR("_"));
+    else if (string_equals(ident, STR("module")))
         sb_append(sb, STR("_"));
     else if (string_equals(ident, STR("byte")))
         sb_append(sb, STR("_"));
@@ -89,6 +132,11 @@ static enum CXChildVisitResult
 struct_field_visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
 {
     StringBuilder *sb = (StringBuilder *)client_data;
+    if (g_struct_member_index == 0)
+    {
+        sb_append(sb, STR("\n"));
+    }
+    g_struct_member_index++;
 
     switch (clang_getCursorKind(cursor))
     {
@@ -200,17 +248,18 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
         {
             if (cursor_kind == CXCursor_StructDecl)
             {
-                sb_append(sb, STR("struct {\n"));
+                sb_append(sb, STR("struct {"));
             }
             else if (cursor_kind == CXCursor_UnionDecl)
             {
-                sb_append(sb, STR("union {\n"));
+                sb_append(sb, STR("union {"));
             }
             else
             {
                 assert(0);
             }
 
+            g_struct_member_index = 0;
             g_indent += 4;
             clang_visitChildren(decl, struct_field_visitor, sb);
             g_indent -= 4;
@@ -222,11 +271,11 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
         {
             if (!hash_get(&g_symbol_map, struct_name, NULL))
             {
-                sb_append(sb, STR("struct {}"));
+                sb_append(sb, STR("struct{}"));
             }
             else
             {
-                sb_append(sb, struct_name);
+                print_name(sb, struct_name);
             }
         }
 
@@ -311,7 +360,7 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
         else if (string_equals(type_name, STR("FILE")))
             sb_append(sb, STR("void"));
         else
-            sb_append(sb, type_name);
+            print_name(sb, type_name);
 
         break;
     }
@@ -360,8 +409,6 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
 static enum CXChildVisitResult
 visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
 {
-    StringBuilder *sb = (StringBuilder *)client_data;
-
     CXSourceLocation loc = clang_getCursorLocation(cursor);
     CXFile file = {0};
     clang_getFileLocation(loc, &file, NULL, NULL, NULL);
@@ -387,6 +434,8 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     switch (clang_getCursorKind(cursor))
     {
     case CXCursor_TypedefDecl: {
+        StringBuilder *sb = &types_sb;
+
         char *typedef_name_c =
             (char *)clang_getCString(clang_getCursorSpelling(cursor));
         String typedef_name = CSTR(typedef_name_c);
@@ -394,7 +443,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (hash_get(&g_symbol_map, typedef_name, NULL)) break;
 
         sb_append(sb, STR("pub typedef "));
-        sb_append(sb, typedef_name);
+        print_name(sb, typedef_name);
         sb_append(sb, STR(" "));
         print_type(sb, clang_getTypedefDeclUnderlyingType(cursor), true, false);
         sb_append(sb, STR(";\n"));
@@ -405,6 +454,8 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     }
 
     case CXCursor_StructDecl: {
+        StringBuilder *sb = &types_sb;
+
         char *struct_name_c =
             (char *)clang_getCString(clang_getCursorSpelling(cursor));
         String struct_name = CSTR(struct_name_c);
@@ -417,7 +468,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (hash_get(&g_symbol_map, struct_name, NULL)) break;
 
         sb_append(sb, STR("pub typedef "));
-        sb_append(sb, struct_name);
+        print_name(sb, struct_name);
         sb_append(sb, STR(" "));
         print_type(sb, clang_getCursorType(cursor), false, false);
         sb_append(sb, STR(";\n"));
@@ -428,6 +479,8 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     }
 
     case CXCursor_UnionDecl: {
+        StringBuilder *sb = &types_sb;
+
         char *struct_name_c =
             (char *)clang_getCString(clang_getCursorSpelling(cursor));
         String struct_name = CSTR(struct_name_c);
@@ -440,7 +493,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (hash_get(&g_symbol_map, struct_name, NULL)) break;
 
         sb_append(sb, STR("pub typedef "));
-        sb_append(sb, struct_name);
+        print_name(sb, struct_name);
         sb_append(sb, STR(" "));
         print_type(sb, clang_getCursorType(cursor), false, false);
         sb_append(sb, STR(";\n"));
@@ -450,6 +503,8 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     }
 
     case CXCursor_FunctionDecl: {
+        StringBuilder *sb = &functions_sb;
+
         cursor = clang_getCanonicalCursor(cursor);
 
         char *fun_name_c =
@@ -459,8 +514,15 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         if (hash_get(&g_symbol_map, fun_name, NULL)) break;
         hash_set(&g_symbol_map, fun_name, NULL);
 
-        sb_append(sb, STR("pub extern func "));
-        sb_append(sb, fun_name);
+        if (get_prefix(fun_name) != NULL)
+        {
+            sb_append(sb, STR("#[link_name=\""));
+            sb_append(sb, fun_name);
+            sb_append(sb, STR("\"]\n"));
+        }
+
+        sb_append(sb, STR("pub extern func \"c\" "));
+        print_name(sb, fun_name);
         sb_append(sb, STR("("));
 
         int num_args = clang_Cursor_getNumArguments(cursor);
@@ -474,7 +536,14 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
             CXCursor arg = clang_Cursor_getArgument(cursor, (unsigned)i);
             char *arg_name =
                 (char *)clang_getCString(clang_getCursorSpelling(arg));
-            print_ident(sb, CSTR(arg_name));
+            if (strlen(arg_name) > 0)
+            {
+                print_ident(sb, CSTR(arg_name));
+            }
+            else
+            {
+                sb_append(sb, STR("_"));
+            }
 
             sb_append(sb, STR(": "));
             print_type(sb, clang_getCursorType(arg), true, true);
@@ -499,10 +568,12 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     }
 
     case CXCursor_EnumConstantDecl: {
+        StringBuilder *sb = &consts_sb;
+
         sb_append(sb, STR("pub const "));
-        sb_append(
-            sb,
-            CSTR((char *)clang_getCString(clang_getCursorSpelling(cursor))));
+        String enum_field_name =
+            CSTR((char *)clang_getCString(clang_getCursorSpelling(cursor)));
+        print_name(sb, enum_field_name);
         sb_append(sb, STR(": "));
         print_type(sb, clang_getCursorType(cursor), true, false);
         sb_sprintf(sb, " = %lld", clang_getEnumConstantDeclValue(cursor));
@@ -516,15 +587,34 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
     return CXChildVisit_Continue;
 }
 
+static void parse_cli_args(int argc, char **argv)
+{
+    memset(&g_args, 0, sizeof(g_args));
+    g_args.module_name = "main";
+
+    for (int i = 1; i < argc; ++i)
+    {
+        if (strncmp("-p=", argv[i], 3) == 0)
+        {
+            array_push(&g_args.prefixes, &argv[i][3]);
+        }
+        if (strncmp("-m=", argv[i], 3) == 0)
+        {
+            g_args.module_name = &argv[i][3];
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
+    parse_cli_args(argc, argv);
+
     if (argc <= 1)
     {
         print_usage(argc, argv);
         exit(EXIT_FAILURE);
     }
-
-    if (argc == 2)
+    else
     {
         array_push(&g_to_parse, argv[1]);
         g_dir = get_path_dir(argv[1]);
@@ -535,17 +625,23 @@ int main(int argc, char **argv)
 
             BumpAlloc bump;
             bump_init(&bump, 1 << 16);
+
             StringBuilder sb;
             sb_init(&sb);
+
+            sb_init(&types_sb);
+            sb_init(&consts_sb);
+            sb_init(&functions_sb);
             hash_init(&g_symbol_map, 64);
-            const char *args[] = {"-x", "c++"};
+
+            const char *clang_args[] = {"-x", "c++"};
 
             CXIndex index = clang_createIndex(0, 0);
             CXTranslationUnit unit = clang_parseTranslationUnit(
                 index,
                 path,
-                args,
-                sizeof(args) / sizeof(args[0]),
+                clang_args,
+                sizeof(clang_args) / sizeof(clang_args[0]),
                 NULL,
                 0,
                 CXTranslationUnit_SkipFunctionBodies |
@@ -557,8 +653,18 @@ int main(int argc, char **argv)
 
             if (unit)
             {
+                sb_append(&sb, STR("module "));
+                sb_append(&sb, CSTR(g_args.module_name));
+                sb_append(&sb, STR("\n\n"));
+
                 CXCursor cursor = clang_getTranslationUnitCursor(unit);
                 clang_visitChildren(cursor, visitor, &sb);
+
+                sb_append(&sb, sb_build(&types_sb, &bump));
+                sb_append(&sb, STR("\n"));
+                sb_append(&sb, sb_build(&consts_sb, &bump));
+                sb_append(&sb, STR("\n"));
+                sb_append(&sb, sb_build(&functions_sb, &bump));
 
                 String output = sb_build(&sb, &bump);
                 fprintf(stdout, "%.*s\n", PRINT_STR(output));

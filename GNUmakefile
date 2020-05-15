@@ -6,6 +6,8 @@ CC=clang
 
 CORE_FILES=$(wildcard core/*.lang)
 
+.PHONY: clean test examples
+
 all: flc flbindgen examples
 
 flc: $(wildcard src/*.c) $(wildcard src/*.h)
@@ -13,8 +15,6 @@ flc: $(wildcard src/*.c) $(wildcard src/*.h)
 
 flbindgen: $(wildcard src/*.c) $(wildcard src/*.h) $(wildcard src/bindgen/*.c)
 	$(CC) $(CFLAGS) $(LLVM_CFLAGS) -Wno-unused-function -lclang -o $@ src/bindgen/main.c
-
-.PHONY: clean test examples
 
 clean:
 	rm flc

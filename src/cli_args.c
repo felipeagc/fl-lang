@@ -37,7 +37,7 @@ static void parse_args(Arguments *args, int argc, char **argv)
             args->abs_build_dir = get_absolute_path(argv[2]);
             if (!args->abs_build_dir)
             {
-                fprintf(stderr, "invalid build dir\n");
+                fprintf(stderr, "Invalid build dir: '%s'\n", argv[2]);
                 exit(1);
             }
         }

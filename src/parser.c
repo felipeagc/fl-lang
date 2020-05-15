@@ -1493,10 +1493,14 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
             if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
 
             Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-            if (!ident_tok)
+            if (!ident_tok){
                 res = false;
+                break;
+            }
             else
+            {
                 ast->decl.name = ident_tok->str;
+            }
 
             ast->decl.type_expr = NULL;
             if (parser_peek(p, 0)->type == TOKEN_COLON)

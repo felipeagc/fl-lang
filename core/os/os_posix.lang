@@ -2,14 +2,21 @@ module os
 
 import "core:os/os_types"
 import "core:sys/posix"
-import "core:strings"
 import "core:c"
 
 extern var environ: **char;
 
+func to_c_str_alloc(str: string) -> *char {
+    var cstr: *char = alloc(str.len + 1);
+    c.strncpy(cstr, str.ptr, str.len);
+    cstr[str.len] = 0;
+    return cstr;
+}
+
 #[inline] pub func get_stdin() -> Handle { return 0; }
 #[inline] pub func get_stdout() -> Handle { return 1; }
 #[inline] pub func get_stderr() -> Handle { return 2; }
+
 
 pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
     var bytes_written: int = cast(int)posix.write(stream, buf.ptr, buf.len);
@@ -26,13 +33,13 @@ pub func get_cwd_alloc() -> string {
 }
 
 pub func chdir(path: string) -> bool {
-    var c_path = strings.to_c_str_alloc(path);
+    var c_path = to_c_str_alloc(path);
     defer dealloc(c_path);
     return posix.chdir(c_path) == 0;
 }
 
 pub func file_exists(path: string) -> bool {
-    var c_path = strings.to_c_str_alloc(path);
+    var c_path = to_c_str_alloc(path);
     defer dealloc(c_path);
     return (posix.access(c_path, posix.F_OK) != -1);
 }
@@ -52,14 +59,14 @@ pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, E
         chdir(old_dir);
     }
 
-    var actual_name = strings.to_c_str_alloc(name);
+    var actual_name = to_c_str_alloc(name);
     defer dealloc(actual_name);
 
     var actual_args: **char = alloc(size_of(*char) * (args.len + 1));
     defer dealloc(actual_args);
 
     for (var i: uint = 0; i < args.len; i += 1) {
-        actual_args[i] = strings.to_c_str_alloc(args[i]);
+        actual_args[i] = to_c_str_alloc(args[i]);
     }
     defer for (var i: uint = 0; i < args.len; i += 1) {
         dealloc(actual_args[i]);
@@ -120,7 +127,7 @@ pub func wait_process(process: Pid) -> (i32, Error) {
 
 pub func last_write_time(path: string) -> (TimeSpec, Error) {
     var stat: posix.stat_t;
-    c_path := strings.to_c_str_alloc(path);
+    var c_path = to_c_str_alloc(path);
     defer dealloc(c_path);
 
     var result = posix.stat(c_path, &stat);

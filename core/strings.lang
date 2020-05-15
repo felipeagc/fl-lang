@@ -1,6 +1,7 @@
 module strings
 
 import "core:c"
+import "core:fmt"
 
 pub func to_c_str_alloc(str: string) -> *char {
     var cstr: *char = alloc(str.len + 1);
@@ -25,4 +26,74 @@ pub func ends_with(str: string, suffix: string) -> bool {
     }
 
     return true;
+}
+
+pub typedef Builder struct {
+    cap: uint,
+    buf: string,
+    scratch: string,
+};
+
+func builder_grow(sb: *Builder) {
+    if (sb.cap == 0) {
+        sb.cap = 4096;
+    } else {
+        sb.cap *= 2;
+    }
+    sb.buf.ptr = realloc(sb.buf.ptr, sb.cap);
+    sb.scratch.ptr = realloc(sb.scratch.ptr, sb.cap);
+}
+
+pub func builder_delete(sb: *Builder) {
+    delete(&sb.buf);
+    delete(&sb.scratch);
+}
+
+pub func builder_reset(sb: *Builder) {
+    sb.buf.len = 0;
+}
+
+pub func builder_build(sb: *Builder) -> string {
+    var str = make(string, sb.buf.len);
+    c.strncpy(str.ptr, sb.buf.ptr, sb.buf.len);
+    return str;
+}
+
+pub func builder_append_string(sb: *Builder, str: string) {
+    while (str.len + sb.buf.len >= sb.cap) {
+        builder_grow(sb);
+    }
+
+    for (c in str) {
+        sb.buf[sb.buf.len] = c;
+        sb.buf.len += 1;
+    }
+}
+
+pub func builder_append_char(sb: *Builder, c: char) {
+    while (1 + sb.buf.len >= sb.cap) {
+        builder_grow(sb);
+    }
+
+    sb.buf[sb.buf.len] = c;
+    sb.buf.len += 1;
+}
+
+pub func builder_append_fmt(sb: *Builder, format: string, args: ...any) {
+    while (1 + sb.buf.len >= sb.cap) {
+        builder_grow(sb);
+    }
+
+    sb.scratch.len = 0;
+    fmt.sprintf(&sb.scratch, format, ...args);
+
+    while (sb.scratch.len + sb.buf.len >= sb.cap) {
+        builder_grow(sb);
+    }
+
+    for (c in sb.scratch) {
+        sb.buf[sb.buf.len] = c;
+        sb.buf.len += 1;
+    }
+    sb.scratch.len = 0;
 }

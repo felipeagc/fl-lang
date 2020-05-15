@@ -34,7 +34,7 @@ static inline void sb_grow(StringBuilder *sb)
 
 static inline void sb_append_char(StringBuilder *sb, char c)
 {
-    if (sb->len + 1 >= sb->cap)
+    while (sb->len + 1 >= sb->cap)
     {
         sb_grow(sb);
     }
@@ -43,7 +43,7 @@ static inline void sb_append_char(StringBuilder *sb, char c)
 
 static inline void sb_append(StringBuilder *sb, String str)
 {
-    if (str.len + sb->len >= sb->cap)
+    while (str.len + sb->len >= sb->cap)
     {
         sb_grow(sb);
     }
