@@ -15,9 +15,9 @@ Static assert
 Explicit overloading
 
 TODO:
-- compiler API
-- build scripts
-
+- assert
+- copy intrinsic
+- fix passing structs by value
 - aligned type
 
 Small things:

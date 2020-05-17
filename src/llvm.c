@@ -23,6 +23,8 @@ enum {
 
 typedef ARRAY_OF(LLVMBasicBlockRef) ArrayOfBasicBlock;
 typedef ARRAY_OF(LLVMMetadataRef) ArrayOfMetadataRef;
+typedef ARRAY_OF(LLVMTypeRef) ArrayOfTypeRef;
+typedef ARRAY_OF(LLVMValueRef) ArrayOfValueRef;
 
 typedef struct LLContext
 {
@@ -169,24 +171,26 @@ static LLVMTypeRef llvm_type(LLContext *l, TypeInfo *type)
 
     case TYPE_PROC: {
         size_t param_count = type->proc.params.len;
-        LLVMTypeRef *param_types =
-            bump_alloc(&l->compiler->bump, sizeof(LLVMTypeRef) * param_count);
+
+        ArrayOfTypeInfoPtr abi_types = {0};
         for (size_t i = 0; i < param_count; i++)
         {
             TypeInfo *param_type = type->proc.params.ptr[i];
-            param_types[i] = llvm_type(l, param_type);
-            if (is_type_compound(param_type))
-            {
-                param_types[i] = LLVMPointerType(param_types[i], 0);
-            }
+            get_abi_param_types(l->compiler, param_type, &abi_types);
+        }
+
+        ArrayOfTypeRef param_types = {0};
+        for (size_t i = 0; i < abi_types.len; i++)
+        {
+            array_push(&param_types, llvm_type(l, abi_types.ptr[i]));
         }
 
         LLVMTypeRef return_type = llvm_type(l, type->proc.return_type);
 
         type->ref = LLVMFunctionType(
             return_type,
-            param_types,
-            param_count,
+            param_types.ptr,
+            param_types.len,
             (type->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS);
         break;
     }
@@ -400,19 +404,7 @@ static LLVMMetadataRef llvm_debug_type(LLContext *l, TypeInfo *type)
         for (size_t i = 0; i < param_count; i++)
         {
             TypeInfo *param_type = type->proc.params.ptr[i];
-            String pretty_name = get_type_pretty_name(l->compiler, param_type);
             param_types[i] = llvm_debug_type(l, param_type);
-            if (is_type_compound(param_type))
-            {
-                param_types[i] = LLVMDIBuilderCreatePointerType(
-                    l->mod.di_builder,
-                    param_types[i],
-                    l->compiler->uint_type->integer.num_bits,
-                    align_of_type(l->compiler, l->compiler->uint_type) * 8,
-                    0,
-                    pretty_name.ptr,
-                    pretty_name.len);
-            }
         }
 
         assert(type->file);
@@ -1306,36 +1298,6 @@ static void llvm_codegen_ast(
         assert(ast->type_info->kind == TYPE_POINTER);
         assert(ast->value);
 
-        if (ast->flags & AST_FLAG_FUNCTION_HAS_BODY)
-        {
-            size_t param_count = ast->proc.params.len;
-            for (size_t i = 0; i < param_count; i++)
-            {
-                Ast *param = &ast->proc.params.ptr[i];
-                param->proc_param.value.is_lvalue = false;
-
-                TypeInfo *param_type = param->proc_param.type_expr->as_type;
-                if (is_type_compound(param_type))
-                {
-                    param->proc_param.value.is_lvalue = true;
-                }
-                param->proc_param.value.value = LLVMGetParam(ast->value, i);
-
-                char *param_name =
-                    bump_c_str(&l->compiler->bump, param->proc_param.name);
-                LLVMSetValueName(param->proc_param.value.value, param_name);
-
-                if (param->flags & AST_FLAG_USING)
-                {
-                    Scope *expr_scope = get_expr_scope(
-                        l->compiler, *array_last(&l->scope_stack), param);
-                    assert(expr_scope);
-
-                    expr_scope->value = param->proc_param.value;
-                }
-            }
-        }
-
         if (out_value)
         {
             out_value->is_lvalue = false;
@@ -1583,9 +1545,7 @@ static void llvm_codegen_ast(
         llvm_codegen_ast(l, mod, ast->proc_call.expr, false, &function_value);
         LLVMValueRef fun = load_val(mod, &function_value);
 
-        unsigned param_count = (unsigned)(ast->proc_call.params.len);
-        LLVMValueRef *params =
-            bump_alloc(&l->compiler->bump, sizeof(LLVMValueRef) * param_count);
+        ArrayOfValueRef params = {0};
 
         TypeInfo *proc_ptr_ty = ast->proc_call.expr->type_info;
         TypeInfo *proc_ty = proc_ptr_ty->ptr.sub;
@@ -1593,7 +1553,7 @@ static void llvm_codegen_ast(
         assert(l->operand_scope_stack.len > 0);
 
         array_push(&l->scope_stack, *array_last(&l->operand_scope_stack));
-        for (size_t i = 0; i < param_count; i++)
+        for (size_t i = 0; i < ast->proc_call.params.len; i++)
         {
             TypeInfo *param_expected_type = NULL;
             if (i < (proc_ty->proc.params.len))
@@ -1603,41 +1563,100 @@ static void llvm_codegen_ast(
 
             TypeInfo *param_type = ast->proc_call.params.ptr[i].type_info;
 
+            ArrayOfTypeInfoPtr abi_types = {0};
+            get_abi_param_types(l->compiler, param_type, &abi_types);
+
             AstValue param_value = {0};
             llvm_codegen_ast(
                 l, mod, &ast->proc_call.params.ptr[i], false, &param_value);
-            if (is_type_compound(param_type))
+
+            if (abi_types.len == 1 && abi_types.ptr[0] == param_type)
             {
-                params[i] = param_value.value;
+                // Regular plain parameter
+
+                LLVMValueRef loaded_param_val = load_val(mod, &param_value);
+
+                if (param_expected_type)
+                {
+                    loaded_param_val = autocast_value(
+                        l,
+                        mod,
+                        param_type,
+                        param_expected_type,
+                        loaded_param_val);
+                }
+                else if (proc_ty->flags & TYPE_FLAG_C_VARARGS)
+                {
+                    // Promote float to double when passed as variadic argument
+                    // as per section 6.5.2.2 of the C standard
+                    if (param_type->kind == TYPE_FLOAT &&
+                        param_type->floating.num_bits == 32)
+                    {
+                        loaded_param_val = LLVMBuildFPExt(
+                            mod->builder,
+                            loaded_param_val,
+                            LLVMDoubleType(),
+                            "");
+                    }
+                }
+
+                array_push(&params, loaded_param_val);
+            }
+            else if (
+                abi_types.len == 1 && param_type != abi_types.ptr[0] &&
+                abi_types.ptr[0]->kind == TYPE_POINTER)
+            {
+                // Pass struct by pointer
+                LLVMValueRef struct_ptr = param_value.value;
                 if (!param_value.is_lvalue)
                 {
-                    params[i] = build_alloca(l, mod, param_type);
-                    LLVMBuildStore(mod->builder, param_value.value, params[i]);
+                    struct_ptr = build_alloca(l, mod, param_type);
+                    LLVMBuildStore(
+                        mod->builder, param_value.value, params.ptr[i]);
                 }
+                array_push(&params, struct_ptr);
             }
             else
             {
-                params[i] = load_val(mod, &param_value);
-            }
-
-            if (param_expected_type)
-            {
-                params[i] = autocast_value(
-                    l, mod, param_type, param_expected_type, params[i]);
-            }
-            else if (
-                (proc_ty->flags & TYPE_FLAG_C_VARARGS) == TYPE_FLAG_C_VARARGS)
-            {
-                // Promote float to double when passed as variadic argument
-                // as per section 6.5.2.2 of the C standard
-                if (param_type->kind == TYPE_FLOAT &&
-                    param_type->floating.num_bits == 32)
+                // Split struct into parts
+                LLVMValueRef struct_ptr = param_value.value;
+                if (!param_value.is_lvalue)
                 {
-                    params[i] = LLVMBuildFPExt(
-                        mod->builder, params[i], LLVMDoubleType(), "");
+                    struct_ptr = build_alloca(l, mod, param_type);
+                    LLVMBuildStore(
+                        mod->builder, param_value.value, params.ptr[i]);
+                }
+
+                LLVMTypeRef *field_types = bump_alloc(
+                    &l->compiler->bump, sizeof(LLVMTypeRef) * abi_types.len);
+                for (size_t j = 0; j < abi_types.len; ++j)
+                {
+                    field_types[j] = llvm_type(l, abi_types.ptr[j]);
+                }
+                LLVMTypeRef abi_struct_ty =
+                    LLVMStructType(field_types, abi_types.len, false);
+
+                LLVMValueRef abi_struct_ptr = LLVMBuildPointerCast(
+                    mod->builder,
+                    struct_ptr,
+                    LLVMPointerType(abi_struct_ty, 0),
+                    "");
+
+                for (size_t j = 0; j < abi_types.len; ++j)
+                {
+                    LLVMValueRef indices[2] = {
+                        LLVMConstInt(LLVMInt32Type(), 0, false),
+                        LLVMConstInt(LLVMInt32Type(), j, false),
+                    };
+
+                    LLVMValueRef elem_ptr = LLVMBuildGEP(
+                        mod->builder, abi_struct_ptr, indices, 2, "");
+
+                    LLVMValueRef abi_param_val =
+                        LLVMBuildLoad(mod->builder, elem_ptr, "");
+                    array_push(&params, abi_param_val);
                 }
             }
-            assert(params[i]);
         }
         array_pop(&l->scope_stack);
 
@@ -1655,7 +1674,7 @@ static void llvm_codegen_ast(
 
         AstValue result_value = {0};
         result_value.value =
-            LLVMBuildCall(mod->builder, fun, params, param_count, "");
+            LLVMBuildCall(mod->builder, fun, params.ptr, params.len, "");
         if (is_type_compound(ast->type_info))
         {
             result_value.is_lvalue = true;
@@ -5233,9 +5252,95 @@ static void llvm_codegen_proc_stmts(LLContext *l, LLModule *mod, Ast *ast)
     LLVMBasicBlockRef prev_pos = LLVMGetInsertBlock(mod->builder);
 
     LLVMPositionBuilderAtEnd(mod->builder, alloca_block);
+
+    size_t param_count = ast->proc.params.len;
+    for (size_t i = 0; i < param_count; i++)
+    {
+        Ast *param = &ast->proc.params.ptr[i];
+        TypeInfo *param_type = param->proc_param.type_expr->as_type;
+
+        param->proc_param.value.is_lvalue = true;
+        param->proc_param.value.value =
+            LLVMBuildAlloca(mod->builder, llvm_type(l, param_type), "");
+
+        if (param->flags & AST_FLAG_USING)
+        {
+            Scope *expr_scope = get_expr_scope(
+                l->compiler, *array_last(&l->scope_stack), param);
+            assert(expr_scope);
+
+            expr_scope->value = param->proc_param.value;
+        }
+    }
+
     LLVMBuildBr(mod->builder, entry);
 
     LLVMPositionBuilderAtEnd(mod->builder, entry);
+
+    size_t param_index = 0;
+    for (size_t i = 0; i < param_count; i++)
+    {
+        Ast *param = &ast->proc.params.ptr[i];
+        TypeInfo *param_type = param->proc_param.type_expr->as_type;
+        ArrayOfTypeInfoPtr abi_types = {0};
+        get_abi_param_types(l->compiler, param_type, &abi_types);
+
+        if (abi_types.len == 1 && abi_types.ptr[0] == param_type)
+        {
+            // Regular plain parameter
+            LLVMValueRef param_value = LLVMGetParam(ast->value, param_index);
+            LLVMBuildStore(
+                mod->builder, param_value, param->proc_param.value.value);
+        }
+        else if (
+            abi_types.len == 1 && param_type != abi_types.ptr[0] &&
+            abi_types.ptr[0]->kind == TYPE_POINTER)
+        {
+            // Pass struct by pointer
+            LLVMValueRef param_value = LLVMGetParam(ast->value, param_index);
+            param_value = LLVMBuildLoad(mod->builder, param_value, "");
+            LLVMBuildStore(
+                mod->builder, param_value, param->proc_param.value.value);
+        }
+        else
+        {
+            // TODO
+            // Split struct into parts
+
+            LLVMTypeRef *field_types = bump_alloc(
+                &l->compiler->bump, sizeof(LLVMTypeRef) * abi_types.len);
+            for (size_t j = 0; j < abi_types.len; ++j)
+            {
+                field_types[j] = llvm_type(l, abi_types.ptr[j]);
+            }
+            LLVMTypeRef abi_struct_ty =
+                LLVMStructType(field_types, abi_types.len, false);
+
+            LLVMValueRef abi_struct_ptr = LLVMBuildPointerCast(
+                mod->builder,
+                param->proc_param.value.value,
+                LLVMPointerType(abi_struct_ty, 0),
+                "");
+
+            for (size_t j = 0; j < abi_types.len; ++j)
+            {
+                LLVMValueRef indices[2] = {
+                    LLVMConstInt(LLVMInt32Type(), 0, false),
+                    LLVMConstInt(LLVMInt32Type(), j, false),
+                };
+
+                LLVMValueRef elem_ptr =
+                    LLVMBuildGEP(mod->builder, abi_struct_ptr, indices, 2, "");
+
+                LLVMBuildStore(
+                    mod->builder,
+                    LLVMGetParam(ast->value, param_index + j),
+                    elem_ptr);
+            }
+        }
+
+        param_index += abi_types.len;
+    }
 
     array_push(&l->scope_stack, ast->scope);
     array_push(&l->operand_scope_stack, ast->scope);

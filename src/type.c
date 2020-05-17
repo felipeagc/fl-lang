@@ -769,7 +769,12 @@ static uint32_t align_of_type(Compiler *compiler, TypeInfo *type)
     case TYPE_DYNAMIC_ARRAY: align = PTR_SIZE; break;
 
     case TYPE_VECTOR:
-        align = align_of_type(compiler, type->array.sub) * type->array.size;
+        align = align_of_type(compiler, type->array.sub);
+        if (type->array.size % 4 == 0)
+        {
+            align *= type->array.size;
+        }
+
         break;
     case TYPE_ARRAY: align = align_of_type(compiler, type->array.sub); break;
 
@@ -1267,4 +1272,95 @@ init_named_enum_type(TypeInfo *ty, Scope *scope, TypeInfo *underlying_type)
     ty->scope = scope;
     memset(&ty->enumeration, 0, sizeof(ty->enumeration));
     ty->enumeration.underlying_type = underlying_type;
+}
+
+static void
+get_abi_param_types(Compiler *compiler, TypeInfo *ty, ArrayOfTypeInfoPtr *arr)
+{
+    // Only System V for now
+    switch (ty->kind)
+    {
+    case TYPE_STRUCT: {
+        if (size_of_type(compiler, ty) > 16)
+        {
+            array_push(arr, create_pointer_type(compiler, ty));
+            return;
+        }
+
+        ArrayOfTypeInfoPtr field_types = {0};
+        for (size_t i = 0; i < ty->structure.fields.len; ++i)
+        {
+            TypeInfo *field = ty->structure.fields.ptr[i];
+            get_abi_param_types(compiler, field, &field_types);
+        }
+
+        size_t bytes = 0;
+        bool only_float = true;
+        for (size_t i = 0; i < field_types.len; ++i)
+        {
+            /* String ty_name =  get_type_pretty_name(compiler, field_types.ptr[i]); */
+            /* printf("%.*s\n", PRINT_STR(ty_name)); */
+            bytes += size_of_type(compiler, field_types.ptr[i]);
+
+            if (field_types.ptr[i]->kind != TYPE_FLOAT) only_float = false;
+
+            printf("%zu -> %zu bytes\n", i, bytes);
+
+            if (bytes > 4)
+            {
+                // Consolidate
+                if (!only_float)
+                {
+                    array_push(arr, compiler->u64_type);
+                }
+                else
+                {
+                    array_push(
+                        arr,
+                        create_vector_type(compiler, compiler->float_type, 2));
+                }
+
+                // Reset vars
+                bytes = 0;
+                only_float = true;
+            }
+            else if (i == (field_types.len - 1))
+            {
+                // Consolidate
+                if (!only_float)
+                {
+                    switch (bytes)
+                    {
+                        case 1: array_push(arr, compiler->u8_type); break;
+                        case 2: array_push(arr, compiler->u16_type); break;
+                        case 4: array_push(arr, compiler->u32_type); break;
+                    }
+                }
+                else
+                {
+                    assert(bytes == 4);
+                    array_push(arr, compiler->float_type);
+                }
+
+                // Reset vars
+                bytes = 0;
+                only_float = true;
+            }
+        }
+
+        break;
+    }
+
+    default: {
+        if (size_of_type(compiler, ty) <= 16)
+        {
+            array_push(arr, ty);
+            return;
+        }
+
+        // TODO: not everything is supported yet
+        assert(0);
+        break;
+    }
+    }
 }

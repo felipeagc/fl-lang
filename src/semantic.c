@@ -529,6 +529,7 @@ static bool is_expr_assignable(Compiler *compiler, Scope *scope, Ast *ast)
             {
                 switch (sym->type)
                 {
+                case AST_PROC_PARAM:
                 case AST_BUILTIN_VEC_ACCESS:
                 case AST_STRUCT_FIELD:
                 case AST_VAR_DECL: {
@@ -2613,17 +2614,18 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
 
                 ast->flags |= AST_FLAG_FUNCTION_IS_VARARGS;
             }
+        }
 
-            if ((proc_flags & TYPE_FLAG_EXTERN) == TYPE_FLAG_EXTERN &&
-                is_type_compound(param->decl.type_expr->as_type))
-            {
-                compile_error(
-                    a->compiler,
-                    param->loc,
-                    "extern functions cannot have compound parameters");
-                valid_type = false;
-            }
+        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
+            proc_flags |= TYPE_FLAG_C_VARARGS;
+        if (ast->flags & AST_FLAG_FUNCTION_IS_VARARGS)
+            proc_flags |= TYPE_FLAG_VARARGS;
+        if (ast->flags & AST_FLAG_EXTERN) proc_flags |= TYPE_FLAG_EXTERN;
 
+        for (Ast *param = ast->proc.params.ptr;
+             param != ast->proc.params.ptr + ast->proc.params.len;
+             ++param)
+        {
             array_push(&params, param->decl.type_expr->as_type);
         }
 
@@ -2645,11 +2647,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
             valid_type = false;
         }
 
-        if (ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS)
-        {
-            proc_flags |= TYPE_FLAG_C_VARARGS;
-        }
-
         if ((ast->flags & AST_FLAG_FUNCTION_IS_C_VARARGS) &&
             !(ast->proc.conv & CALL_CONV_C))
         {
@@ -2658,16 +2655,6 @@ static void analyze_ast(Analyzer *a, Ast *ast, TypeInfo *expected_type)
                 ast->loc,
                 "functions with c-varargs require \"c\" calling "
                 "convention");
-        }
-
-        if (ast->flags & AST_FLAG_FUNCTION_IS_VARARGS)
-        {
-            proc_flags |= TYPE_FLAG_VARARGS;
-        }
-
-        if (ast->flags & AST_FLAG_EXTERN)
-        {
-            proc_flags |= TYPE_FLAG_EXTERN;
         }
 
         if (valid_type)
