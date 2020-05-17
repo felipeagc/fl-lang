@@ -9,6 +9,6 @@ func callback() {
 }
 
 func main() {
-    var my_func: MyFunc = callback;
+    var my_func MyFunc = callback;
     my_func();
 }

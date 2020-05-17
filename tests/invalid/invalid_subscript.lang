@@ -1,6 +1,6 @@
 module main
 
 func main() {
-    var a: i32 = 123;
-    var b: i32 = a[0];
+    var a i32 = 123;
+    var b i32 = a[0];
 }

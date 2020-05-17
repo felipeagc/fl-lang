@@ -730,8 +730,6 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
             else
                 field.struct_field.name = name_tok->str;
 
-            if (!parser_consume(p, TOKEN_COLON)) res = false;
-
             Ast type = {0};
             if (parse_expr(p, &type, true))
             {
@@ -943,8 +941,6 @@ static bool parse_unary_expr(Parser *p, Ast *ast, bool parsing_type)
                 res = false;
                 break;
             }
-
-            if (!parser_consume(p, TOKEN_COLON)) res = false;
 
             param.proc_param.type_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
@@ -1493,7 +1489,8 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
             if (kind->type == TOKEN_CONST) ast->type = AST_CONST_DECL;
 
             Token *ident_tok = parser_consume(p, TOKEN_IDENT);
-            if (!ident_tok){
+            if (!ident_tok)
+            {
                 res = false;
                 break;
             }
@@ -1503,19 +1500,21 @@ static bool parse_stmt(Parser *p, Ast *ast, bool need_semi)
             }
 
             ast->decl.type_expr = NULL;
-            if (parser_peek(p, 0)->type == TOKEN_COLON)
+            if (parser_peek(p, 0)->type != TOKEN_ASSIGN)
             {
-                parser_next(p, 1);
-
                 ast->decl.type_expr =
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
                 if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
             }
 
             ast->decl.value_expr = NULL;
-            if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+            if (parser_peek(p, 0)->type == TOKEN_ASSIGN || !ast->decl.type_expr)
             {
-                if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+                if (!parser_consume(p, TOKEN_ASSIGN))
+                {
+                    res = false;
+                    break;
+                }
 
                 ast->decl.value_expr =
                     bump_alloc(&p->compiler->bump, sizeof(Ast));
@@ -2304,8 +2303,6 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
                 break;
             }
 
-            if (!parser_consume(p, TOKEN_COLON)) res = false;
-
             param.proc_param.type_expr =
                 bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, param.proc_param.type_expr, true)) res = false;
@@ -2437,23 +2434,30 @@ static bool parse_top_level_stmt(Parser *p, Ast *ast)
 
         Token *ident_tok = parser_consume(p, TOKEN_IDENT);
         if (!ident_tok)
+        {
             res = false;
+            break;
+        }
         else
+        {
             ast->decl.name = ident_tok->str;
+        }
 
         ast->decl.type_expr = NULL;
-        if (parser_peek(p, 0)->type == TOKEN_COLON)
+        if (parser_peek(p, 0)->type != TOKEN_ASSIGN)
         {
-            parser_next(p, 1);
-
             ast->decl.type_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, ast->decl.type_expr, true)) res = false;
         }
 
         ast->decl.value_expr = NULL;
-        if (parser_peek(p, 0)->type == TOKEN_ASSIGN)
+        if (parser_peek(p, 0)->type == TOKEN_ASSIGN || !ast->decl.type_expr)
         {
-            if (!parser_consume(p, TOKEN_ASSIGN)) res = false;
+            if (!parser_consume(p, TOKEN_ASSIGN))
+            {
+                res = false;
+                break;
+            }
 
             ast->decl.value_expr = bump_alloc(&p->compiler->bump, sizeof(Ast));
             if (!parse_expr(p, ast->decl.value_expr, false)) res = false;

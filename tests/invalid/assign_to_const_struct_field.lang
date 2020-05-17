@@ -1,7 +1,7 @@
 module main
 
 typedef Struct struct {
-    a: i32
+    a i32
 };
 
 const const_struct = Struct {12};

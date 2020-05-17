@@ -3,11 +3,11 @@ module main
 import "core:c"
 
 typedef Struct2 struct {
-    a: i32,
+    a i32,
 };
 
 typedef Struct struct {
-    array: [2]Struct2,
+    array [2]Struct2,
 };
 
 
@@ -16,7 +16,7 @@ func test() -> *Struct {
 }
 
 func main() {
-    var fn: func* () -> *Struct = test;
+    var fn func* () -> *Struct = test;
     test().array[0].a = 123;
     fn().array[0].a = 123;
     fn()[0].array[0].a = 123;

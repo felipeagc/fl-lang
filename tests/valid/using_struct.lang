@@ -3,16 +3,16 @@ module main
 import "core:c"
 
 typedef Hello struct { 
-    a: i32,
-    b: struct {
-        c: *char,
+    a i32,
+    b struct {
+        c *char,
     },
 };
 
 func main() {
     using c;
 
-    var h: Hello;
+    var h Hello;
     h.a = 123;
 
     using h;

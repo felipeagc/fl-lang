@@ -3,10 +3,10 @@ module main
 import "core:c"
 import "core:sync"
 
-var my_val: i32 = 123;
-var mtx: sync.Mutex;
+var my_val i32 = 123;
+var mtx sync.Mutex;
 
-func thread_start(arg: *void) -> *void {
+func thread_start(arg *void) -> *void {
     sync.mutex_lock(&mtx);
     my_val = 321;
     sync.mutex_unlock(&mtx);

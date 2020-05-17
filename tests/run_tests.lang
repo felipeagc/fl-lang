@@ -8,12 +8,12 @@ import "core:strings"
 
 typedef TestRun struct
 {
-    pid: os.Pid,
-    path: string,
-    status: i32,
+    pid    os.Pid,
+    path   string,
+    status i32,
 };
 
-var failures: uint = 0;
+var failures uint = 0;
 
 version "win32" {
     const compiler_exe = ".\\flc.exe";
@@ -21,12 +21,12 @@ version "win32" {
     const compiler_exe = "./flc";
 }
 
-func run_tests(batch_name: string, tests_path: string, expected_status: i32)
+func run_tests(batch_name string, tests_path string, expected_status i32)
 {
     var entries = fs.dir_entries_alloc(tests_path);
     defer fs.dir_entries_free(entries);
 
-    var runs: [dyn]TestRun;
+    var runs [dyn]TestRun;
     defer delete(&runs);
 
     for (entry in entries) 
@@ -47,7 +47,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
             }
             else
             {
-                var run: TestRun;
+                var run TestRun;
                 run.pid = pid;
                 run.path = path;
                 append(&runs, run);
@@ -72,7 +72,7 @@ func run_tests(batch_name: string, tests_path: string, expected_status: i32)
         run.status = status;
     }
 
-    var local_failures: uint = 0;
+    var local_failures uint = 0;
     for (*run in runs)
     {
         if (run.status != expected_status)

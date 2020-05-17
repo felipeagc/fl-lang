@@ -1,6 +1,6 @@
 module main
 
-func add(a: i32, b: i32) -> i32;
+func add(a i32, b i32) -> i32;
 
 func main() {
     add(1, c"");

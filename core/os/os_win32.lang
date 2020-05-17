@@ -5,7 +5,7 @@ import "core:sys/win32"
 import "core:strings"
 import "core:c"
 
-func get_stream_handle(type: win32.DWORD) -> Handle {
+func get_stream_handle(type win32.DWORD) -> Handle {
     var fd = win32.GetStdHandle(type);
     win32.SetHandleInformation(fd, win32.HANDLE_FLAG_INHERIT, 0);
     return fd; 
@@ -23,10 +23,10 @@ pub func get_stderr() -> Handle {
     return get_stream_handle(win32.STD_ERROR_HANDLE);
 }
 
-pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
+pub func write_to_stream(stream Handle, buf []byte) -> (int, Error) {
     var tmp_buf = buf;
-    var single_bytes_written: win32.DWORD;
-    var total_bytes_written: win32.DWORD;
+    var single_bytes_written win32.DWORD;
+    var total_bytes_written win32.DWORD;
 
     while (cast(uint)total_bytes_written < buf.len) {
         var success = win32.WriteFile(
@@ -50,40 +50,40 @@ pub func write_to_stream(stream: Handle, buf: []byte) -> (int, Error) {
 
 pub func get_cwd_alloc() -> string {
     var required_size = win32.GetCurrentDirectory(0, null);
-    var buf: *win32.TCHAR = alloc(size_of(win32.TCHAR) * cast(uint)required_size);
+    var buf *win32.TCHAR = alloc(size_of(win32.TCHAR) * cast(uint)required_size);
     defer dealloc(buf);
     win32.GetCurrentDirectory(required_size, buf);
     return win32.wstr_to_string_alloc(buf, required_size);
 }
 
-pub func chdir(path: string) -> bool {
+pub func chdir(path string) -> bool {
     var wpath = win32.to_cwstr_alloc(path);
     defer dealloc(wpath);
     return win32.SetCurrentDirectory(wpath) != 0;
 }
 
-pub func file_exists(path: string) -> bool {
+pub func file_exists(path string) -> bool {
     var wpath = win32.to_cwstr_alloc(path);
     defer dealloc(wpath);
     return win32.PathFileExistsW(wpath);
 }
 
-pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, Error) {
-    var si: win32.STARTUPINFOA;
+pub func spawn_process(name string, args []string, attr *ProcAttr) -> (Pid, Error) {
+    var si win32.STARTUPINFOA;
     si.cb = cast(u32)size_of(win32.STARTUPINFOA);
     if (attr && attr.stdout != NULL_HANDLE) si.hStdOutput = attr.stdout;
     if (attr && attr.stderr != NULL_HANDLE) si.hStdError = attr.stderr;
     si.dwFlags |= win32.STARTF_USESTDHANDLES;
 
-    var pi: win32.PROCESS_INFORMATION;
+    var pi win32.PROCESS_INFORMATION;
 
-    var total_length: uint;
+    var total_length uint;
     for (*arg in args) {
         total_length += (arg.len + 1);
     }
 
-    var pos: uint = 0;
-    var c_cmd_line: *char = alloc(total_length);
+    var pos uint = 0;
+    var c_cmd_line *char = alloc(total_length);
     defer dealloc(c_cmd_line);
 
     for (*arg in args) {
@@ -96,7 +96,7 @@ pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, E
     }
     c_cmd_line[pos-1] = 0;
 
-    var dir: win32.LPCSTR;
+    var dir win32.LPCSTR;
     if (attr && attr.dir.len > 0) {
         dir = strings.to_c_str_alloc(attr.dir);
     }
@@ -126,8 +126,8 @@ pub func spawn_process(name: string, args: []string, attr: *ProcAttr) -> (Pid, E
     }, Error.Success;
 }
 
-pub func wait_process(process: Pid) -> (i32, Error) {
-    var exit_code: win32.DWORD;
+pub func wait_process(process Pid) -> (i32, Error) {
+    var exit_code win32.DWORD;
     win32.WaitForSingleObject(process.hProcess, win32.INFINITE);
     win32.GetExitCodeProcess(process.hProcess, &exit_code);
 
@@ -137,11 +137,11 @@ pub func wait_process(process: Pid) -> (i32, Error) {
     return cast(i32)exit_code, Error.Success;
 }
 
-pub func last_write_time(path: string) -> (TimeSpec, Error) {
+pub func last_write_time(path string) -> (TimeSpec, Error) {
     var wpath = win32.to_cwstr_alloc(path);
     defer dealloc(wpath);
 
-    var data: win32.WIN32_FILE_ATTRIBUTE_DATA;
+    var data win32.WIN32_FILE_ATTRIBUTE_DATA;
     var success = win32.GetFileAttributesExW(
         wpath,
         win32.GetFileExInfoStandard,
@@ -152,7 +152,7 @@ pub func last_write_time(path: string) -> (TimeSpec, Error) {
 
     var low = cast(u64)data.ftLastWriteTime.dwLowDateTime;
     var high = cast(u64)data.ftLastWriteTime.dwHighDateTime;
-    var nano100: u64 = low | (high << 32);
+    var nano100 u64 = low | (high << 32);
 
     var seconds = nano100 / 10000000;
     var nanos = (nano100 - (seconds * 10000000)) * 100;

@@ -1,6 +1,6 @@
 module main
 
-func sum(a: u32, b: u32) -> u32 { return a + b; }
+func sum(a u32, b u32) -> u32 { return a + b; }
 
 typedef MyEnum enum u32 {
     some_field = sum(1, 2),

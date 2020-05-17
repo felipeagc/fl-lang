@@ -3,13 +3,13 @@ module main
 import "core:c"
 
 pub typedef Test struct {
-    test: *Test,
+    test *Test,
 };
 
 func main() {
     using c;
 
-    var a: Test;
+    var a Test;
     a.test = malloc(size_of(Test));
     free(a.test);
 }

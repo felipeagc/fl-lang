@@ -3,8 +3,8 @@ module main
 import "core:c"
 
 typedef Struct struct {
-    a: i32,
-    b: *char,
+    a i32,
+    b *char,
 };
 
 const const_struct = Struct{321, c"Yo"};
@@ -14,24 +14,24 @@ func main() {
     using c;
 
     var my_array = [2]i32{1, 2};
-    for (var i: uint = 0; i < my_array.len; i += 1) {
+    for (var i uint = 0; i < my_array.len; i += 1) {
         printf(c"my_array[%lu] = %d\n", i, my_array[i]);
     }
 
-    for (var i: uint = 0; i < const_array.len; i += 1) {
+    for (var i uint = 0; i < const_array.len; i += 1) {
         printf(c"const_array[%lu] = %d\n", i, const_array[i]);
     }
 
     {
         var my_slice = const_array[:];
-        for (var i: uint = 0; i < my_slice.len; i += 1) {
+        for (var i uint = 0; i < my_slice.len; i += 1) {
             printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
 
     {
         var my_slice = my_array[:];
-        for (var i: uint = 0; i < my_slice.len; i += 1) {
+        for (var i uint = 0; i < my_slice.len; i += 1) {
             printf(c"my_slice[%lu] = %d\n", i, my_slice[i]);
         }
     }
@@ -61,7 +61,7 @@ func main() {
 
     {
         var zeroed_array = [5]i32{};
-        for (var i: uint = 0; i < zeroed_array.len; i += 1) {
+        for (var i uint = 0; i < zeroed_array.len; i += 1) {
             printf(c"zeroed_array[%lu] = %d\n", i, zeroed_array[i]);
             if (zeroed_array[i] != 0) abort();
         }

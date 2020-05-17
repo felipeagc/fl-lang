@@ -5,5 +5,5 @@ typedef MyEnum enum u32 {
 };
 
 func main() {
-    var my_enum: MyEnum = 1;
+    var my_enum MyEnum = 1;
 }

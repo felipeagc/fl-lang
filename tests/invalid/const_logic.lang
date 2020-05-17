@@ -1,3 +1,3 @@
 module main
 
-const a: bool = true && false;
+const a bool = true && false;

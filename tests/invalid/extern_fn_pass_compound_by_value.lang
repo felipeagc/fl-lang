@@ -1,9 +1,9 @@
 module main
 
 typedef Vec3 struct {
-    e: [3]float,
+    e [3]float,
 };
 
-typedef SomeFunc extern func* (a: Vec3);
-extern func hello(a: Vec3);
+typedef SomeFunc extern func* (a Vec3);
+extern func hello(a Vec3);
 

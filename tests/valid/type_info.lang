@@ -5,8 +5,8 @@ import "core:fmt"
 import "core:c"
 
 typedef MyStruct struct {
-    a: i32,
-    b: string
+    a i32,
+    b string
 };
 
 func main() {
@@ -14,7 +14,7 @@ func main() {
 
     // Integer
     {
-        var t: runtime.TypeInfo = type_info_of(i32);
+        var t runtime.TypeInfo = type_info_of(i32);
         if (t.kind != runtime.TypeKind.Int) abort();
         if (t.integer.num_bits != 32) abort();
         if (t.integer.is_signed != true) abort();
@@ -54,7 +54,7 @@ func main() {
 
     // Function
     {
-        var t = type_info_of(func* (a: i32, b: []int) -> i32);
+        var t = type_info_of(func* (a i32, b []int) -> i32);
         if (t.kind != runtime.TypeKind.Pointer) abort();
         if (t.pointer.sub.kind != runtime.TypeKind.Function) abort();
         if (t.pointer.sub.function.return_type.kind != runtime.TypeKind.Int) abort();

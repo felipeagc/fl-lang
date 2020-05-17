@@ -2,9 +2,9 @@ module main
 
 import "core:c"
 
-const const1: float = -3 * 5.8 + 9.1;
-const const2: i32 = (123 + 321) * 2;
-const const3: bool = !(-(123 + 321) > 2.2);
+const const1 float = -3 * 5.8 + 9.1;
+const const2 i32 = (123 + 321) * 2;
+const const3 bool = !(-(123 + 321) > 2.2);
 
 func main() {
     using c;
@@ -13,30 +13,30 @@ func main() {
     printf(c"const2 = %d\n", const2);
     printf(c"const3 = %hhu\n", const3);
 
-    var mul1: float = 3.3 * 3;
+    var mul1 float = 3.3 * 3;
     printf(c"mul1 = %f\n", mul1);
 
-    var mul2: double = 3.3 * 3;
+    var mul2 double = 3.3 * 3;
     printf(c"mul2 = %lf\n", mul2);
 
-    var sub1: i32 = 5 - 10;
+    var sub1 i32 = 5 - 10;
     printf(c"sub1 = %d\n", sub1);
 
-    var sub2: u32 = 5 - 10;
+    var sub2 u32 = 5 - 10;
     printf(c"sub2 = %u\n", sub2);
 
     printf(c"neg = %ld\n", -5);
     printf(c"funceg = %f\n", -5.5 + 3);
 
-    var cmp1: bool = 5 == 5;
+    var cmp1 bool = 5 == 5;
     printf(c"cmp1 = %hhu\n", cmp1);
 
-    var cmp2: bool = 5 != 5;
+    var cmp2 bool = 5 != 5;
     printf(c"cmp2 = %hhu\n", cmp2);
 
-    var cmp3: bool = (4 + 10) > 10.5;
+    var cmp3 bool = (4 + 10) > 10.5;
     printf(c"cmp3 = %hhu\n", cmp3);
-    var not_cmp3: bool = !cmp3;
+    var not_cmp3 bool = !cmp3;
     printf(c"not_cmp3 = %hhu\n", not_cmp3);
 
     printf(c"cmp4 = %hhu\n", 99.9 > 5);
@@ -46,8 +46,8 @@ func main() {
 
     false != true;
 
-    var ptr1: *void = null;
-    var ptr2: *void = cast(*void) 1;
+    var ptr1 *void = null;
+    var ptr2 *void = cast(*void) 1;
 
     printf(c"!ptr1 = %hhu\n", !ptr1);
     printf(c"!ptr2 = %hhu\n", !ptr2);
@@ -67,7 +67,7 @@ func main() {
     if((2 >> 1) != 1) abort();
 
     {
-        var n: i32 = 2;
+        var n i32 = 2;
         n += 2;
         if (n != 4) abort();
         n <<= 2;

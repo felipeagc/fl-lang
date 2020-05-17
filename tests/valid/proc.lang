@@ -1,59 +1,59 @@
 module main
 
-const hello: i32 = (123);
-var global_array: [5]i32;
-var global: i32 = 123;
-var global_string: *i8 = c"Hello";
+const hello i32 = (123);
+var global_array [5]i32;
+var global i32 = 123;
+var global_string *i8 = c"Hello";
 
-const ARRAY_SIZE: i64 = 5;
+const ARRAY_SIZE i64 = 5;
 
 typedef MyInt i32;
 typedef MyArrayType [ARRAY_SIZE]i32;
 
 typedef MyStruct struct {
-    a: i32,
-    b: *u8,
+    a i32,
+    b *u8,
 };
 
-extern func "c" puts(str: *char);
-extern func "c" printf(fmt: *char, ...);
+extern func "c" puts(str *char);
+extern func "c" printf(fmt *char, ...);
 
-func add(a: i32, b: i32) -> i32 {
+func add(a i32, b i32) -> i32 {
     return 0;
 }
 
 func main() {
-    var hey: i32 = 2;
-    var yo: *i32 = (&hey);
-    var a_int: i32 = yo[0];
+    var hey i32 = 2;
+    var yo *i32 = (&hey);
+    var a_int i32 = yo[0];
     yo.* = (123);
 
     global = 321;
 
-    var myint: MyInt = 123;
-    var my_u8: u8 = 255;
-    var my_float: float = 321.123;
+    var myint MyInt = 123;
+    var my_u8 u8 = 255;
+    var my_float float = 321.123;
 
-    var str: *i8 = c"cool";
+    var str *i8 = c"cool";
 
-    var derp: i32 = add(1, 2);
+    var derp i32 = add(1, 2);
     add(1, 2);
 
-    var my_char: i8 = 'A';
+    var my_char i8 = 'A';
 
     printf(c"Hello, world \"%d\"!\n", a_int);
     printf(c"global_array[2] = %d\n", global_array[2]);
     global_array[2] = 3;
     printf(c"global_array[2] = %d\n", global_array[2]);
 
-    var array: [3]i32;
+    var array [3]i32;
     array[0] = 1;
     printf(c"array[0] = %d\n", array[0]);
 
-    var a_struct: MyStruct;
+    var a_struct MyStruct;
     a_struct.a = 32;
 
-    var b_struct: MyStruct;
+    var b_struct MyStruct;
     b_struct = a_struct;
 
     printf(c"a_struct.a = %d\n", a_struct.a);

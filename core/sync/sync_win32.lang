@@ -8,11 +8,11 @@ pub typedef Mutex win32.CRITICAL_SECTION;
 pub typedef Cond win32.CONDITION_VARIABLE;
 
 typedef Bundle struct {
-    start: ThreadStart,
-    arg: *void,
+    start ThreadStart,
+    arg *void,
 };
 
-extern func "std" thread_start_wrapper(arg: win32.LPVOID) -> win32.DWORD {
+extern func "std" thread_start_wrapper(arg win32.LPVOID) -> win32.DWORD {
     var bundle = cast(*Bundle)arg;
     var exit_code = bundle.start(bundle.arg);
     dealloc(bundle);
@@ -20,7 +20,7 @@ extern func "std" thread_start_wrapper(arg: win32.LPVOID) -> win32.DWORD {
 }
 
 #[inline]
-pub func thread_create(start: ThreadStart, arg: *void) -> Thread {
+pub func thread_create(start ThreadStart, arg *void) -> Thread {
     var bundle = new(Bundle);
     bundle.start = start;
     bundle.arg = arg;
@@ -31,12 +31,12 @@ pub func thread_create(start: ThreadStart, arg: *void) -> Thread {
 }
 
 #[inline]
-pub func thread_wait(thread: Thread) {
+pub func thread_wait(thread Thread) {
     if (win32.WaitForSingleObject(thread, win32.INFINITE) == win32.WAIT_FAILED) {
         return;
     }
 
-    var dw_res: win32.DWORD;
+    var dw_res win32.DWORD;
     if (!win32.GetExitCodeThread(thread, &dw_res)) {
         return;
     }
@@ -45,12 +45,12 @@ pub func thread_wait(thread: Thread) {
 }
 
 #[inline]
-pub func thread_sleep(milliseconds: u32) {
+pub func thread_sleep(milliseconds u32) {
     win32.Sleep(cast(win32.DWORD)milliseconds);
 }
 
 #[inline]
-pub func thread_detach(thread: Thread) {
+pub func thread_detach(thread Thread) {
     win32.CloseHandle(thread);
 }
 
@@ -60,50 +60,50 @@ pub func thread_exit() {
 }
 
 #[inline]
-pub func mutex_init(mtx: *Mutex) {
+pub func mutex_init(mtx *Mutex) {
     win32.InitializeCriticalSection(mtx);
 }
 
 #[inline]
-pub func mutex_destroy(mtx: *Mutex) {
+pub func mutex_destroy(mtx *Mutex) {
     win32.DeleteCriticalSection(mtx);
 }
 
 #[inline]
-pub func mutex_lock(mtx: *Mutex) {
+pub func mutex_lock(mtx *Mutex) {
     win32.EnterCriticalSection(mtx);
 }
 
 #[inline]
-pub func mutex_trylock(mtx: *Mutex) {
+pub func mutex_trylock(mtx *Mutex) {
     win32.TryEnterCriticalSection(mtx);
 }
 
 #[inline]
-pub func mutex_unlock(mtx: *Mutex) {
+pub func mutex_unlock(mtx *Mutex) {
     win32.LeaveCriticalSection(mtx);
 }
 
 #[inline]
-pub func cond_init(cond: *Cond) {
+pub func cond_init(cond *Cond) {
     win32.InitializeConditionVariable(cond);
 }
 
 #[inline]
-pub func cond_destroy(cond: *Cond) {
+pub func cond_destroy(cond *Cond) {
 }
 
 #[inline]
-pub func cond_wake_one(cond: *Cond) {
+pub func cond_wake_one(cond *Cond) {
     win32.WakeConditionVariable(cond);
 }
 
 #[inline]
-pub func cond_wake_all(cond: *Cond) {
+pub func cond_wake_all(cond *Cond) {
     win32.WakeAllConditionVariable(cond);
 }
 
 #[inline]
-pub func cond_wait(cond: *Cond, mtx: *Mutex) {
+pub func cond_wait(cond *Cond, mtx *Mutex) {
     win32.SleepConditionVariableCS(cond, mtx, win32.INFINITE);
 }

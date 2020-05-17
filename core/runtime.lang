@@ -30,39 +30,39 @@ pub typedef TypeFlags enum u32 {
 };
 
 pub typedef TypeInfo struct {
-    kind: TypeKind,
-    align: u32,
-    size: u32,
-    flags: u32,
-    name: string,
-    using info: union {
-        integer: struct {
-            num_bits: u8,
-            is_signed: bool,
+    kind TypeKind,
+    align u32,
+    size u32,
+    flags u32,
+    name string,
+    using info union {
+        integer struct {
+            num_bits u8,
+            is_signed bool,
         },
-        floating: struct {
-            num_bits: u8,
+        floating struct {
+            num_bits u8,
         },
-        pointer: struct {
-            sub: *TypeInfo,
+        pointer struct {
+            sub *TypeInfo,
         },
-        array: struct {
-            sub: *TypeInfo,
-            size: uint,
+        array struct {
+            sub *TypeInfo,
+            size uint,
         },
-        function: struct {
-            parameters: []*TypeInfo,
-            return_type: *TypeInfo,
+        function struct {
+            parameters  []*TypeInfo,
+            return_type *TypeInfo,
         },
-        structure: struct {
-            fields: []*TypeInfo,
-            is_union: bool,
+        structure struct {
+            fields   []*TypeInfo,
+            is_union bool,
         },
-        enumeration: struct {
-            underlying_type: *TypeInfo,
+        enumeration struct {
+            underlying_type *TypeInfo,
         },
-        tuple: struct {
-            fields: []*TypeInfo,
+        tuple struct {
+            fields []*TypeInfo,
         },
     },
 };

@@ -3,19 +3,19 @@ module main
 import "core:c"
 
 typedef MyStruct struct {
-    a: i32,
+    a i32,
 };
 
 typedef NestedStruct struct {
-    name: *char,
-    sub: struct {
-        a: i32,
-        b: i32,
-        s: [5]MyStruct,
+    name *char,
+    sub struct {
+        a i32,
+        b i32,
+        s [5]MyStruct,
     },
 };
 
-func print_nested(n: *NestedStruct) {
+func print_nested(n *NestedStruct) {
     using c;
 
     printf(c"n = %p\n", n);
@@ -32,18 +32,18 @@ func print_nested(n: *NestedStruct) {
 func main() {
     using c;
 
-    var a_struct: MyStruct;
+    var a_struct MyStruct;
     a_struct.a = 32;
-    var b_struct: *MyStruct = &a_struct;
+    var b_struct *MyStruct = &a_struct;
 
     printf(c"a_struct.a = %d\n", a_struct.a);
     printf(c"b_struct.a = %d\n", b_struct.a);
 
-    var anon: struct { c: i32 };
+    var anon struct { c i32 };
     anon.c = 321;
     printf(c"anon.c = %d\n", anon.c);
 
-    var nested: NestedStruct;
+    var nested NestedStruct;
     nested.name = c"yo";
     nested.sub.a = 123;
     nested.sub.b = 321;
@@ -57,20 +57,20 @@ func main() {
     printf(c"align_of(NestedStruct) = %lu\n", align_of(NestedStruct));
     printf(c"align_of(nested) = %lu\n", align_of(nested));
 
-    var ptr: *NestedStruct = malloc(size_of(ptr.*));
+    var ptr *NestedStruct = malloc(size_of(ptr.*));
     free(ptr);
 
     printf(c"size_of(*ptr) = %lu\n", size_of(ptr.*));
 
-    var my_u32: u32 = 123;
+    var my_u32 u32 = 123;
     printf(c"my_u32 = %u\n", my_u32);
 
-    var my_u64: u64 = cast(u64) my_u32;
+    var my_u64 u64 = cast(u64) my_u32;
     printf(c"my_u64 = %lu\n", my_u64);
 
-    var my_i64: i64 = cast(i64) my_u32;
+    var my_i64 i64 = cast(i64) my_u32;
     printf(c"my_i64 = %ld\n", my_i64);
 
-    var my_float: float = cast(float) my_u32;
+    var my_float float = cast(float) my_u32;
     printf(c"my_float = %f\n", my_float);
 }

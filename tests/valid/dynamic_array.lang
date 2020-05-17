@@ -7,7 +7,7 @@ func main() {
     using c;
 
     {
-        var arr: [dyn]i32;
+        var arr [dyn]i32;
         defer delete(&arr);
 
         append(&arr, 1);
@@ -16,7 +16,7 @@ func main() {
     }
 
     {
-        var arr: [dyn]i32;
+        var arr [dyn]i32;
         defer delete(&arr);
 
         append(&arr, 1);

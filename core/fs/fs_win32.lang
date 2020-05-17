@@ -4,17 +4,17 @@ import "core:sys/win32"
 import "core:c"
 import "core:strings"
 
-pub func dir_entries_alloc(path: string) -> []string {
+pub func dir_entries_alloc(path string) -> []string {
     var search_str = strings.concat_alloc(path, "\\*");
     defer delete(&search_str);
     var c_path = strings.to_c_str_alloc(search_str);
     defer dealloc(c_path);
 
-    var data: win32.WIN32_FIND_DATAA;
+    var data win32.WIN32_FIND_DATAA;
     var first_file = win32.FindFirstFileA(c_path, &data);
     defer win32.FindClose(first_file);
 
-    var entries: [dyn]string;
+    var entries [dyn]string;
     var entry = make(string, c.strlen(data.cFileName.ptr));
     c.memcpy(entry.ptr, data.cFileName, entry.len);
     append(&entries, entry);

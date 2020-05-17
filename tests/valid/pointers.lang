@@ -1,25 +1,25 @@
 module main
 
-extern func "c" printf(fmt: *char, ...);
+extern func "c" printf(fmt *char, ...);
 
-func some_func(a: *void) {
+func some_func(a *void) {
     printf(c"Ptr: %p\n", a);
 }
 
 func main() {
-    var my_int: i32 = 123;
-    var ptr: *i32 = &my_int;
-    var ptr2: *i64 = &123;
+    var my_int i32 = 123;
+    var ptr *i32 = &my_int;
+    var ptr2 *i64 = &123;
     ptr.* = 321;
-    var ptr_ptr: **i32 = &ptr;
+    var ptr_ptr **i32 = &ptr;
 
-    var my_char: i8 = c"hello".*;
+    var my_char i8 = c"hello".*;
 
-    var void_ptr: **void = cast(**void)ptr_ptr;
+    var void_ptr **void = cast(**void)ptr_ptr;
     void_ptr = cast(**void)ptr_ptr;
 
     printf(c"Ptr: %p\n", ptr);
     some_func(ptr);
 
-    var tmp_ptr: *i32 = &123;
+    var tmp_ptr *i32 = &123;
 }

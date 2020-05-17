@@ -10,5 +10,5 @@ func main() {
 
 import "core:c"
 
-const some_int: i32 = 123;
+const some_int i32 = 123;
 const puts_func = c.puts;

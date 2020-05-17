@@ -3,7 +3,7 @@ module main
 import "core:build"
 
 func main() {
-    var workspace: build.Workspace;
+    var workspace build.Workspace;
 
     build.add_executable_target(&workspace, &build.CompilerTarget{
         input = "ray.lang",

@@ -3,9 +3,9 @@ module main
 import "core:c"
 
 typedef MyStruct struct {
-    a: i32,
-    path: string,
-    d: i32,
+    a i32,
+    path string,
+    d i32,
 };
 
 func main() {

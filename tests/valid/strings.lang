@@ -1,6 +1,6 @@
 module main
 
 func main() {
-    var str: string = "Hello";
-    var c_str: *char = c"Hello";
+    var str string = "Hello";
+    var c_str *char = c"Hello";
 }

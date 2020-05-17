@@ -3,7 +3,7 @@ module win32
 version "win32" {
     import "core:strings"
 
-    pub const MAX_PATH: DWORD = 260;
+    pub const MAX_PATH DWORD = 260;
 
     pub typedef HANDLE *void;
     pub typedef CHAR i8;
@@ -27,68 +27,68 @@ version "win32" {
     pub typedef OVERLAPPED struct{};
     pub typedef SECURITY_ATTRIBUTES struct{};
     pub typedef STARTUPINFOA struct{
-        cb: DWORD,
-        lpReserved: LPSTR,
-        lpDesktop: LPSTR,
-        lpTitle: LPSTR,
-        dwX: DWORD,
-        dwY: DWORD,
-        dwXSize: DWORD,
-        dwYSize: DWORD,
-        dwXCountChars: DWORD,
-        dwYCountChars: DWORD,
-        dwFillAttribute: DWORD,
-        dwFlags: DWORD,
-        wShowWindow: WORD,
-        cbReserved2: WORD,
-        lpReserved2: LPBYTE,
-        hStdInput: HANDLE,
-        hStdOutput: HANDLE,
-        hStdError: HANDLE,
+        cb DWORD,
+        lpReserved LPSTR,
+        lpDesktop LPSTR,
+        lpTitle LPSTR,
+        dwX DWORD,
+        dwY DWORD,
+        dwXSize DWORD,
+        dwYSize DWORD,
+        dwXCountChars DWORD,
+        dwYCountChars DWORD,
+        dwFillAttribute DWORD,
+        dwFlags DWORD,
+        wShowWindow WORD,
+        cbReserved2 WORD,
+        lpReserved2 LPBYTE,
+        hStdInput HANDLE,
+        hStdOutput HANDLE,
+        hStdError HANDLE,
     };
     pub typedef PROCESS_INFORMATION struct{
-        hProcess: HANDLE,
-        hThread: HANDLE,
-        dwProcessId: DWORD,
-        dwThreadId: DWORD,
+        hProcess HANDLE,
+        hThread HANDLE,
+        dwProcessId DWORD,
+        dwThreadId DWORD,
     };
     pub typedef FILETIME struct{
-        dwLowDateTime: DWORD,
-        dwHighDateTime: DWORD,
+        dwLowDateTime DWORD,
+        dwHighDateTime DWORD,
     };
     pub typedef WIN32_FILE_ATTRIBUTE_DATA struct {
-        dwFileAttributes: DWORD,
-        ftCreationTime: FILETIME,
-        ftLastAccessTime: FILETIME,
-        ftLastWriteTime: FILETIME,
-        nFileSizeHigh: DWORD,
-        nFileSizeLow: DWORD,
+        dwFileAttributes DWORD,
+        ftCreationTime FILETIME,
+        ftLastAccessTime FILETIME,
+        ftLastWriteTime FILETIME,
+        nFileSizeHigh DWORD,
+        nFileSizeLow DWORD,
     };
     pub typedef WIN32_FIND_DATAA struct {
-        dwFileAttributes: DWORD,
-        ftCreationTime: FILETIME,
-        ftLastAccessTime: FILETIME,
-        ftLastWriteTime: FILETIME,
-        nFileSizeHigh: DWORD,
-        nFileSizeLow: DWORD,
-        dwReserved0: DWORD,
-        dwReserved1: DWORD,
-        cFileName: [MAX_PATH]CHAR,
-        cAlternateFileName: [14]CHAR,
-        dwFileType: DWORD,
-        dwCreatorType: DWORD,
-        wFinderFlags: WORD,
+        dwFileAttributes DWORD,
+        ftCreationTime FILETIME,
+        ftLastAccessTime FILETIME,
+        ftLastWriteTime FILETIME,
+        nFileSizeHigh DWORD,
+        nFileSizeLow DWORD,
+        dwReserved0 DWORD,
+        dwReserved1 DWORD,
+        cFileName [MAX_PATH]CHAR,
+        cAlternateFileName [14]CHAR,
+        dwFileType DWORD,
+        dwCreatorType DWORD,
+        wFinderFlags WORD,
     };
     pub typedef CRITICAL_SECTION struct {
-        DebugInfo: *struct{},
-        LockCount: LONG,
-        RecursionCount: LONG,
-        OwningThread: HANDLE,
-        LockSemaphore: HANDLE,
-        SpinCount: ULONG_PTR,
+        DebugInfo *struct{},
+        LockCount LONG,
+        RecursionCount LONG,
+        OwningThread HANDLE,
+        LockSemaphore HANDLE,
+        SpinCount ULONG_PTR,
     };
     pub typedef CONDITION_VARIABLE struct {
-        Ptr: PVOID,
+        Ptr PVOID,
     };
 
     pub typedef LPDWORD *DWORD;
@@ -116,176 +116,176 @@ version "win32" {
     pub typedef PCONDITION_VARIABLE *CONDITION_VARIABLE;
 
     pub typedef GET_FILEEX_INFO_LEVELS DWORD;
-    pub const GetFileExInfoStandard: DWORD = 0;
-    pub const GetFileExMaxInfoLevel: DWORD = 1;
+    pub const GetFileExInfoStandard DWORD = 0;
+    pub const GetFileExMaxInfoLevel DWORD = 1;
 
-    pub const STD_INPUT_HANDLE: DWORD = -10;
-    pub const STD_OUTPUT_HANDLE: DWORD = -11;
-    pub const STD_ERROR_HANDLE: DWORD = -12;
+    pub const STD_INPUT_HANDLE DWORD = -10;
+    pub const STD_OUTPUT_HANDLE DWORD = -11;
+    pub const STD_ERROR_HANDLE DWORD = -12;
 
-    pub const HANDLE_FLAG_INHERIT: DWORD = 0x00000001;
+    pub const HANDLE_FLAG_INHERIT DWORD = 0x00000001;
 
-    pub const INFINITE: DWORD = 0xFFFFFFFF;
-    pub const WAIT_FAILED: DWORD = 0xFFFFFFFF;
+    pub const INFINITE DWORD = 0xFFFFFFFF;
+    pub const WAIT_FAILED DWORD = 0xFFFFFFFF;
 
-    pub const CP_UTF8: UINT = 65001;
+    pub const CP_UTF8 UINT = 65001;
 
-    pub const STARTF_USESTDHANDLES: DWORD = 0x00000100;
+    pub const STARTF_USESTDHANDLES DWORD = 0x00000100;
 
-    pub typedef LPTHREAD_START_ROUTINE extern func* "std" (lpThreadParameter: LPVOID) -> DWORD;
+    pub typedef LPTHREAD_START_ROUTINE extern func* "std" (lpThreadParameter LPVOID) -> DWORD;
 
     pub extern func "std" WideCharToMultiByte(
-        CodePage: UINT,
-        dwFlags: DWORD,
-        lpWideCharStr: LPCWCH,
-        cchWideChar: i32,
-        lpMultiByteStr: LPSTR,
-        cbMultiByte: i32,
-        lpDefaultChar: LPCCH,
-        lpUsedDefaultChar: LPBOOL
+        CodePage UINT,
+        dwFlags DWORD,
+        lpWideCharStr LPCWCH,
+        cchWideChar i32,
+        lpMultiByteStr LPSTR,
+        cbMultiByte i32,
+        lpDefaultChar LPCCH,
+        lpUsedDefaultChar LPBOOL
     ) -> i32;
 
     pub extern func "std" MultiByteToWideChar(
-        CodePage: UINT,
-        dwFlags: DWORD,
-        lpMultiByteStr: LPCCH,
-        cbMultiByte: i32,
-        lpWideCharStr: LPWSTR,
-        cchWideChar: i32
+        CodePage UINT,
+        dwFlags DWORD,
+        lpMultiByteStr LPCCH,
+        cbMultiByte i32,
+        lpWideCharStr LPWSTR,
+        cchWideChar i32
     ) -> i32;
 
-    pub extern func "std" GetStdHandle(nStdHandle: DWORD) -> HANDLE;
+    pub extern func "std" GetStdHandle(nStdHandle DWORD) -> HANDLE;
     pub extern func "std" SetHandleInformation(
-        hObject: HANDLE,
-        dwMask: DWORD,
-        dwFlags: DWORD) -> BOOL;
+        hObject HANDLE,
+        dwMask DWORD,
+        dwFlags DWORD) -> BOOL;
 
     pub extern func "std" WriteFile(
-        hFile: HANDLE,
-        lpBuffer: LPCVOID,
-        nNumberOfBytesToWrite: DWORD,
-        lpNumberOfBytesWritten: LPDWORD,
-        lpOverlapped: LPOVERLAPPED) -> BOOL;
+        hFile HANDLE,
+        lpBuffer LPCVOID,
+        nNumberOfBytesToWrite DWORD,
+        lpNumberOfBytesWritten LPDWORD,
+        lpOverlapped LPOVERLAPPED) -> BOOL;
 
     pub extern func "std" GetFileTime(
-        hFile: HANDLE,
-        lpCreationTime: LPFILETIME,
-        lpLastAccessTime: LPFILETIME,
-        lpLastWriteTime: LPFILETIME
+        hFile HANDLE,
+        lpCreationTime LPFILETIME,
+        lpLastAccessTime LPFILETIME,
+        lpLastWriteTime LPFILETIME
     ) -> BOOL;
 
     pub extern func "std" GetFileAttributesExW(
-        lpFileName: LPCWSTR,
-        fInfoLevelId: GET_FILEEX_INFO_LEVELS,
-        lpFileInformation: LPVOID
+        lpFileName LPCWSTR,
+        fInfoLevelId GET_FILEEX_INFO_LEVELS,
+        lpFileInformation LPVOID
     ) -> BOOL;
 
     pub extern func "std" CreateProcessA(
-        lpApplicationName: LPCSTR,
-        lpCommandLine: LPSTR,
-        lpProcessAttributes: LPSECURITY_ATTRIBUTES,
-        lpThreadAttributes: LPSECURITY_ATTRIBUTES,
-        bInheritHandles: BOOL,
-        dwCreationFlags: DWORD,
-        lpEnvironment: LPVOID,
-        lpCurrentDirectory: LPCSTR,
-        lpStartupInfo: LPSTARTUPINFOA,
-        lpProcessInformation: LPPROCESS_INFORMATION 
+        lpApplicationName LPCSTR,
+        lpCommandLine LPSTR,
+        lpProcessAttributes LPSECURITY_ATTRIBUTES,
+        lpThreadAttributes LPSECURITY_ATTRIBUTES,
+        bInheritHandles BOOL,
+        dwCreationFlags DWORD,
+        lpEnvironment LPVOID,
+        lpCurrentDirectory LPCSTR,
+        lpStartupInfo LPSTARTUPINFOA,
+        lpProcessInformation LPPROCESS_INFORMATION 
     ) -> BOOL;
 
     pub extern func "std" GetExitCodeProcess(
-        hProcess: HANDLE,
-        lpExitCode: LPDWORD
+        hProcess HANDLE,
+        lpExitCode LPDWORD
     ) -> BOOL;
 
     pub extern func "std" WaitForSingleObject(
-        hHandle: HANDLE,
-        dwMilliseconds: DWORD
+        hHandle HANDLE,
+        dwMilliseconds DWORD
     ) -> DWORD;
 
     pub extern func "std" CloseHandle(
-        hHandle: HANDLE
+        hHandle HANDLE
     ) -> BOOL;
 
     pub extern func "std" GetLastError() -> DWORD;
 
     #[link_name="GetCurrentDirectoryW"]
     pub extern func "std" GetCurrentDirectory(
-        nBufferLength: DWORD,
-        lpBuffer: LPTSTR) -> DWORD;
+        nBufferLength DWORD,
+        lpBuffer LPTSTR) -> DWORD;
 
     #[link_name="SetCurrentDirectoryW"]
-    pub extern func "std" SetCurrentDirectory(lpBuffer: LPCTSTR) -> DWORD;
+    pub extern func "std" SetCurrentDirectory(lpBuffer LPCTSTR) -> DWORD;
 
-    pub extern func "std" PathFileExistsW(pszPath: LPCWSTR) -> BOOL;
+    pub extern func "std" PathFileExistsW(pszPath LPCWSTR) -> BOOL;
 
     pub extern func "std" FindFirstFileA(
-        lpFileName: LPCSTR,
-        lpFindFileData: LPWIN32_FIND_DATAA) -> HANDLE;
+        lpFileName LPCSTR,
+        lpFindFileData LPWIN32_FIND_DATAA) -> HANDLE;
 
     pub extern func "std" FindNextFileA(
-        hFindFile: HANDLE,
-        lpFindFileData: LPWIN32_FIND_DATAA) -> BOOL;
+        hFindFile HANDLE,
+        lpFindFileData LPWIN32_FIND_DATAA) -> BOOL;
 
-    pub extern func "std" FindClose(hFindFile: HANDLE) -> BOOL;
+    pub extern func "std" FindClose(hFindFile HANDLE) -> BOOL;
 
     pub extern func "std" CreateThread(
-        lpThreadAttributes: LPSECURITY_ATTRIBUTES,
-        dwStackSize: SIZE_T,
-        lpStartAddress: LPTHREAD_START_ROUTINE,
-        lpParameter: LPVOID,
-        dwCreationFlags: DWORD,
-        lpThreadId: LPDWORD
+        lpThreadAttributes LPSECURITY_ATTRIBUTES,
+        dwStackSize SIZE_T,
+        lpStartAddress LPTHREAD_START_ROUTINE,
+        lpParameter LPVOID,
+        dwCreationFlags DWORD,
+        lpThreadId LPDWORD
     ) -> HANDLE;
 
-    pub extern func "std" ExitThread(dwExitCode: DWORD);
+    pub extern func "std" ExitThread(dwExitCode DWORD);
 
     pub extern func "std" GetExitCodeThread(
-        hThread: HANDLE,
-        lpExitCode: LPDWORD
+        hThread HANDLE,
+        lpExitCode LPDWORD
     ) -> BOOL;
 
     pub extern func "std" InitializeCriticalSection(
-        lpCriticalSection: LPCRITICAL_SECTION);
+        lpCriticalSection LPCRITICAL_SECTION);
 
     pub extern func "std" DeleteCriticalSection(
-        lpCriticalSection: LPCRITICAL_SECTION);
+        lpCriticalSection LPCRITICAL_SECTION);
 
     pub extern func "std" EnterCriticalSection(
-        lpCriticalSection: LPCRITICAL_SECTION);
+        lpCriticalSection LPCRITICAL_SECTION);
 
     pub extern func "std" TryEnterCriticalSection(
-        lpCriticalSection: LPCRITICAL_SECTION) -> BOOL;
+        lpCriticalSection LPCRITICAL_SECTION) -> BOOL;
 
     pub extern func "std" LeaveCriticalSection(
-        lpCriticalSection: LPCRITICAL_SECTION);
+        lpCriticalSection LPCRITICAL_SECTION);
 
     pub extern func "std" InitializeConditionVariable(
-        ConditionVariable: PCONDITION_VARIABLE,
+        ConditionVariable PCONDITION_VARIABLE,
     );
 
     pub extern func "std" WakeConditionVariable(
-        ConditionVariable: PCONDITION_VARIABLE,
+        ConditionVariable PCONDITION_VARIABLE,
     );
 
     pub extern func "std" WakeAllConditionVariable(
-        ConditionVariable: PCONDITION_VARIABLE,
+        ConditionVariable PCONDITION_VARIABLE,
     );
 
     pub extern func "std" SleepConditionVariableCS(
-        ConditionVariable: PCONDITION_VARIABLE,
-        CriticalSection: PCRITICAL_SECTION,
-        dwMilliseconds: DWORD,
+        ConditionVariable PCONDITION_VARIABLE,
+        CriticalSection PCRITICAL_SECTION,
+        dwMilliseconds DWORD,
     ) -> BOOL;
 
-    pub extern func "std" Sleep(dwMilliseconds: DWORD);
+    pub extern func "std" Sleep(dwMilliseconds DWORD);
 
     // Utility function
-    pub func to_cwstr_alloc(str: string) -> LPCWSTR {
+    pub func to_cwstr_alloc(str string) -> LPCWSTR {
         var wpath_len = MultiByteToWideChar(CP_UTF8, 0,
             str.ptr, cast(i32)str.len, null, 0);
 
-        var wpath: LPCWSTR = alloc(cast(uint)(wpath_len + 1) * size_of(WCHAR));
+        var wpath LPCWSTR = alloc(cast(uint)(wpath_len + 1) * size_of(WCHAR));
 
         MultiByteToWideChar(CP_UTF8, 0, 
             str.ptr, cast(i32)str.len, wpath, wpath_len);
@@ -295,9 +295,9 @@ version "win32" {
         return wpath;
     }
 
-    pub func wstr_to_string_alloc(buf: LPWSTR, size: DWORD) -> string {
+    pub func wstr_to_string_alloc(buf LPWSTR, size DWORD) -> string {
         var required_size = WideCharToMultiByte(CP_UTF8, 0, buf, cast(i32)size, null, 0, null, null);
-        var str: string = make(string, cast(uint)required_size);
+        var str string = make(string, cast(uint)required_size);
         WideCharToMultiByte(CP_UTF8, 0, buf, cast(i32)size, str.ptr, required_size, null, null);
         return str;
     }

@@ -1,7 +1,7 @@
 module main
 
-var hello: i32 = 32;
+var hello i32 = 32;
 
 func main() {
-    const a: i32 = hello;
+    const a i32 = hello;
 }

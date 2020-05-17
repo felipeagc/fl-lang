@@ -18,16 +18,16 @@ typedef MyEnum2 enum u32 {
 func main() {
     using c;
 
-    var enum1: MyEnum = MyEnum.two;
+    var enum1 MyEnum = MyEnum.two;
     var enum2 = MyEnum.two_again;
-    var my_uint: u32 = MyEnum.one;
+    var my_uint u32 = MyEnum.one;
 
-    var my_array: [MyEnum.two]i32;
+    var my_array [MyEnum.two]i32;
 
     if (enum1 != enum2) abort();
     if (enum1 != MyEnum.two_again) abort();
 
-    var hello: u32 = MyEnum2.five;
+    var hello u32 = MyEnum2.five;
 
     if (MyEnum2.five_again != hello) abort();
 }

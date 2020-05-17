@@ -3,12 +3,12 @@ module main
 import "core:c"
 
 typedef MyUnion union {
-    a: u64,
-    b: float,
+    a u64,
+    b float,
 };
 
 func main() {
-    var u: MyUnion;
+    var u MyUnion;
     u.b = 123133.1258;
 
     if (size_of(u) != size_of(u64)) c.abort();

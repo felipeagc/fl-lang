@@ -4,37 +4,37 @@ import "core:c"
 import "core:os"
 import "core:runtime"
 
-pub func print(str: string) {
-    var buf: []byte = void;
+pub func print(str string) {
+    var buf []byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stdout(), buf);
 }
 
-pub func eprint(str: string) {
-    var buf: []byte = void;
+pub func eprint(str string) {
+    var buf []byte = void;
     buf.ptr = cast(*byte)str.ptr;
     buf.len = str.len;
     os.write_to_stream(os.get_stderr(), buf);
 }
 
-pub func printf(fmt: string, args: ...any) {
-    var buf: [4096]char = void;
+pub func printf(fmt string, args ...any) {
+    var buf [4096]char = void;
     var str = buf[0:0];
     sprintf(&str, fmt, ...args);
     print(str);
 }
 
-pub func eprintf(fmt: string, args: ...any) {
-    var buf: [4096]char = void;
+pub func eprintf(fmt string, args ...any) {
+    var buf [4096]char = void;
     var str = buf[0:0];
     sprintf(&str, fmt, ...args);
     eprint(str);
 }
 
-func signed_itoa(into: *string, num: i64, base: i64) {
-    var buf: [32]char;
-    var len: uint = 0;
+func signed_itoa(into *string, num i64, base i64) {
+    var buf [32]char;
+    var len uint = 0;
     var n = num;
     var negative = n < 0;
 
@@ -48,7 +48,7 @@ func signed_itoa(into: *string, num: i64, base: i64) {
             var rem = n % base;
             n /= base;
 
-            var ch: char = void;
+            var ch char = void;
             if (rem < 10) {
                 ch = cast(char)rem + '0';
             } else {
@@ -72,9 +72,9 @@ func signed_itoa(into: *string, num: i64, base: i64) {
     }
 }
 
-func unsigned_itoa(into: *string, num: u64, base: u64) {
-    var buf: [32]char;
-    var len: uint = 0;
+func unsigned_itoa(into *string, num u64, base u64) {
+    var buf [32]char;
+    var len uint = 0;
     var n = num;
 
     if (n == 0) {
@@ -85,7 +85,7 @@ func unsigned_itoa(into: *string, num: u64, base: u64) {
             var rem = n % base;
             n /= base;
 
-            var ch: char = void;
+            var ch char = void;
             if (rem < 10) {
                 ch = cast(char)rem + '0';
             } else {
@@ -104,8 +104,8 @@ func unsigned_itoa(into: *string, num: u64, base: u64) {
     }
 }
 
-pub func sprintf(into: *string, fmt: string, args: ...any) {
-    var argi: uint = 0;
+pub func sprintf(into *string, fmt string, args ...any) {
+    var argi uint = 0;
 
     for (ch in fmt) {
         if (ch == '%') {
@@ -114,7 +114,7 @@ pub func sprintf(into: *string, fmt: string, args: ...any) {
 
             case runtime.TypeKind.Int: 
                 if (arg.type_info.integer.is_signed) {
-                    var num: i64 = void;
+                    var num i64 = void;
 
                     switch (arg.type_info.integer.num_bits) {
                     case 8 : num = cast(i64)(cast(*i8)arg.ptr).*;
@@ -125,7 +125,7 @@ pub func sprintf(into: *string, fmt: string, args: ...any) {
 
                     signed_itoa(into, num, 10);
                 } else {
-                    var num: u64 = void;
+                    var num u64 = void;
 
                     switch (arg.type_info.integer.num_bits) {
                     case 8:  num = cast(u64)(cast(*u8)arg.ptr).*;

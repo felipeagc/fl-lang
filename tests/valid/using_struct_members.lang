@@ -3,24 +3,24 @@ module main
 import "core:c"
 
 typedef SubSub struct {
-    ss: i32,
+    ss i32,
 };
 
 typedef Sub struct {
-    hello: i32,
-    subsub: SubSub,
+    hello i32,
+    subsub SubSub,
 };
 
 typedef Struct struct {
-    using sub: Sub,
-    using vec: [3]->float,
-    field: i32,
+    using sub Sub,
+    using vec [3]->float,
+    field i32,
 };
 
 func main() {
     using c;
 
-    var str: Struct;
+    var str Struct;
     str.hello = 123;
     printf(c"str.hello = %d\n", str.hello);
     str.field = 123;

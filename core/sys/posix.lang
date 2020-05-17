@@ -22,192 +22,192 @@ version "glibc" {
         pub typedef clock_t i64;
 
         pub typedef stat_t struct {
-            st_dev: u64,
-            st_ino: u64,
-            st_nlink: u64,
-            st_mode: u32,
-            st_uid: u32,
-            st_gid: u32,
-            __pad0: i32,
-            st_rdev: u64,
-            st_size: i64,
-            st_blksize: i64,
-            st_blocks: i64,
-            st_atim: timespec,
-            st_mtim: timespec,
-            st_ctim: timespec,
-            __glibc_reserved: [3]i32,
+            st_dev           u64,
+            st_ino           u64,
+            st_nlink         u64,
+            st_mode          u32,
+            st_uid           u32,
+            st_gid           u32,
+            __pad0           i32,
+            st_rdev          u64,
+            st_size          i64,
+            st_blksize       i64,
+            st_blocks        i64,
+            st_atim          timespec,
+            st_mtim          timespec,
+            st_ctim          timespec,
+            __glibc_reserved [3]i32,
         };
 
         pub typedef dirent struct {
-            d_ino: u64,
-            d_off: off_t,
-            d_reclen: u16,
-            d_type: u8,
-            d_name: [256]i8,
+            d_ino       u64,
+            d_off       off_t,
+            d_reclen    u16,
+            d_type      u8,
+            d_name      [256]i8,
         };
         pub typedef dirent64 struct {
-            d_ino: u64,
-            d_off: i64,
-            d_reclen: u16,
-            d_type: u8,
-            d_name: [256]i8,
+            d_ino       u64,
+            d_off       i64,
+            d_reclen    u16,
+            d_type      u8,
+            d_name      [256]i8,
         };
 
         pub typedef sched_param struct {
-            sched_priority: i32,
+            sched_priority i32,
         };
 
         pub typedef timespec struct {
-            tv_sec: i64,
-            tv_nsec: i64,
+            tv_sec  i64,
+            tv_nsec i64,
         };
 
         pub typedef sigset_t struct {
-            val: [16]u64,
+            val [16]u64,
         };
 
         pub typedef posix_spawnattr_t struct {
-            flags: i16,
-            pgrp: pid_t,
-            sd: sigset_t,
-            ss: sigset_t,
-            sp: sched_param,
-            policy: i32,
-            pad: [16]i32,
+            flags   i16,
+            pgrp    pid_t,
+            sd      sigset_t,
+            ss      sigset_t,
+            sp      sched_param,
+            policy  i32,
+            pad     [16]i32,
         };
         pub typedef posix_spawn_file_actions_t struct {
-            allocated: i32,
-            used: i32,
-            actions: *struct {},
-            pad: [16]i32,
+            allocated   i32,
+            used        i32,
+            actions     *struct{},
+            pad         [16]i32,
         };
 
         pub typedef pthread_t u64;
 
         pub typedef pthread_mutexattr_t union {
-            size: [4]i8,
-            align: i32,
+            size  [4]i8,
+            align i32,
         };
 
         pub typedef pthread_condattr_t union {
-            size: [4]i8,
-            align: i32,
+            size  [4]i8,
+            align i32,
         };
 
         pub typedef pthread_attr_t union {
-            size: [56]i8,
-            align: i64,
+            size  [56]i8,
+            align i64,
         };
 
         pub typedef pthread_mutex_t union {
-            size: [40]i8,
-            align: i64,
+            size  [40]i8,
+            align i64,
         };
 
         pub typedef pthread_cond_t union {
-            size: [48]i8,
-            align: i64,
+            size  [48]i8,
+            align i64,
         };
 
-        pub const F_OK: i32 = 0;
-        pub const R_OK: i32 = 4;
-        pub const W_OK: i32 = 2;
-        pub const X_OK: i32 = 1;
+        pub const F_OK i32 = 0;
+        pub const R_OK i32 = 4;
+        pub const W_OK i32 = 2;
+        pub const X_OK i32 = 1;
 
-        pub const FD_CLOEXEC: i32 = 1;
+        pub const FD_CLOEXEC i32 = 1;
 
-        pub const F_RDLCK: i32 = 0;
-        pub const F_UNLCK: i32 = 2;
-        pub const F_WRLCK: i32 = 1;
+        pub const F_RDLCK i32 = 0;
+        pub const F_UNLCK i32 = 2;
+        pub const F_WRLCK i32 = 1;
 
-        pub const O_CREAT: i32 = 0x40;
-        pub const O_EXCL: i32 = 0x80;
-        pub const O_NOCTTY: i32 = 0x100;
-        pub const O_TRUNC: i32 = 0x200;
+        pub const O_CREAT i32 = 0x40;
+        pub const O_EXCL i32 = 0x80;
+        pub const O_NOCTTY i32 = 0x100;
+        pub const O_TRUNC i32 = 0x200;
 
-        pub const O_NONBLOCK: i32 = 0x800;
-        pub const O_APPEND: i32 = 0x400;
-        pub const O_SYNC: i32 = 0x101000;
+        pub const O_NONBLOCK i32 = 0x800;
+        pub const O_APPEND i32 = 0x400;
+        pub const O_SYNC i32 = 0x101000;
 
-        pub const O_RDONLY: i32 = 0x0;
-        pub const O_WRONLY: i32 = 0x1;
-        pub const O_RDWR: i32 = 0x2;
-        pub const O_ACCMODE: i32 = 0x3;
+        pub const O_RDONLY i32 = 0x0;
+        pub const O_WRONLY i32 = 0x1;
+        pub const O_RDWR i32 = 0x2;
+        pub const O_ACCMODE i32 = 0x3;
 
         #[inline]
-        pub func __WTERMSIG(status: i32) -> i32 {
+        pub func __WTERMSIG(status i32) -> i32 {
             return status & 0x7f; 
         }
         #[inline]
-        pub func WIFEXITED(status: i32) -> bool {
+        pub func WIFEXITED(status i32) -> bool {
             return __WTERMSIG(status) == 0; 
         }
         #[inline]
-        pub func WIFSIGNALED(status: i32) -> bool {
+        pub func WIFSIGNALED(status i32) -> bool {
             return (cast(byte)((status & 0x7f) + 1) >> 1) > 0; 
         }
         #[inline]
-        pub func WEXITSTATUS(status: i32) -> i32 {
+        pub func WEXITSTATUS(status i32) -> i32 {
             return (status & 0xff00) >> 8; 
         }
         #[inline]
-        pub func WSTOPSIG(status: i32) -> i32 {
+        pub func WSTOPSIG(status i32) -> i32 {
             return WEXITSTATUS(status); 
         }
         #[inline]
-        pub func WTERMSIG(status: i32) -> i32 {
+        pub func WTERMSIG(status i32) -> i32 {
             return status & 0x7f; 
         }
     }
 } else version "darwin" {
-    pub const FD_CLOEXEC: i32 = 1;
+    pub const FD_CLOEXEC i32 = 1;
 
-    pub const F_OK: i32 = 0;
-    pub const R_OK: i32 = 4;
-    pub const W_OK: i32 = 2;
-    pub const X_OK: i32 = 1;
+    pub const F_OK i32 = 0;
+    pub const R_OK i32 = 4;
+    pub const W_OK i32 = 2;
+    pub const X_OK i32 = 1;
 
-    pub const F_RDLCK: i32 = 1;
-    pub const F_UNLCK: i32 = 2;
-    pub const F_WRLCK: i32 = 3;
+    pub const F_RDLCK i32 = 1;
+    pub const F_UNLCK i32 = 2;
+    pub const F_WRLCK i32 = 3;
 
-    pub const O_CREAT: i32 = 0x0200;
-    pub const O_EXCL: i32 = 0x0800;
-    pub const O_NOCTTY: i32 = 0;
-    pub const O_TRUNC: i32 = 0x0400;
+    pub const O_CREAT i32 = 0x0200;
+    pub const O_EXCL i32 = 0x0800;
+    pub const O_NOCTTY i32 = 0;
+    pub const O_TRUNC i32 = 0x0400;
 
-    pub const O_NONBLOCK: i32 = 0x0004;
-    pub const O_APPEND: i32 = 0x0008;
-    pub const O_SYNC: i32 = 0x0080;
+    pub const O_NONBLOCK i32 = 0x0004;
+    pub const O_APPEND i32 = 0x0008;
+    pub const O_SYNC i32 = 0x0080;
 
-    pub const O_RDONLY: i32 = 0x0000;
-    pub const O_WRONLY: i32 = 0x0001;
-    pub const O_RDWR: i32 = 0x0002;
-    pub const O_ACCMODE: i32 = 0x0003;
+    pub const O_RDONLY i32 = 0x0000;
+    pub const O_WRONLY i32 = 0x0001;
+    pub const O_RDWR i32 = 0x0002;
+    pub const O_ACCMODE i32 = 0x0003;
 
     #[inline]
-    pub func _WSTATUS(status: i32) -> i32 {
+    pub func _WSTATUS(status i32) -> i32 {
         return status & 0x7f; 
     }
     #[inline]
-    pub func WIFEXITED(status: i32) -> bool {
+    pub func WIFEXITED(status i32) -> bool {
         return _WSTATUS(status) == 0; 
     }
     #[inline]
-    pub func WIFSIGNALED(status: i32) -> bool {
+    pub func WIFSIGNALED(status i32) -> bool {
         return _WSTATUS(status) != 0x7f && _WSTATUS(status) != 0; 
     }
     #[inline]
-    pub func WEXITSTATUS(status: i32) -> i32 {
+    pub func WEXITSTATUS(status i32) -> i32 {
         return status >> 8; 
     }
     #[inline]
-    pub func WSTOPSIG(status: i32) -> i32 {
+    pub func WSTOPSIG(status i32) -> i32 {
         return status >> 8; 
     }
     #[inline]
-    pub func WTERMSIG(status: i32) -> i32 {
+    pub func WTERMSIG(status i32) -> i32 {
         return _WSTATUS(status); 
     }
 }
@@ -217,142 +217,142 @@ version "glibc" {
 //
 
 pub extern func posix_spawn(
-    pid: *pid_t,
-    path: *i8,
-    file_actions: *posix_spawn_file_actions_t,
-    attrp: *posix_spawnattr_t,
-    argv: **i8,
-    envp: **i8) -> i32;
+    pid *pid_t,
+    path *i8,
+    file_actions *posix_spawn_file_actions_t,
+    attrp *posix_spawnattr_t,
+    argv **i8,
+    envp **i8) -> i32;
 pub extern func posix_spawnp(
-    pid: *pid_t,
-    file: *i8,
-    file_actions: *posix_spawn_file_actions_t,
-    attrp: *posix_spawnattr_t,
-    argv: **i8,
-    envp: **i8) -> i32;
-pub extern func posix_spawnattr_init(attr: *posix_spawnattr_t) -> i32;
-pub extern func posix_spawnattr_destroy(attr: *posix_spawnattr_t) -> i32;
-pub extern func posix_spawn_file_actions_init(file_actions: *posix_spawn_file_actions_t) -> i32;
-pub extern func posix_spawn_file_actions_destroy(file_actions: *posix_spawn_file_actions_t) -> i32;
+    pid *pid_t,
+    file *i8,
+    file_actions *posix_spawn_file_actions_t,
+    attrp *posix_spawnattr_t,
+    argv **i8,
+    envp **i8) -> i32;
+pub extern func posix_spawnattr_init(attr *posix_spawnattr_t) -> i32;
+pub extern func posix_spawnattr_destroy(attr *posix_spawnattr_t) -> i32;
+pub extern func posix_spawn_file_actions_init(file_actions *posix_spawn_file_actions_t) -> i32;
+pub extern func posix_spawn_file_actions_destroy(file_actions *posix_spawn_file_actions_t) -> i32;
 pub extern func posix_spawn_file_actions_addopen(
-    file_actions: *posix_spawn_file_actions_t,
-    fd: i32,
-    path: *i8,
-    oflag: i32,
-    mode: mode_t) -> i32;
+    file_actions *posix_spawn_file_actions_t,
+    fd i32,
+    path *i8,
+    oflag i32,
+    mode mode_t) -> i32;
 pub extern func posix_spawn_file_actions_addclose(
-    file_actions: *posix_spawn_file_actions_t,
-    fd: i32) -> i32;
+    file_actions *posix_spawn_file_actions_t,
+    fd i32) -> i32;
 pub extern func posix_spawn_file_actions_adddup2(
-    file_actions: *posix_spawn_file_actions_t,
-    fd: i32,
-    newfd: i32) -> i32;
+    file_actions *posix_spawn_file_actions_t,
+    fd i32,
+    newfd i32) -> i32;
 
 //
 // pthreads
 //
 
 pub extern func pthread_create(
-    newthread: *pthread_t,
-    attr: *pthread_attr_t,
-    start_routine: func* (_: *void) -> *void,
-    arg: *void) -> i32;
-pub extern func pthread_exit(retval: *void);
-pub extern func pthread_join(th: pthread_t, thread_return: **void) -> i32;
-pub extern func pthread_detach(th: pthread_t) -> i32;
+    newthread *pthread_t,
+    attr *pthread_attr_t,
+    start_routine func* (_ *void) -> *void,
+    arg *void) -> i32;
+pub extern func pthread_exit(retval *void);
+pub extern func pthread_join(th pthread_t, thread_return **void) -> i32;
+pub extern func pthread_detach(th pthread_t) -> i32;
 pub extern func pthread_self() -> pthread_t;
-pub extern func pthread_equal(thread1: pthread_t, thread2: pthread_t) -> i32;
-pub extern func pthread_attr_init(attr: *pthread_attr_t) -> i32;
-pub extern func pthread_attr_destroy(attr: *pthread_attr_t) -> i32;
+pub extern func pthread_equal(thread1 pthread_t, thread2 pthread_t) -> i32;
+pub extern func pthread_attr_init(attr *pthread_attr_t) -> i32;
+pub extern func pthread_attr_destroy(attr *pthread_attr_t) -> i32;
 pub extern func pthread_yield() -> i32;
-pub extern func pthread_cancel(th: pthread_t) -> i32;
-pub extern func pthread_mutex_init(mutex: *pthread_mutex_t, mutexattr: *pthread_mutexattr_t) -> i32;
-pub extern func pthread_mutex_destroy(mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_trylock(mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_lock(mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_mutex_unlock(mutex: *pthread_mutex_t) -> i32;
-pub extern func pthread_cond_init(cond: *pthread_cond_t, cond_attr: *pthread_condattr_t) -> i32;
-pub extern func pthread_cond_destroy(cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_signal(cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_broadcast(cond: *pthread_cond_t) -> i32;
-pub extern func pthread_cond_wait(cond: *pthread_cond_t, mutex: *pthread_mutex_t) -> i32;
+pub extern func pthread_cancel(th pthread_t) -> i32;
+pub extern func pthread_mutex_init(mutex *pthread_mutex_t, mutexattr *pthread_mutexattr_t) -> i32;
+pub extern func pthread_mutex_destroy(mutex *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_trylock(mutex *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_lock(mutex *pthread_mutex_t) -> i32;
+pub extern func pthread_mutex_unlock(mutex *pthread_mutex_t) -> i32;
+pub extern func pthread_cond_init(cond *pthread_cond_t, cond_attr *pthread_condattr_t) -> i32;
+pub extern func pthread_cond_destroy(cond *pthread_cond_t) -> i32;
+pub extern func pthread_cond_signal(cond *pthread_cond_t) -> i32;
+pub extern func pthread_cond_broadcast(cond *pthread_cond_t) -> i32;
+pub extern func pthread_cond_wait(cond *pthread_cond_t, mutex *pthread_mutex_t) -> i32;
 
 //
 // unistd
 //
 
-pub extern func access(name: *i8, type: i32) -> i32;
-pub extern func euidaccess(name: *i8, type: i32) -> i32;
-pub extern func eaccess(name: *i8, type: i32) -> i32;
-pub extern func faccessat(fd: i32, file: *i8, type: i32, flag: i32) -> i32;
-pub extern func lseek(fd: i32, offset: off_t, whence: i32) -> off_t;
-pub extern func lseek64(fd: i32, offset: off64_t, whence: i32) -> off64_t;
-pub extern func close(fd: i32) -> i32;
-pub extern func read(fd: i32, buf: *void, nbytes: uint) -> ssize_t;
-pub extern func write(fd: i32, buf: *void, n: uint) -> ssize_t;
-pub extern func pread(fd: i32, buf: *void, nbytes: uint, offset: off_t) -> ssize_t;
-pub extern func pwrite(fd: i32, buf: *void, n: uint, offset: off_t) -> ssize_t;
-pub extern func pread64(fd: i32, buf: *void, nbytes: uint, offset: off64_t) -> ssize_t;
-pub extern func pwrite64(fd: i32, buf: *void, n: uint, offset: off64_t) -> ssize_t;
-pub extern func pipe(pipedes: *i32) -> i32;
-pub extern func pipe2(pipedes: *i32, flags: i32) -> i32;
-pub extern func alarm(seconds: u32) -> u32;
-pub extern func sleep(seconds: u32) -> u32;
-pub extern func ualarm(value: useconds_t, interval: useconds_t) -> useconds_t;
-pub extern func usleep(useconds: useconds_t) -> i32;
+pub extern func access(name *i8, type i32) -> i32;
+pub extern func euidaccess(name *i8, type i32) -> i32;
+pub extern func eaccess(name *i8, type i32) -> i32;
+pub extern func faccessat(fd i32, file *i8, type i32, flag i32) -> i32;
+pub extern func lseek(fd i32, offset off_t, whence i32) -> off_t;
+pub extern func lseek64(fd i32, offset off64_t, whence i32) -> off64_t;
+pub extern func close(fd i32) -> i32;
+pub extern func read(fd i32, buf *void, nbytes uint) -> ssize_t;
+pub extern func write(fd i32, buf *void, n uint) -> ssize_t;
+pub extern func pread(fd i32, buf *void, nbytes uint, offset off_t) -> ssize_t;
+pub extern func pwrite(fd i32, buf *void, n uint, offset off_t) -> ssize_t;
+pub extern func pread64(fd i32, buf *void, nbytes uint, offset off64_t) -> ssize_t;
+pub extern func pwrite64(fd i32, buf *void, n uint, offset off64_t) -> ssize_t;
+pub extern func pipe(pipedes *i32) -> i32;
+pub extern func pipe2(pipedes *i32, flags i32) -> i32;
+pub extern func alarm(seconds u32) -> u32;
+pub extern func sleep(seconds u32) -> u32;
+pub extern func ualarm(value useconds_t, interval useconds_t) -> useconds_t;
+pub extern func usleep(useconds useconds_t) -> i32;
 pub extern func pause() -> i32;
-pub extern func chown(file: *i8, owner: uid_t, group: gid_t) -> i32;
-pub extern func fchown(fd: i32, owner: uid_t, group: gid_t) -> i32;
-pub extern func lchown(file: *i8, owner: uid_t, group: gid_t) -> i32;
-pub extern func fchownat(fd: i32, file: *i8, owner: uid_t, group: gid_t, flag: i32) -> i32;
-pub extern func chdir(path: *i8) -> i32;
-pub extern func fchdir(fd: i32) -> i32;
-pub extern func getcwd(buf: *i8, size: uint) -> *i8;
-pub extern func getwd(buf: *i8) -> *i8;
+pub extern func chown(file *i8, owner uid_t, group gid_t) -> i32;
+pub extern func fchown(fd i32, owner uid_t, group gid_t) -> i32;
+pub extern func lchown(file *i8, owner uid_t, group gid_t) -> i32;
+pub extern func fchownat(fd i32, file *i8, owner uid_t, group gid_t, flag i32) -> i32;
+pub extern func chdir(path *i8) -> i32;
+pub extern func fchdir(fd i32) -> i32;
+pub extern func getcwd(buf *i8, size uint) -> *i8;
+pub extern func getwd(buf *i8) -> *i8;
 pub extern func getpid() -> pid_t;
 pub extern func getppid() -> pid_t;
 pub extern func getpgrp() -> pid_t;
-pub extern func getpgid(pid: pid_t) -> pid_t;
-pub extern func setpgid(pid: pid_t, pgid: pid_t) -> i32;
+pub extern func getpgid(pid pid_t) -> pid_t;
+pub extern func setpgid(pid pid_t, pgid pid_t) -> i32;
 pub extern func setpgrp() -> i32;
-pub extern func link(from: *i8, to: *i8) -> i32;
-pub extern func linkat(fromfd: i32, from: *i8, tofd: i32, to: *i8, flags: i32) -> i32;
-pub extern func symlink(from: *i8, to: *i8) -> i32;
-pub extern func readlink(path: *i8, buf: *i8, len: uint) -> ssize_t;
-pub extern func symlinkat(from: *i8, tofd: i32, to: *i8) -> i32;
-pub extern func readlinkat(fd: i32, path: *i8, buf: *i8, len: uint) -> ssize_t;
-pub extern func rmdir(path: *i8) -> i32;
+pub extern func link(from *i8, to *i8) -> i32;
+pub extern func linkat(fromfd i32, from *i8, tofd i32, to *i8, flags i32) -> i32;
+pub extern func symlink(from *i8, to *i8) -> i32;
+pub extern func readlink(path *i8, buf *i8, len uint) -> ssize_t;
+pub extern func symlinkat(from *i8, tofd i32, to *i8) -> i32;
+pub extern func readlinkat(fd i32, path *i8, buf *i8, len uint) -> ssize_t;
+pub extern func rmdir(path *i8) -> i32;
 
 //
 // sys/wait.h
 //
 
-pub extern func wait(stat_loc: *i32) -> pid_t;
-pub extern func waitpid(pid: pid_t, stat_loc: *i32, options: i32) -> pid_t;
+pub extern func wait(stat_loc *i32) -> pid_t;
+pub extern func waitpid(pid pid_t, stat_loc *i32, options i32) -> pid_t;
 
 //
 // dirent.h
 //
 
 pub typedef DIR struct{};
-pub extern func opendir(name: *i8) -> *DIR;
-pub extern func fdopendir(fd: i32) -> *DIR;
-pub extern func closedir(dirp: *DIR) -> i32;
-pub extern func readdir(dirp: *DIR) -> *dirent;
-pub extern func readdir64(dirp: *DIR) -> *dirent64;
-pub extern func readdir_r(dirp: *DIR, entry: *dirent, result: **dirent) -> i32;
-pub extern func readdir64_r(dirp: *DIR, entry: *dirent64, result: **dirent64) -> i32;
-pub extern func rewinddir(dirp: *DIR);
-pub extern func seekdir(dirp: *DIR, pos: i64);
-pub extern func telldir(dirp: *DIR) -> i64;
-pub extern func dirfd(dirp: *DIR) -> i32;
-pub extern func alphasort(e1: **dirent, e2: **dirent) -> i32;
-pub extern func alphasort64(e1: **dirent64, e2: **dirent64) -> i32;
-pub extern func getdirentries(fd: i32, buf: *i8, nbytes: uint, basep: *off_t) -> ssize_t;
-pub extern func getdirentries64(fd: i32, buf: *i8, nbytes: uint, basep: *off64_t) -> ssize_t;
+pub extern func opendir(name *i8) -> *DIR;
+pub extern func fdopendir(fd i32) -> *DIR;
+pub extern func closedir(dirp *DIR) -> i32;
+pub extern func readdir(dirp *DIR) -> *dirent;
+pub extern func readdir64(dirp *DIR) -> *dirent64;
+pub extern func readdir_r(dirp *DIR, entry *dirent, result **dirent) -> i32;
+pub extern func readdir64_r(dirp *DIR, entry *dirent64, result **dirent64) -> i32;
+pub extern func rewinddir(dirp *DIR);
+pub extern func seekdir(dirp *DIR, pos i64);
+pub extern func telldir(dirp *DIR) -> i64;
+pub extern func dirfd(dirp *DIR) -> i32;
+pub extern func alphasort(e1 **dirent, e2 **dirent) -> i32;
+pub extern func alphasort64(e1 **dirent64, e2 **dirent64) -> i32;
+pub extern func getdirentries(fd i32, buf *i8, nbytes uint, basep *off_t) -> ssize_t;
+pub extern func getdirentries64(fd i32, buf *i8, nbytes uint, basep *off64_t) -> ssize_t;
 
 //
 // sys/stat.h
 //
 
-pub extern func stat(file: *char, buf: *stat_t) -> i32;
+pub extern func stat(file *char, buf *stat_t) -> i32;

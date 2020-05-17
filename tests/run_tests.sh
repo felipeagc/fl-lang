@@ -6,7 +6,7 @@ MAGENTA='\033[35;1m'
 NC='\033[0m' # No Color
 
 OUTPUT_FILE=/tmp/compiler_output
-COMPILER=./compiler
+COMPILER=./flc
 TESTS_PASSED=1
 
 for file in ./tests/valid/*; do

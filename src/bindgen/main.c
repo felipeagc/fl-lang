@@ -149,7 +149,7 @@ struct_field_visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
 
         print_ident(sb, field_name);
 
-        sb_append(sb, STR(": "));
+        sb_append(sb, STR(" "));
         print_type(sb, clang_getCursorType(cursor), true, false);
         sb_append(sb, STR(",\n"));
         break;
@@ -318,7 +318,7 @@ print_type(StringBuilder *sb, CXType type, bool named, bool is_param)
             {
                 sb_append(sb, STR("_"));
             }
-            sb_append(sb, STR(": "));
+            sb_append(sb, STR(" "));
             print_type(sb, clang_getArgType(type, i), true, true);
         }
 
@@ -545,7 +545,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
                 sb_append(sb, STR("_"));
             }
 
-            sb_append(sb, STR(": "));
+            sb_append(sb, STR(" "));
             print_type(sb, clang_getCursorType(arg), true, true);
         }
 
@@ -574,7 +574,7 @@ visitor(CXCursor cursor, CXCursor parent, CXClientData client_data)
         String enum_field_name =
             CSTR((char *)clang_getCString(clang_getCursorSpelling(cursor)));
         print_name(sb, enum_field_name);
-        sb_append(sb, STR(": "));
+        sb_append(sb, STR(" "));
         print_type(sb, clang_getCursorType(cursor), true, false);
         sb_sprintf(sb, " = %lld", clang_getEnumConstantDeclValue(cursor));
         sb_append(sb, STR(";\n"));

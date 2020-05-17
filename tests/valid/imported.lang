@@ -3,11 +3,11 @@ module hello
 import "core:fmt"
 
 pub const array_size = 5;
-pub const some_const: i32 = 512;
-pub var some_var: i32 = 123;
+pub const some_const i32 = 512;
+pub var some_var i32 = 123;
 
 pub typedef SomeType struct {
-    field: i64,
+    field i64,
 };
 
 pub func say_hello() {

@@ -3,25 +3,25 @@ module strings
 import "core:c"
 import "core:fmt"
 
-pub func to_c_str_alloc(str: string) -> *char {
-    var cstr: *char = alloc(str.len + 1);
+pub func to_c_str_alloc(str string) -> *char {
+    var cstr *char = alloc(str.len + 1);
     c.strncpy(cstr, str.ptr, str.len);
     cstr[str.len] = 0;
     return cstr;
 }
 
-pub func concat_alloc(a: string, b: string) -> string {
-    var chars: *char = alloc(a.len + b.len);
+pub func concat_alloc(a string, b string) -> string {
+    var chars *char = alloc(a.len + b.len);
     var str = chars[0:(a.len+b.len)];
     c.strncpy(&str[0], a.ptr, a.len);
     c.strncpy(&str[a.len], b.ptr, b.len);
     return str;
 }
 
-pub func ends_with(str: string, suffix: string) -> bool {
+pub func ends_with(str string, suffix string) -> bool {
     if (suffix.len > str.len) return false;
 
-    for (var i: uint = 0; i < suffix.len; i += 1) {
+    for (var i uint = 0; i < suffix.len; i += 1) {
         if (suffix[i] != str[str.len - suffix.len + i]) return false;
     }
 
@@ -29,12 +29,12 @@ pub func ends_with(str: string, suffix: string) -> bool {
 }
 
 pub typedef Builder struct {
-    cap: uint,
-    buf: string,
-    scratch: string,
+    cap     uint,
+    buf     string,
+    scratch string,
 };
 
-func builder_grow(sb: *Builder) {
+func builder_grow(sb *Builder) {
     if (sb.cap == 0) {
         sb.cap = 4096;
     } else {
@@ -44,22 +44,22 @@ func builder_grow(sb: *Builder) {
     sb.scratch.ptr = realloc(sb.scratch.ptr, sb.cap);
 }
 
-pub func builder_delete(sb: *Builder) {
+pub func builder_delete(sb *Builder) {
     delete(&sb.buf);
     delete(&sb.scratch);
 }
 
-pub func builder_reset(sb: *Builder) {
+pub func builder_reset(sb *Builder) {
     sb.buf.len = 0;
 }
 
-pub func builder_build(sb: *Builder) -> string {
+pub func builder_build(sb *Builder) -> string {
     var str = make(string, sb.buf.len);
     c.strncpy(str.ptr, sb.buf.ptr, sb.buf.len);
     return str;
 }
 
-pub func builder_append_string(sb: *Builder, str: string) {
+pub func builder_append_string(sb *Builder, str string) {
     while (str.len + sb.buf.len >= sb.cap) {
         builder_grow(sb);
     }
@@ -70,7 +70,7 @@ pub func builder_append_string(sb: *Builder, str: string) {
     }
 }
 
-pub func builder_append_char(sb: *Builder, c: char) {
+pub func builder_append_char(sb *Builder, c char) {
     while (1 + sb.buf.len >= sb.cap) {
         builder_grow(sb);
     }
@@ -79,7 +79,7 @@ pub func builder_append_char(sb: *Builder, c: char) {
     sb.buf.len += 1;
 }
 
-pub func builder_append_fmt(sb: *Builder, format: string, args: ...any) {
+pub func builder_append_fmt(sb *Builder, format string, args ...any) {
     while (1 + sb.buf.len >= sb.cap) {
         builder_grow(sb);
     }

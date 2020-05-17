@@ -8,7 +8,7 @@ import "core:compiler"
 pub const BUILD_FILE_NAME = "build.lang";
 
 pub typedef Workspace struct {
-    targets: [dyn]Target,
+    targets [dyn]Target,
 };
 
 pub typedef TargetType enum u32 {
@@ -17,33 +17,33 @@ pub typedef TargetType enum u32 {
 };
 
 pub typedef Target struct {
-    type: TargetType,
-    using target: union {
-        compiler_target: CompilerTarget,
-        script_target: ScriptTarget,
+    type TargetType,
+    using target union {
+        compiler_target CompilerTarget,
+        script_target ScriptTarget,
     },
 };
 
 pub typedef CompilerTarget struct {
-    input: string,
-    output: string,
-    link_with: []string,
-    library_paths: []string,
-    opt_level: u32,
+    input         string,
+    output        string,
+    link_with     []string,
+    library_paths []string,
+    opt_level     u32,
 };
 
 pub typedef ScriptTarget struct {
-    name: string,
-    output: string,
-    working_dir: string,
-    commands: [][]string,
+    name        string,
+    output      string,
+    working_dir string,
+    commands    [][]string,
 };
 
-pub func add_script_target(builder: *Workspace, target: *ScriptTarget) {
+pub func add_script_target(builder *Workspace, target *ScriptTarget) {
     var new_commands = make([][]string, target.commands.len);
-    for (var i: uint = 0; i < new_commands.len; i += 1) {
+    for (var i uint = 0; i < new_commands.len; i += 1) {
         new_commands[i] = make([]string, target.commands[i].len);
-        for (var j: uint = 0; j < new_commands[i].len; j += 1) {
+        for (var j uint = 0; j < new_commands[i].len; j += 1) {
             new_commands[i][j] = target.commands[i][j];
         }
     }
@@ -54,14 +54,14 @@ pub func add_script_target(builder: *Workspace, target: *ScriptTarget) {
     });
 }
 
-pub func add_executable_target(builder: *Workspace, target: *CompilerTarget) {
+pub func add_executable_target(builder *Workspace, target *CompilerTarget) {
     append(&builder.targets, Target{
         type = TargetType.Compiler,
         compiler_target = target.*,
     });
 }
 
-pub func build(builder: *Workspace) {
+pub func build(builder *Workspace) {
     for (*target in builder.targets) {
         switch (target.type) {
         case TargetType.Compiler:
@@ -72,7 +72,7 @@ pub func build(builder: *Workspace) {
                 defer delete(&output_path);
             }
 
-            var comp: *compiler.Compiler = compiler.create(&compiler.Arguments{
+            var comp *compiler.Compiler = compiler.create(&compiler.Arguments{
                 input = target.compiler_target.input,
                 output = output_path,
                 link_with = target.compiler_target.link_with,
