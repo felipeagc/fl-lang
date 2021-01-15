@@ -10,7 +10,7 @@ module main
 import "core:c"
 
 func main() {
-    c.printf(c"Hello, world: %d!\n");
+    c.printf(c"Hello, world!\n");
 }
 ```
 
