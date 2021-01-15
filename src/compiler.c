@@ -425,6 +425,7 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path)
 
     ArrayOfCharPtr args = {0};
     array_push(&args, LINKER_PATH);
+    array_push(&args, "-no-pie");
     array_push(&args, TMP_OBJECT_NAME);
     array_push(&args, "-lm");
     array_push(&args, "-o");
@@ -453,20 +454,17 @@ compiler_link_module(Compiler *compiler, LLModule *mod, String out_file_path)
         if (waitpid(pid, &status, 0) == -1)
         {
             remove(TMP_OBJECT_NAME);
-            fprintf(stderr, "Linking failed 1!\n");
             exit(status);
         }
 
         if (status != 0)
         {
             remove(TMP_OBJECT_NAME);
-            fprintf(stderr, "Linking failed 2!\n");
             exit(status);
         }
     }
     else
     {
-        fprintf(stderr, "Linking failed 3!\n");
         exit(status);
     }
 

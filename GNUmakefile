@@ -25,7 +25,7 @@ clean:
 test: flc
 	./flc -r ./tests/run_tests.lang
 
-examples:
+examples: flc flbindgen
 	rm -f examples/ray examples/table
 	./flc build examples
 

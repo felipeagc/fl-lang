@@ -5529,7 +5529,11 @@ static void llvm_codegen_file(LLContext *l, SourceFile *file)
         LLVMDWARFEmissionFull,
         0,
         true,
-        false);
+        false,
+        "",
+        0,
+        "",
+        0);
 
     file->did_codegen = true;
     llvm_codegen_ast(l, &l->mod, file->root, false, NULL);
